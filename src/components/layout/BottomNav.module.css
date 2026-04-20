@@ -1,0 +1,78 @@
+.bottomNav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bottom-nav-height);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(var(--color-surface-rgb, 255, 255, 255), 0.92);
+}
+
+[data-theme="dark"] .bottomNav {
+  background: rgba(30, 41, 59, 0.92);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--space-1) var(--space-3);
+  background: none;
+  border: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+  min-width: 56px;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+
+.tab:active {
+  transform: scale(0.92);
+}
+
+.tab.active {
+  color: var(--color-primary-500);
+}
+
+.tabIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  height: 28px;
+}
+
+.tabLabel {
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.activeDot {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-primary-500);
+}
+
+/* Hide on desktop */
+@media (min-width: 1024px) {
+  .bottomNav {
+    display: none;
+  }
+}

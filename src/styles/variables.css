@@ -1,0 +1,173 @@
+/* ============================================
+   CampusOS Design System — CSS Custom Properties
+   ============================================ */
+
+:root {
+  /* ── Typography ── */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  --text-display: 700 1.75rem/1.2 var(--font-family);
+  --text-heading-1: 700 1.375rem/1.3 var(--font-family);
+  --text-heading-2: 600 1.125rem/1.3 var(--font-family);
+  --text-heading-3: 600 1rem/1.4 var(--font-family);
+  --text-body: 400 0.875rem/1.5 var(--font-family);
+  --text-body-sm: 400 0.8125rem/1.5 var(--font-family);
+  --text-caption: 400 0.75rem/1.4 var(--font-family);
+  --text-overline: 600 0.6875rem/1.5 var(--font-family);
+
+  /* ── Spacing (4px base) ── */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── Border Radius ── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+
+  /* ── Transitions ── */
+  --transition-fast: 100ms ease-in;
+  --transition-normal: 200ms ease-in-out;
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Layout ── */
+  --sidebar-width: 256px;
+  --sidebar-collapsed: 64px;
+  --header-height: 56px;
+  --bottom-nav-height: 64px;
+  --max-width: 1280px;
+
+  /* ── Breakpoints (for reference, used in media queries) ── */
+  /* --bp-mobile: 0 – 639px */
+  /* --bp-tablet: 640 – 1023px */
+  /* --bp-desktop: 1024 – 1279px */
+  /* --bp-wide: 1280px+ */
+
+  /* ── Subject Colors ── */
+  --subject-math: #6366F1;
+  --subject-math-bg: #EEF2FF;
+  --subject-english: #EC4899;
+  --subject-english-bg: #FDF2F8;
+  --subject-science: #10B981;
+  --subject-science-bg: #ECFDF5;
+  --subject-hindi: #F59E0B;
+  --subject-hindi-bg: #FFFBEB;
+  --subject-social: #8B5CF6;
+  --subject-social-bg: #F5F3FF;
+  --subject-pe: #14B8A6;
+  --subject-pe-bg: #F0FDFA;
+  --subject-cs: #3B82F6;
+  --subject-cs-bg: #EFF6FF;
+  --subject-art: #F97316;
+  --subject-art-bg: #FFF7ED;
+}
+
+/* ── Light Theme (default) ── */
+:root,
+[data-theme="light"] {
+  --color-primary-50: #EEF2FF;
+  --color-primary-100: #E0E7FF;
+  --color-primary-200: #C7D2FE;
+  --color-primary-300: #A5B4FC;
+  --color-primary-400: #818CF8;
+  --color-primary-500: #6366F1;
+  --color-primary-600: #4F46E5;
+  --color-primary-700: #4338CA;
+  --color-primary-800: #3730A3;
+  --color-primary-900: #312E81;
+
+  --color-surface: #FFFFFF;
+  --color-surface-dim: #F8FAFC;
+  --color-surface-variant: #F1F5F9;
+  --color-surface-elevated: #FFFFFF;
+
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #94A3B8;
+  --color-text-inverse: #FFFFFF;
+
+  --color-border: #E2E8F0;
+  --color-border-strong: #CBD5E1;
+  --color-divider: #F1F5F9;
+
+  --color-success: #10B981;
+  --color-success-bg: #ECFDF5;
+  --color-success-text: #065F46;
+  --color-error: #EF4444;
+  --color-error-bg: #FEF2F2;
+  --color-error-text: #991B1B;
+  --color-warning: #F59E0B;
+  --color-warning-bg: #FFFBEB;
+  --color-warning-text: #92400E;
+  --color-info: #3B82F6;
+  --color-info-bg: #EFF6FF;
+  --color-info-text: #1E40AF;
+
+  --color-overlay: rgba(0, 0, 0, 0.5);
+  --color-focus-ring: rgba(99, 102, 241, 0.4);
+}
+
+/* ── Dark Theme ── */
+[data-theme="dark"] {
+  --color-primary-50: #1E1B4B;
+  --color-primary-100: #252262;
+  --color-primary-200: #312E81;
+  --color-primary-300: #4338CA;
+  --color-primary-400: #6366F1;
+  --color-primary-500: #818CF8;
+  --color-primary-600: #A5B4FC;
+  --color-primary-700: #C7D2FE;
+  --color-primary-800: #E0E7FF;
+  --color-primary-900: #EEF2FF;
+
+  --color-surface: #1E293B;
+  --color-surface-dim: #0F172A;
+  --color-surface-variant: #334155;
+  --color-surface-elevated: #253348;
+
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #CBD5E1;
+  --color-text-tertiary: #64748B;
+  --color-text-inverse: #0F172A;
+
+  --color-border: #334155;
+  --color-border-strong: #475569;
+  --color-divider: #1E293B;
+
+  --color-success: #34D399;
+  --color-success-bg: rgba(16, 185, 129, 0.15);
+  --color-success-text: #6EE7B7;
+  --color-error: #F87171;
+  --color-error-bg: rgba(239, 68, 68, 0.15);
+  --color-error-text: #FCA5A5;
+  --color-warning: #FBBF24;
+  --color-warning-bg: rgba(245, 158, 11, 0.15);
+  --color-warning-text: #FDE68A;
+  --color-info: #60A5FA;
+  --color-info-bg: rgba(59, 130, 246, 0.15);
+  --color-info-text: #93C5FD;
+
+  --color-overlay: rgba(0, 0, 0, 0.7);
+  --color-focus-ring: rgba(129, 140, 248, 0.4);
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4), 0 2px 4px -2px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.4), 0 4px 6px -4px rgba(0,0,0,0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.4), 0 8px 10px -6px rgba(0,0,0,0.3);
+}

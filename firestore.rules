@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Rule for user profiles:
+    // Allow users to read and write their own profile document (used for our auto-seeding)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Global fallback for authenticated users:
+    // Allow any logged-in user to read the rest of the database (e.g. classes, timetable)
+    // NOTE: For a production app, you will want to restrict this further based on user roles
+    match /{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only allow writes explicitly defined above
+    }
+  }
+}
