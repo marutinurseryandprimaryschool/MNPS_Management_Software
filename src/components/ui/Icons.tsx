@@ -150,6 +150,10 @@ export function XIcon(props: IconProps) {
   return <Icon {...props}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Icon>;
 }
 
+export function SparklesIcon(props: IconProps) {
+  return <Icon {...props}><path d="M12 3L13.5 8.5L19 9L14.5 12L16 17.5L12 14.5L8 17.5L9.5 12L5 9L10.5 8.5L12 3Z" /></Icon>;
+}
+
 export function AlertTriangleIcon(props: IconProps) {
   return <Icon {...props}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></Icon>;
 }
