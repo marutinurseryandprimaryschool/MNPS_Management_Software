@@ -70,13 +70,21 @@ function getNavForRole(role: UserRole | null): NavItem[] {
 export default function Sidebar({
   activePage,
   onNavigate,
+  onCollapsedChange,
 }: {
   activePage: string;
   onNavigate: (id: string, href: string) => void;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const { role } = useAuth();
   const { school } = useSchool();
   const [collapsed, setCollapsed] = useState(false);
+
+  const handleCollapse = () => {
+    const newCollapsed = !collapsed;
+    setCollapsed(newCollapsed);
+    onCollapsedChange?.(newCollapsed);
+  };
 
   const navItems = getNavForRole(role);
 
@@ -104,7 +112,7 @@ export default function Sidebar({
         ))}
       </nav>
 
-      <button className={styles.collapseBtn} onClick={() => setCollapsed(!collapsed)}>
+      <button className={styles.collapseBtn} onClick={handleCollapse}>
         <span className={`${styles.collapseIcon} ${collapsed ? styles.collapseIconFlipped : ''}`}>
           <ChevronLeftIcon size={18} />
         </span>

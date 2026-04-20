@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { DEMO_TEACHERS, DEMO_TIMETABLE, DEMO_SCHOOL, DEMO_ASSIGNMENTS, DEMO_CHATS } from '@/lib/demo-data';
 import { getGreeting, formatTime, getSubjectColor, getTodayDayOfWeek, getCurrentPeriod } from '@/lib/utils';
 import { DayOfWeek } from '@/types/enums';
-import { CalendarIcon, ClipboardCheckIcon, BookOpenIcon, MessageCircleIcon, UsersIcon } from '@/components/ui/Icons';
+import { CalendarIcon, ClipboardCheckIcon, BookOpenIcon, MessageCircleIcon, UsersIcon, ClockIcon, ZapIcon, AwardIcon } from '@/components/ui/Icons';
 
 export default function TeacherDashboard({ onNavigate }: { onNavigate: (id: string) => void }) {
   const { user } = useAuth();
@@ -20,7 +20,7 @@ export default function TeacherDashboard({ onNavigate }: { onNavigate: (id: stri
   return (
     <div className="page-container">
       <div style={{ marginBottom: 'var(--space-6)' }}>
-        <h2 className="text-h1">{getGreeting()}, {user?.name?.split(' ')[0]} 👋</h2>
+        <h2 className="text-h1">{getGreeting()}, {user?.name?.split(' ')[0]}</h2>
         <p className="text-body-sm" style={{ marginTop: 'var(--space-1)' }}>
           {teacher.assignedClasses.length} classes assigned • {todaySlots.length} periods today
         </p>
@@ -49,14 +49,14 @@ export default function TeacherDashboard({ onNavigate }: { onNavigate: (id: stri
           <h3 className="text-h3">Today&apos;s Schedule</h3>
         </div>
         {todaySlots.length === 0 ? (
-          <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', padding: 'var(--space-4)', textAlign: 'center' }}>No classes today! 🎉</p>
+          <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', padding: 'var(--space-4)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}><AwardIcon size={16} /> No classes today!</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             {DEMO_SCHOOL.settings.periodTimings.map((timing, i) => {
               if (timing.type === 'break' || timing.type === 'lunch') {
                 return (
-                  <div key={i} style={{ textAlign: 'center', padding: 'var(--space-1)', font: 'var(--text-caption)', color: 'var(--color-text-tertiary)' }}>
-                    ☕ {timing.label}
+                  <div key={i} style={{ textAlign: 'center', padding: 'var(--space-1)', font: 'var(--text-caption)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-1)' }}>
+                    <ClockIcon size={12} /> {timing.label}
                   </div>
                 );
               }

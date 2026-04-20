@@ -10,6 +10,7 @@ import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { formatCurrency, formatDate, generateReceiptNumber } from '@/lib/utils';
+import { CreditCardIcon, CheckCircleIcon, ClockIcon, AlertTriangleIcon, BarChartIcon } from '@/components/ui/Icons';
 
 export default function AdminFees() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -27,15 +28,15 @@ export default function AdminFees() {
           <h2 className="text-h1">Fee Management</h2>
           <p className="text-body-sm">Academic Year: 2026-27</p>
         </div>
-        <Button variant="primary" onClick={() => setShowPaymentModal(true)} icon={<span>💳</span>}>Record Payment</Button>
+        <Button variant="primary" onClick={() => setShowPaymentModal(true)} icon={<CreditCardIcon size={20} color="white" />}>Record Payment</Button>
       </div>
 
       {/* Stats */}
       <div className="grid-4" style={{ marginBottom: 'var(--space-4)' }}>
-        <DataCard icon="💰" value={formatCurrency(totalCollected)} label="Collected" color="var(--color-success)" />
-        <DataCard icon="⏳" value={formatCurrency(560000)} label="Pending" color="var(--color-warning)" />
-        <DataCard icon="🔴" value={formatCurrency(120000)} label="Overdue" color="var(--color-error)" />
-        <DataCard icon="📊" value="72%" label="Collection Rate" color="var(--color-info)" />
+        <DataCard icon={<CheckCircleIcon size={24} />} value={formatCurrency(totalCollected)} label="Collected" color="var(--color-success)" />
+        <DataCard icon={<ClockIcon size={24} />} value={formatCurrency(560000)} label="Pending" color="var(--color-warning)" />
+        <DataCard icon={<AlertTriangleIcon size={24} />} value={formatCurrency(120000)} label="Overdue" color="var(--color-error)" />
+        <DataCard icon={<BarChartIcon size={24} />} value="72%" label="Collection Rate" color="var(--color-info)" />
       </div>
 
       <Tabs tabs={[

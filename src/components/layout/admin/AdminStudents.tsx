@@ -32,7 +32,7 @@ export default function AdminStudents() {
           <h2 className="text-h1">Students</h2>
           <p className="text-body-sm">{filteredStudents.length} students</p>
         </div>
-        <Button variant="primary" onClick={() => setShowAddModal(true)} icon={<PlusIcon size={18} />}>
+        <Button variant="primary" onClick={() => setShowAddModal(true)} icon={<PlusIcon size={20} color="white" />}>
           <span className="desktop-only">Add Student</span>
         </Button>
       </div>
@@ -161,7 +161,7 @@ export default function AdminStudents() {
       </Modal>
 
       <div className="mobile-only">
-        <FAB icon={<PlusIcon size={24} />} onClick={() => setShowAddModal(true)} label="Add Student" />
+        <FAB icon={<PlusIcon size={24} color="white" />} onClick={() => setShowAddModal(true)} label="Add Student" />
       </div>
     </div>
   );

@@ -61,6 +61,7 @@ export default function DashboardLayout() {
   const { role } = useAuth();
   const [activePage, setActivePage] = useState('dashboard');
   const [showMore, setShowMore] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleNavigate = useCallback((id: string) => {
     setActivePage(id);
@@ -118,9 +119,9 @@ export default function DashboardLayout() {
 
   return (
     <div className={styles.layout}>
-      <Sidebar activePage={activePage} onNavigate={handleSidebarNavigate} />
-      
-      <div className={styles.main}>
+      <Sidebar activePage={activePage} onNavigate={handleSidebarNavigate} onCollapsedChange={setSidebarCollapsed} />
+
+      <div className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ''}`}>
         <Header title={PAGE_TITLES[activePage] || 'CampusOS'} />
         
         <main className={styles.content}>

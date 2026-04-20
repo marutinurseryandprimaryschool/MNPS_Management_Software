@@ -4,6 +4,7 @@ import React from 'react';
 import { DEMO_ASSIGNMENTS } from '@/lib/demo-data';
 import { Badge } from '@/components/ui/SharedUI';
 import { formatDate, getSubjectColor } from '@/lib/utils';
+import { BookOpenIcon, UserIcon, CalendarIcon } from '@/components/ui/Icons';
 
 export default function ParentAssignments() {
   return (
@@ -31,9 +32,9 @@ export default function ParentAssignments() {
               </div>
               <div className="divider" />
               <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-                <span className="text-caption">📚 {assignment.subjectName}</span>
-                <span className="text-caption">👤 {assignment.teacherName}</span>
-                <span className="text-caption">📅 Due: {formatDate(assignment.dueDate)}</span>
+                <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><BookOpenIcon size={14} /> {assignment.subjectName}</span>
+                <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><UserIcon size={14} /> {assignment.teacherName}</span>
+                <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><CalendarIcon size={14} /> Due: {formatDate(assignment.dueDate)}</span>
               </div>
             </div>
           );

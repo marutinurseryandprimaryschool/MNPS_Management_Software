@@ -8,9 +8,18 @@ import { getGreeting, formatCompactCurrency } from '@/lib/utils';
 import {
   GraduationCapIcon, UsersIcon, BarChartIcon, CreditCardIcon,
   UserPlusIcon, CalendarIcon, ZapIcon, MegaphoneIcon,
-  TrendingUpIcon
+  TrendingUpIcon, ClockIcon
 } from '@/components/ui/Icons';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+
+// Icon mapper for activity feed
+const activityIcons: Record<string, React.ReactNode> = {
+  'user-plus': <UserPlusIcon size={16} />,
+  'calendar': <CalendarIcon size={16} />,
+  'credit-card': <CreditCardIcon size={16} />,
+  'clock': <ClockIcon size={16} />,
+  'bar-chart': <BarChartIcon size={16} />,
+};
 
 export default function AdminDashboard({ onNavigate }: { onNavigate: (id: string) => void }) {
   const { user } = useAuth();
@@ -20,7 +29,7 @@ export default function AdminDashboard({ onNavigate }: { onNavigate: (id: string
     <div className="page-container">
       {/* Greeting */}
       <div style={{ marginBottom: 'var(--space-6)' }}>
-        <h2 className="text-h1">{getGreeting()}, {user?.name?.split(' ')[0]} 👋</h2>
+        <h2 className="text-h1">{getGreeting()}, {user?.name?.split(' ')[0]}</h2>
         <p className="text-body-sm" style={{ marginTop: 'var(--space-1)' }}>Academic Year: 2026-27 • AJK School</p>
       </div>
 
@@ -93,12 +102,12 @@ export default function AdminDashboard({ onNavigate }: { onNavigate: (id: string
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
             {DEMO_RECENT_ACTIVITY.map(act => (
               <div key={act.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)', padding: 'var(--space-2) 0', borderBottom: '1px solid var(--color-divider)' }}>
-                <span style={{ 
+                <span style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   width: 32, height: 32, borderRadius: 'var(--radius-md)',
                   background: 'var(--color-surface-variant)', flexShrink: 0,
-                  fontSize: '0.875rem'
-                }}>{act.icon}</span>
+                  fontSize: '0.875rem', color: act.color
+                }}>{activityIcons[act.icon] || <MegaphoneIcon size={16} />}</span>
                 <div style={{ flex: 1 }}>
                   <p className="text-body-sm" style={{ color: 'var(--color-text-primary)' }}>{act.text}</p>
                   <span className="text-caption">{act.time}</span>

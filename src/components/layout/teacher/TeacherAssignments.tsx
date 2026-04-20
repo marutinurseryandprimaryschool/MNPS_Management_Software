@@ -8,6 +8,7 @@ import Modal from '@/components/ui/Modal';
 import Input, { Textarea, Select } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate, getSubjectColor } from '@/lib/utils';
+import { PlusIcon, BookOpenIcon, SchoolIcon, CalendarIcon, UserIcon } from '@/components/ui/Icons';
 
 export default function TeacherAssignments() {
   const [showAdd, setShowAdd] = useState(false);
@@ -22,7 +23,7 @@ export default function TeacherAssignments() {
           <h2 className="text-h1">Assignments</h2>
           <p className="text-body-sm">{assignments.length} active assignments</p>
         </div>
-        <Button variant="primary" onClick={() => setShowAdd(true)} icon={<span>+</span>}>New Assignment</Button>
+        <Button variant="primary" onClick={() => setShowAdd(true)} icon={<PlusIcon size={20} color="white" />}>New Assignment</Button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -43,10 +44,10 @@ export default function TeacherAssignments() {
               </div>
               <div className="divider" />
               <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-                <span className="text-caption">📚 {assignment.subjectName}</span>
-                <span className="text-caption">🏫 {assignment.className}-{assignment.sectionName}</span>
-                <span className="text-caption">📅 Due: {formatDate(assignment.dueDate)}</span>
-                <span className="text-caption">👤 {assignment.teacherName}</span>
+                <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><BookOpenIcon size={14} /> {assignment.subjectName}</span>
+                <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><SchoolIcon size={14} /> {assignment.className}-{assignment.sectionName}</span>
+                <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><CalendarIcon size={14} /> Due: {formatDate(assignment.dueDate)}</span>
+                <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><UserIcon size={14} /> {assignment.teacherName}</span>
               </div>
             </div>
           );
@@ -68,7 +69,7 @@ export default function TeacherAssignments() {
         </div>
       </Modal>
 
-      <FAB icon={<span style={{ fontSize: '1.5rem' }}>+</span>} onClick={() => setShowAdd(true)} label="New Assignment" />
+      <FAB icon={<PlusIcon size={24} color="white" />} onClick={() => setShowAdd(true)} label="New Assignment" />
     </div>
   );
 }

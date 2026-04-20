@@ -4,6 +4,7 @@ import React from 'react';
 import { DEMO_MARKS, DEMO_SCHOOL } from '@/lib/demo-data';
 import { Badge } from '@/components/ui/SharedUI';
 import { DataCard } from '@/components/ui/Card';
+import { FileTextIcon, BarChartIcon, AwardIcon } from '@/components/ui/Icons';
 
 export default function ParentMarks() {
   const marks = DEMO_MARKS[0];
@@ -16,9 +17,9 @@ export default function ParentMarks() {
       </div>
 
       <div className="grid-3" style={{ marginBottom: 'var(--space-4)' }}>
-        <DataCard icon="📝" value={childMarks?.grade || 'B+'} label="Avg Grade" color="var(--color-info)" />
-        <DataCard icon="📊" value={`${childMarks?.marksObtained || 0}/${marks.maxMarks}`} label="Last Exam" color="var(--color-primary-500)" />
-        <DataCard icon="🏆" value="5th" label="Class Rank" color="var(--color-warning)" />
+        <DataCard icon={<FileTextIcon size={24} />} value={childMarks?.grade || 'B+'} label="Avg Grade" color="var(--color-info)" />
+        <DataCard icon={<BarChartIcon size={24} />} value={`${childMarks?.marksObtained || 0}/${marks.maxMarks}`} label="Last Exam" color="var(--color-primary-500)" />
+        <DataCard icon={<AwardIcon size={24} />} value="5th" label="Class Rank" color="var(--color-warning)" />
       </div>
 
       <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>

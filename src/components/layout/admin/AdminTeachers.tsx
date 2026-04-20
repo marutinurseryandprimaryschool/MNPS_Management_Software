@@ -9,6 +9,7 @@ import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import { Select } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
+import { PlusIcon, AwardIcon } from '@/components/ui/Icons';
 
 export default function AdminTeachers() {
   const [search, setSearch] = useState('');
@@ -29,7 +30,7 @@ export default function AdminTeachers() {
           <h2 className="text-h1">Teachers</h2>
           <p className="text-body-sm">{filteredTeachers.length} teachers</p>
         </div>
-        <Button variant="primary" onClick={() => setShowAdd(true)} icon={<span>+</span>}>Add Teacher</Button>
+        <Button variant="primary" onClick={() => setShowAdd(true)} icon={<PlusIcon size={20} color="white" />}>Add Teacher</Button>
       </div>
 
       <div className="mb-4">
@@ -81,7 +82,7 @@ export default function AdminTeachers() {
               <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
                 {detail.assignedClasses.map((ac, i) => (
                   <div key={i} style={{ background: 'var(--color-primary-50)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', font: 'var(--text-body-sm)' }}>
-                    {ac.className}-{ac.sectionName} ({ac.subjectName}) {ac.isClassTeacher && '⭐'}
+                    {ac.className}-{ac.sectionName} ({ac.subjectName}) {ac.isClassTeacher && <AwardIcon size={14} style={{ marginLeft: 4 }} />}
                   </div>
                 ))}
               </div>
@@ -128,7 +129,7 @@ export default function AdminTeachers() {
         </div>
       </Modal>
 
-      <FAB icon={<span style={{ fontSize: '1.5rem' }}>+</span>} onClick={() => setShowAdd(true)} label="Add Teacher" />
+      <FAB icon={<PlusIcon size={24} color="white" />} onClick={() => setShowAdd(true)} label="Add Teacher" />
     </div>
   );
 }

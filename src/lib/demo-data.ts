@@ -638,9 +638,9 @@ export const DEMO_FEE_BY_CLASS = [
 
 // ── Recent Activity ──
 export const DEMO_RECENT_ACTIVITY = [
-  { id: 'act_1', text: 'New student Bhavya S. enrolled in Class 5-A', time: '2 hours ago', icon: '👨‍🎓', color: 'var(--color-success)' },
-  { id: 'act_2', text: 'Timetable published for Class 8-A', time: '4 hours ago', icon: '📅', color: 'var(--color-primary-500)' },
-  { id: 'act_3', text: 'Fee payment of ₹48,500 received from Mohammed Irfan', time: 'Yesterday', icon: '💰', color: 'var(--color-success)' },
-  { id: 'act_4', text: 'Rajan M. marked leave for Thursday P1-P2', time: 'Yesterday', icon: '🏖️', color: 'var(--color-warning)' },
-  { id: 'act_5', text: 'Mid-term marks published for Class 5-A Mathematics', time: '3 days ago', icon: '📊', color: 'var(--color-info)' },
+  { id: 'act_1', text: 'New student Bhavya S. enrolled in Class 5-A', time: '2 hours ago', icon: 'user-plus', color: 'var(--color-success)' },
+  { id: 'act_2', text: 'Timetable published for Class 8-A', time: '4 hours ago', icon: 'calendar', color: 'var(--color-primary-500)' },
+  { id: 'act_3', text: 'Fee payment of ₹48,500 received from Mohammed Irfan', time: 'Yesterday', icon: 'credit-card', color: 'var(--color-success)' },
+  { id: 'act_4', text: 'Rajan M. marked leave for Thursday P1-P2', time: 'Yesterday', icon: 'clock', color: 'var(--color-warning)' },
+  { id: 'act_5', text: 'Mid-term marks published for Class 5-A Mathematics', time: '3 days ago', icon: 'bar-chart', color: 'var(--color-info)' },
 ];

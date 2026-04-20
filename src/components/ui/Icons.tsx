@@ -7,6 +7,7 @@ interface IconProps {
   color?: string;
   className?: string;
   strokeWidth?: number;
+  style?: React.CSSProperties;
 }
 
 const defaultProps: IconProps = { size: 20, strokeWidth: 1.8 };
@@ -215,4 +216,16 @@ export function AwardIcon(props: IconProps) {
 
 export function BriefcaseIcon(props: IconProps) {
   return <Icon {...props}><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></Icon>;
+}
+
+export function UploadIcon(props: IconProps) {
+  return <Icon {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></Icon>;
+}
+
+export function BookIcon(props: IconProps) {
+  return <Icon {...props}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></Icon>;
+}
+
+export function BuildingIcon(props: IconProps) {
+  return <Icon {...props}><rect x="4" y="2" width="16" height="20" rx="2" ry="2" /><path d="M9 22v-4h6v4" /><path d="M8 6h.01" /><path d="M16 6h.01" /><path d="M8 10h.01" /><path d="M16 10h.01" /><path d="M8 14h.01" /><path d="M16 14h.01" /></Icon>;
 }

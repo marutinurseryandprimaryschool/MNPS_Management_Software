@@ -7,6 +7,7 @@ import Modal from '@/components/ui/Modal';
 import Input, { Textarea, Select } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate, formatFileSize, getSubjectColor } from '@/lib/utils';
+import { FolderIcon, BookIcon, BuildingIcon, PaperclipIcon, UploadIcon } from '@/components/ui/Icons';
 
 export default function TeacherMaterials() {
   const [showAdd, setShowAdd] = useState(false);
@@ -20,7 +21,7 @@ export default function TeacherMaterials() {
           <h2 className="text-h1">Study Materials</h2>
           <p className="text-body-sm">{DEMO_MATERIALS.length} materials uploaded</p>
         </div>
-        <Button variant="primary" onClick={() => setShowAdd(true)} icon={<span>📁</span>}>Upload Material</Button>
+        <Button variant="primary" onClick={() => setShowAdd(true)} icon={<UploadIcon size={18} />}>Upload Material</Button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -33,13 +34,13 @@ export default function TeacherMaterials() {
               <div className="divider" />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                  <span className="text-caption">📚 {material.subjectName}</span>
-                  <span className="text-caption">🏫 {material.className}-{material.sectionName}</span>
+                  <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><BookIcon size={14} /> {material.subjectName}</span>
+                  <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}><BuildingIcon size={14} /> {material.className}-{material.sectionName}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                   {material.files.map((file, i) => (
-                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', padding: 'var(--space-1) var(--space-2)', background: 'var(--color-surface-variant)', borderRadius: 'var(--radius-sm)', font: 'var(--text-caption)', cursor: 'pointer' }}>
-                      📎 {file.name} ({formatFileSize(file.size)})
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', padding: 'var(--space-1) var(--space-2)', background: 'var(--color-surface-variant)', borderRadius: 'var(--radius-sm)', font: 'var(--text-caption)', cursor: 'pointer' }}>
+                      <PaperclipIcon size={14} /> {file.name} ({formatFileSize(file.size)})
                     </span>
                   ))}
                 </div>
@@ -55,7 +56,7 @@ export default function TeacherMaterials() {
           <Textarea label="Description" placeholder="What is this material about?" rows={2} />
           <Select label="Class-Section" options={teacher.assignedClasses.map(ac => ({ value: `${ac.classId}-${ac.sectionId}`, label: `${ac.className}-${ac.sectionName} (${ac.subjectName})` }))} placeholder="Select class" />
           <div style={{ border: '2px dashed var(--color-border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-8)', textAlign: 'center', cursor: 'pointer' }}>
-            <div style={{ fontSize: '2rem', marginBottom: 'var(--space-2)' }}>📁</div>
+            <div style={{ fontSize: '2rem', marginBottom: 'var(--space-2)', color: 'var(--color-text-tertiary)' }}><FolderIcon size={32} /></div>
             <p className="text-body-sm" style={{ color: 'var(--color-text-secondary)' }}>Click to upload or drag files here</p>
             <p className="text-caption">PDF, DOC, PPT, Images (max 10MB)</p>
           </div>

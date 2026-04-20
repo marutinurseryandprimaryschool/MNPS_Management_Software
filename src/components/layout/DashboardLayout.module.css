@@ -15,6 +15,11 @@
 @media (min-width: 1024px) {
   .main {
     margin-left: var(--sidebar-width);
+    transition: margin-left var(--transition-smooth);
+  }
+
+  .mainCollapsed {
+    margin-left: var(--sidebar-collapsed);
   }
 }
 

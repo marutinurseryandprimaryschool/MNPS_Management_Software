@@ -4,6 +4,7 @@ import React from 'react';
 import { DEMO_ADMIN_STATS, DEMO_ATTENDANCE_TREND, DEMO_FEE_BY_CLASS } from '@/lib/demo-data';
 import { DataCard } from '@/components/ui/Card';
 import { formatCurrency } from '@/lib/utils';
+import { GraduationCapIcon, UsersIcon, BarChartIcon, CreditCardIcon } from '@/components/ui/Icons';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 
 const COLORS = ['var(--color-primary-500)', 'var(--color-success)', 'var(--color-warning)', 'var(--color-info)'];
@@ -21,10 +22,10 @@ export default function AdminReports() {
       </div>
 
       <div className="grid-4" style={{ marginBottom: 'var(--space-6)' }}>
-        <DataCard icon="👨‍🎓" value={DEMO_ADMIN_STATS.totalStudents} label="Total Students" color="var(--color-primary-500)" />
-        <DataCard icon="👩‍🏫" value={DEMO_ADMIN_STATS.totalTeachers} label="Total Teachers" color="var(--color-info)" />
-        <DataCard icon="📊" value={`${DEMO_ADMIN_STATS.avgAttendance}%`} label="Avg Attendance" color="var(--color-success)" />
-        <DataCard icon="💰" value={formatCurrency(DEMO_ADMIN_STATS.totalFeeCollected)} label="Total Collection" color="var(--color-warning)" />
+        <DataCard icon={<GraduationCapIcon size={24} />} value={DEMO_ADMIN_STATS.totalStudents} label="Total Students" color="var(--color-primary-500)" />
+        <DataCard icon={<UsersIcon size={24} />} value={DEMO_ADMIN_STATS.totalTeachers} label="Total Teachers" color="var(--color-info)" />
+        <DataCard icon={<BarChartIcon size={24} />} value={`${DEMO_ADMIN_STATS.avgAttendance}%`} label="Avg Attendance" color="var(--color-success)" />
+        <DataCard icon={<CreditCardIcon size={24} />} value={formatCurrency(DEMO_ADMIN_STATS.totalFeeCollected)} label="Total Collection" color="var(--color-warning)" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }} className="responsive-grid-2">

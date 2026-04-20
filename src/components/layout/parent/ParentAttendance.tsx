@@ -4,6 +4,7 @@ import React from 'react';
 import { DEMO_ATTENDANCE } from '@/lib/demo-data';
 import { Badge } from '@/components/ui/SharedUI';
 import { DataCard } from '@/components/ui/Card';
+import { BarChartIcon, CheckCircleIcon, XCircleIcon } from '@/components/ui/Icons';
 import { AttendanceStatus } from '@/types/enums';
 
 export default function ParentAttendance() {
@@ -25,9 +26,9 @@ export default function ParentAttendance() {
       </div>
 
       <div className="grid-3" style={{ marginBottom: 'var(--space-4)' }}>
-        <DataCard icon="📊" value="92%" label="This Month" color="var(--color-success)" />
-        <DataCard icon="✅" value="11" label="Days Present" color="var(--color-primary-500)" />
-        <DataCard icon="❌" value="1" label="Days Absent" color="var(--color-error)" />
+        <DataCard icon={<BarChartIcon size={24} />} value="92%" label="This Month" color="var(--color-success)" />
+        <DataCard icon={<CheckCircleIcon size={24} />} value="11" label="Days Present" color="var(--color-primary-500)" />
+        <DataCard icon={<XCircleIcon size={24} />} value="1" label="Days Absent" color="var(--color-error)" />
       </div>
 
       <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 'var(--space-4)' }}>

@@ -6,6 +6,7 @@ import { Select } from '@/components/ui/Input';
 import { Badge, Tabs } from '@/components/ui/SharedUI';
 import { AttendanceStatus } from '@/types/enums';
 import { DataCard } from '@/components/ui/Card';
+import { BarChartIcon, CheckCircleIcon, XCircleIcon, UsersIcon } from '@/components/ui/Icons';
 
 export default function AdminAttendance() {
   const [selectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -34,10 +35,10 @@ export default function AdminAttendance() {
 
       {/* Stats */}
       <div className="grid-4" style={{ marginBottom: 'var(--space-4)' }}>
-        <DataCard icon="📊" value={`${percentage}%`} label="Attendance Rate" color="var(--color-primary-500)" />
-        <DataCard icon="✅" value={present} label="Present" color="var(--color-success)" />
-        <DataCard icon="❌" value={absent} label="Absent" color="var(--color-error)" />
-        <DataCard icon="👥" value={total} label="Total Students" color="var(--color-info)" />
+        <DataCard icon={<BarChartIcon size={24} />} value={`${percentage}%`} label="Attendance Rate" color="var(--color-primary-500)" />
+        <DataCard icon={<CheckCircleIcon size={24} />} value={present} label="Present" color="var(--color-success)" />
+        <DataCard icon={<XCircleIcon size={24} />} value={absent} label="Absent" color="var(--color-error)" />
+        <DataCard icon={<UsersIcon size={24} />} value={total} label="Total Students" color="var(--color-info)" />
       </div>
 
       {/* Attendance Records */}

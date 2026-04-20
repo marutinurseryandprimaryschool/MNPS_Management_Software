@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/SharedUI';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
+import { PlusIcon } from '@/components/ui/Icons';
 
 export default function AdminClasses() {
   const [showAdd, setShowAdd] = useState(false);
@@ -20,7 +21,7 @@ export default function AdminClasses() {
           <h2 className="text-h1">Classes & Sections</h2>
           <p className="text-body-sm">{DEMO_CLASSES.length} classes</p>
         </div>
-        <Button variant="primary" onClick={() => setShowAdd(true)} icon={<span>+</span>}>Add Class</Button>
+        <Button variant="primary" onClick={() => setShowAdd(true)} icon={<PlusIcon size={20} color="white" />}>Add Class</Button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>

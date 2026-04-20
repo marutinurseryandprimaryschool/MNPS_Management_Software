@@ -2,12 +2,11 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
 import { UserRole } from '@/types/enums';
 import { Avatar } from '@/components/ui/SharedUI';
 import { DEMO_NOTIFICATIONS } from '@/lib/demo-data';
 import {
-  BellIcon, SunIcon, MoonIcon, ArrowLeftIcon, LogOutIcon,
+  BellIcon, ArrowLeftIcon, LogOutIcon,
   ChevronDownIcon, CreditCardIcon, ClipboardCheckIcon,
   CalendarIcon, MegaphoneIcon, FileTextIcon,
   UserIcon, GraduationCapIcon, UsersIcon, BriefcaseIcon, AwardIcon
@@ -39,7 +38,6 @@ export default function Header({
   onBack?: () => void;
 }) {
   const { user, logout, switchRole, role } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
 
@@ -57,11 +55,6 @@ export default function Header({
       </div>
 
       <div className={styles.right}>
-        {/* Theme Toggle */}
-        <button className={styles.iconBtn} onClick={toggleTheme} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
-          {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
-        </button>
-
         {/* Notifications */}
         <div className={styles.notifWrapper}>
           <button className={styles.iconBtn} onClick={() => { setShowNotif(!showNotif); setShowMenu(false); }}>

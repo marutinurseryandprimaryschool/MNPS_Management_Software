@@ -15,7 +15,7 @@ export default function ParentDashboard({ onNavigate }: { onNavigate: (id: strin
   return (
     <div className="page-container">
       <div style={{ marginBottom: 'var(--space-6)' }}>
-        <h2 className="text-h1">{getGreeting()}, {user?.name?.split(' ')[0]} 👋</h2>
+        <h2 className="text-h1">{getGreeting()}, {user?.name?.split(' ')[0]}</h2>
         <p className="text-body-sm" style={{ marginTop: 'var(--space-1)' }}>Parent Portal • AJK School</p>
       </div>
 

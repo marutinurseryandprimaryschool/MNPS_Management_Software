@@ -6,6 +6,7 @@ import { DataCard } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/SharedUI';
 import { Tabs } from '@/components/ui/SharedUI';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { CreditCardIcon, CheckCircleIcon, ClockIcon } from '@/components/ui/Icons';
 
 export default function ParentFees() {
   const [activeTab, setActiveTab] = React.useState('overview');
@@ -22,9 +23,9 @@ export default function ParentFees() {
       </div>
 
       <div className="grid-3" style={{ marginBottom: 'var(--space-4)' }}>
-        <DataCard icon="💰" value={formatCurrency(totalFee)} label="Total Fee" color="var(--color-info)" />
-        <DataCard icon="✅" value={formatCurrency(totalPaid)} label="Paid" color="var(--color-success)" />
-        <DataCard icon="⏳" value={formatCurrency(pending)} label="Pending" color="var(--color-warning)" />
+        <DataCard icon={<CreditCardIcon size={24} />} value={formatCurrency(totalFee)} label="Total Fee" color="var(--color-info)" />
+        <DataCard icon={<CheckCircleIcon size={24} />} value={formatCurrency(totalPaid)} label="Paid" color="var(--color-success)" />
+        <DataCard icon={<ClockIcon size={24} />} value={formatCurrency(pending)} label="Pending" color="var(--color-warning)" />
       </div>
 
       {/* Progress Bar */}

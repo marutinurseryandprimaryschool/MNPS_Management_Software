@@ -9,6 +9,7 @@ import Input from '@/components/ui/Input';
 import { Badge, Avatar, Tabs } from '@/components/ui/SharedUI';
 import { useToast } from '@/components/ui/Toast';
 import { MarksStatus } from '@/types/enums';
+import { PlusIcon } from '@/components/ui/Icons';
 
 export default function TeacherMarks() {
   const [activeTab, setActiveTab] = useState('entry');
@@ -34,7 +35,7 @@ export default function TeacherMarks() {
           <h2 className="text-h1">Marks & Grades</h2>
           <p className="text-body-sm">Enter and publish student marks</p>
         </div>
-        <Button variant="primary" onClick={() => setShowAddExam(true)} icon={<span>+</span>}>New Exam</Button>
+        <Button variant="primary" onClick={() => setShowAddExam(true)} icon={<PlusIcon size={20} color="white" />}>New Exam</Button>
       </div>
 
       <Tabs tabs={[

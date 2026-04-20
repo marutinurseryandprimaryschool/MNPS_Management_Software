@@ -80,7 +80,7 @@
   padding: 0;
   border-radius: var(--radius-full);
 }
-.icon:hover:not(:disabled) {
+.button.icon:hover:not(:disabled) {
   background: var(--color-surface-variant);
   color: var(--color-text-primary);
 }
@@ -98,10 +98,16 @@
   animation: spin 1s linear infinite;
 }
 
-.icon > span:first-child {
-  display: flex;
+.icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  height: 100%;
+}
+
+.icon > svg,
+.icon > span > svg {
+  display: block;
 }
 
 /* FAB */
