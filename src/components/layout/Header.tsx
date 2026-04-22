@@ -51,7 +51,7 @@ export default function Header({
             <ArrowLeftIcon size={20} />
           </button>
         )}
-        <h1 className={styles.title}>{title || 'CampusOS'}</h1>
+        <h1 className={styles.title}>{title || 'Maruti School'}</h1>
       </div>
 
       <div className={styles.right}>

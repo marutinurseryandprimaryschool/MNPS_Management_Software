@@ -34,7 +34,7 @@ function AppContent() {
             borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />
-          <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-tertiary)' }}>Loading CampusOS...</span>
+          <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-tertiary)' }}>Loading Maruti School...</span>
         </div>
       </div>
     );

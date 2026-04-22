@@ -1,0 +1,173 @@
+/* [project]/src/components/ui/Input.module.css [app-client] (css) */
+.Input-module__5jsJuW__wrapper {
+  gap: var(--space-1);
+  flex-direction: column;
+  display: flex;
+}
+
+.Input-module__5jsJuW__fullWidth {
+  width: 100%;
+}
+
+.Input-module__5jsJuW__label {
+  font: var(--text-body-sm);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.Input-module__5jsJuW__inputContainer {
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-surface-variant);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-3);
+  transition: all var(--transition-fast);
+  border: 1.5px solid #0000;
+  height: 44px;
+  display: flex;
+}
+
+.Input-module__5jsJuW__inputContainer:focus-within {
+  border-color: var(--color-primary-500);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.Input-module__5jsJuW__hasError, .Input-module__5jsJuW__inputContainer.Input-module__5jsJuW__hasError {
+  border-color: var(--color-error) !important;
+}
+
+.Input-module__5jsJuW__icon {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  display: flex;
+}
+
+.Input-module__5jsJuW__input {
+  height: 100%;
+  font: var(--text-body);
+  color: var(--color-text-primary);
+  background: none;
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.Input-module__5jsJuW__input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.Input-module__5jsJuW__textarea {
+  background: var(--color-surface-variant);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font: var(--text-body);
+  color: var(--color-text-primary);
+  resize: vertical;
+  min-height: 80px;
+  transition: all var(--transition-fast);
+  border: 1.5px solid #0000;
+  outline: none;
+}
+
+.Input-module__5jsJuW__textarea:focus {
+  border-color: var(--color-primary-500);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.Input-module__5jsJuW__textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.Input-module__5jsJuW__select {
+  height: 44px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface-variant);
+  border-radius: var(--radius-sm);
+  font: var(--text-body);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  appearance: auto;
+  transition: all var(--transition-fast);
+  border: 1.5px solid #0000;
+  outline: none;
+}
+
+.Input-module__5jsJuW__select:focus {
+  border-color: var(--color-primary-500);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.Input-module__5jsJuW__error {
+  font: var(--text-caption);
+  color: var(--color-error);
+}
+
+.Input-module__5jsJuW__hint {
+  font: var(--text-caption);
+  color: var(--color-text-tertiary);
+}
+
+.Input-module__5jsJuW__searchWrapper {
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-surface-variant);
+  border-radius: var(--radius-full);
+  padding: 0 var(--space-3);
+  height: 40px;
+  transition: all var(--transition-fast);
+  border: 1.5px solid #0000;
+  min-width: 200px;
+  display: flex;
+}
+
+.Input-module__5jsJuW__searchWrapper:focus-within {
+  border-color: var(--color-primary-500);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.Input-module__5jsJuW__searchIcon {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  display: flex;
+}
+
+.Input-module__5jsJuW__searchInput {
+  height: 100%;
+  font: var(--text-body);
+  color: var(--color-text-primary);
+  background: none;
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.Input-module__5jsJuW__searchInput::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.Input-module__5jsJuW__searchClear {
+  border-radius: var(--radius-full);
+  background: var(--color-text-tertiary);
+  color: #fff;
+  cursor: pointer;
+  border: none;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: .625rem;
+  display: flex;
+}
+
+.Input-module__5jsJuW__searchClear:hover {
+  background: var(--color-text-secondary);
+}
+
+/*# sourceMappingURL=src_components_ui_Input_module_css_0w3-wzy._.single.css.map*/

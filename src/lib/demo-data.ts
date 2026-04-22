@@ -13,7 +13,7 @@ export const DEMO_USERS: Record<UserRole, User> = {
     uid: 'auth_admin_001',
     role: UserRole.ADMIN,
     name: 'Priya Sharma',
-    email: 'admin@campusos.demo',
+    email: 'admin@marutischool.edu',
     phone: '+91 98765 43210',
     photo: '',
     status: 'active',
@@ -25,7 +25,7 @@ export const DEMO_USERS: Record<UserRole, User> = {
     uid: 'auth_principal_001',
     role: UserRole.PRINCIPAL,
     name: 'Dr. Aravind Swamy',
-    email: 'principal@campusos.demo',
+    email: 'principal@marutischool.edu',
     phone: '+91 98765 43208',
     photo: '',
     status: 'active',
@@ -37,7 +37,7 @@ export const DEMO_USERS: Record<UserRole, User> = {
     uid: 'auth_correspondent_001',
     role: UserRole.CORRESPONDENT,
     name: 'Mrs. Lakshmi Rajan',
-    email: 'correspondent@campusos.demo',
+    email: 'correspondent@marutischool.edu',
     phone: '+91 98765 43209',
     photo: '',
     status: 'active',
@@ -49,7 +49,7 @@ export const DEMO_USERS: Record<UserRole, User> = {
     uid: 'auth_teacher_001',
     role: UserRole.TEACHER,
     name: 'Rajesh Kumar',
-    email: 'teacher@campusos.demo',
+    email: 'teacher@marutischool.edu',
     phone: '+91 98765 43211',
     photo: '',
     status: 'active',
@@ -61,7 +61,7 @@ export const DEMO_USERS: Record<UserRole, User> = {
     uid: 'auth_parent_001',
     role: UserRole.PARENT,
     name: 'Meena Devi',
-    email: 'parent@campusos.demo',
+    email: 'parent@marutischool.edu',
     phone: '+91 98765 43212',
     photo: '',
     status: 'active',
@@ -73,15 +73,15 @@ export const DEMO_USERS: Record<UserRole, User> = {
 // ── Demo School ──
 export const DEMO_SCHOOL: School = {
   id: 'school_demo_001',
-  name: 'AJK School',
+  name: 'Maruti Nursery & Primary School',
   address: '123 Education Lane, Bangalore, Karnataka 560001',
   phone: '+91 80 2345 6789',
-  email: 'info@ajkschool.edu.in',
-  logo: '',
+  email: 'info@marutischool.edu.in',
+  logo: '/MARUTI.png.bv.webp',
   academicYear: '2026-27',
   plan: SchoolPlan.STANDARD,
   settings: {
-    admissionPrefix: 'GIS',
+    admissionPrefix: 'MNS',
     periodsPerDay: 8,
     schoolDays: [DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY],
     periodTimings: [
@@ -192,7 +192,7 @@ const studentNames = [
 
 export const DEMO_STUDENTS: Student[] = studentNames.map((name, i) => ({
   id: `student_${String(i + 1).padStart(3, '0')}`,
-  admissionNumber: `GIS-2026-${String(i + 1).padStart(4, '0')}`,
+  admissionNumber: `MNS-2026-${String(i + 1).padStart(4, '0')}`,
   name,
   dob: new Date(2014 + Math.floor(i / 10), (i * 3) % 12, (i * 7 + 5) % 28 + 1),
   gender: i % 3 === 0 ? 'female' : 'male' as const,
@@ -215,7 +215,7 @@ export const DEMO_STUDENTS: Student[] = studentNames.map((name, i) => ({
 export const DEMO_TEACHERS: Teacher[] = [
   {
     id: 'teacher_001', userId: 'user_teacher_001', employeeId: 'EMP001',
-    name: 'Rajesh Kumar', email: 'rajesh@ajkschool.edu.in', phone: '+91 98765 43211', photo: '',
+    name: 'Rajesh Kumar', email: 'rajesh@marutischool.edu.in', phone: '+91 98765 43211', photo: '',
     subjects: ['sub_math'], subjectNames: ['Mathematics'],
     assignedClasses: [
       { classId: 'class_005', sectionId: 'sec_5a', subjectId: 'sub_math', isClassTeacher: true, className: 'Class 5', sectionName: 'A', subjectName: 'Mathematics' },
@@ -234,7 +234,7 @@ export const DEMO_TEACHERS: Teacher[] = [
   },
   {
     id: 'teacher_002', userId: 'user_teacher_002', employeeId: 'EMP002',
-    name: 'Preeti Nair', email: 'preeti@ajkschool.edu.in', phone: '+91 98765 43213', photo: '',
+    name: 'Preeti Nair', email: 'preeti@marutischool.edu.in', phone: '+91 98765 43213', photo: '',
     subjects: ['sub_eng'], subjectNames: ['English'],
     assignedClasses: [
       { classId: 'class_005', sectionId: 'sec_5a', subjectId: 'sub_eng', isClassTeacher: false, className: 'Class 5', sectionName: 'A', subjectName: 'English' },
@@ -252,7 +252,7 @@ export const DEMO_TEACHERS: Teacher[] = [
   },
   {
     id: 'teacher_003', userId: 'user_teacher_003', employeeId: 'EMP003',
-    name: 'Rajan M.', email: 'rajan@ajkschool.edu.in', phone: '+91 98765 43214', photo: '',
+    name: 'Rajan M.', email: 'rajan@marutischool.edu.in', phone: '+91 98765 43214', photo: '',
     subjects: ['sub_sci'], subjectNames: ['Science'],
     assignedClasses: [
       { classId: 'class_005', sectionId: 'sec_5a', subjectId: 'sub_sci', isClassTeacher: false, className: 'Class 5', sectionName: 'A', subjectName: 'Science' },
@@ -271,7 +271,7 @@ export const DEMO_TEACHERS: Teacher[] = [
   },
   {
     id: 'teacher_004', userId: 'user_teacher_004', employeeId: 'EMP004',
-    name: 'Deepa Menon', email: 'deepa@ajkschool.edu.in', phone: '+91 98765 43215', photo: '',
+    name: 'Deepa Menon', email: 'deepa@marutischool.edu.in', phone: '+91 98765 43215', photo: '',
     subjects: ['sub_hindi'], subjectNames: ['Hindi'],
     assignedClasses: [
       { classId: 'class_005', sectionId: 'sec_5a', subjectId: 'sub_hindi', isClassTeacher: false, className: 'Class 5', sectionName: 'A', subjectName: 'Hindi' },
@@ -289,7 +289,7 @@ export const DEMO_TEACHERS: Teacher[] = [
   },
   {
     id: 'teacher_005', userId: 'user_teacher_005', employeeId: 'EMP005',
-    name: 'Suresh Babu', email: 'suresh@ajkschool.edu.in', phone: '+91 98765 43216', photo: '',
+    name: 'Suresh Babu', email: 'suresh@marutischool.edu.in', phone: '+91 98765 43216', photo: '',
     subjects: ['sub_social'], subjectNames: ['Social Studies'],
     assignedClasses: [
       { classId: 'class_005', sectionId: 'sec_5a', subjectId: 'sub_social', isClassTeacher: false, className: 'Class 5', sectionName: 'A', subjectName: 'Social Studies' },
@@ -307,7 +307,7 @@ export const DEMO_TEACHERS: Teacher[] = [
   },
   {
     id: 'teacher_006', userId: 'user_teacher_006', employeeId: 'EMP006',
-    name: 'Anitha R.', email: 'anitha@ajkschool.edu.in', phone: '+91 98765 43217', photo: '',
+    name: 'Anitha R.', email: 'anitha@marutischool.edu.in', phone: '+91 98765 43217', photo: '',
     subjects: ['sub_cs'], subjectNames: ['Computer Science'],
     assignedClasses: [
       { classId: 'class_005', sectionId: 'sec_5a', subjectId: 'sub_cs', isClassTeacher: false, className: 'Class 5', sectionName: 'A', subjectName: 'Computer Science' },
@@ -325,7 +325,7 @@ export const DEMO_TEACHERS: Teacher[] = [
   },
   {
     id: 'teacher_007', userId: 'user_teacher_007', employeeId: 'EMP007',
-    name: 'Vijay S.', email: 'vijay@ajkschool.edu.in', phone: '+91 98765 43218', photo: '',
+    name: 'Vijay S.', email: 'vijay@marutischool.edu.in', phone: '+91 98765 43218', photo: '',
     subjects: ['sub_pe', 'sub_art'], subjectNames: ['Physical Education', 'Art'],
     assignedClasses: [
       { classId: 'class_005', sectionId: 'sec_5a', subjectId: 'sub_pe', isClassTeacher: false, className: 'Class 5', sectionName: 'A', subjectName: 'Physical Education' },

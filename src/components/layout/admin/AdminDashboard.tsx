@@ -30,7 +30,7 @@ export default function AdminDashboard({ onNavigate }: { onNavigate: (id: string
       {/* Greeting */}
       <div style={{ marginBottom: 'var(--space-6)' }}>
         <h2 className="text-h1">{getGreeting()}, {user?.name?.split(' ')[0]}</h2>
-        <p className="text-body-sm" style={{ marginTop: 'var(--space-1)' }}>Academic Year: 2026-27 • AJK School</p>
+        <p className="text-body-sm" style={{ marginTop: 'var(--space-1)' }}>Academic Year: 2026-27 • Maruti School</p>
       </div>
 
       {/* Stats Grid */}
@@ -86,7 +86,7 @@ export default function AdminDashboard({ onNavigate }: { onNavigate: (id: string
             <BarChart data={DEMO_FEE_BY_CLASS} layout="vertical">
               <XAxis type="number" tick={{ fill: 'var(--color-text-tertiary)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}K`} />
               <YAxis dataKey="class" type="category" tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
-              <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 13 }} formatter={(v: number) => [`₹${(v/1000).toFixed(0)}K`, '']} />
+              <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 13 }} formatter={(v) => [typeof v === 'number' ? `₹${(v/1000).toFixed(0)}K` : v, '']} />
               <Bar dataKey="collected" fill="var(--color-primary-500)" radius={[0, 4, 4, 0]} barSize={16} />
               <Bar dataKey="target" fill="var(--color-surface-variant)" radius={[0, 4, 4, 0]} barSize={16} />
             </BarChart>

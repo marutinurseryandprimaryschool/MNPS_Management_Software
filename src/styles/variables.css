@@ -81,16 +81,21 @@
 /* ── Light Theme (default) ── */
 :root,
 [data-theme="light"] {
-  --color-primary-50: #EEF2FF;
-  --color-primary-100: #E0E7FF;
-  --color-primary-200: #C7D2FE;
-  --color-primary-300: #A5B4FC;
-  --color-primary-400: #818CF8;
-  --color-primary-500: #6366F1;
-  --color-primary-600: #4F46E5;
-  --color-primary-700: #4338CA;
-  --color-primary-800: #3730A3;
-  --color-primary-900: #312E81;
+  /* Maruti Nursery Brand Colors - RED, WHITE, BLACK from logo */
+  --color-primary-50: #FEF2F2;
+  --color-primary-100: #FECACA;
+  --color-primary-200: #FCA5A5;
+  --color-primary-300: #F87171;
+  --color-primary-400: #EF4444;
+  --color-primary-500: #DC2626;
+  --color-primary-600: #B91C1C;
+  --color-primary-700: #991B1B;
+  --color-primary-800: #7F1D1D;
+  --color-primary-900: #450A0A;
+
+  /* Accent Colors - Black/Gray */
+  --color-accent-500: #1F2937;
+  --color-accent-600: #111827;
 
   --color-surface: #FFFFFF;
   --color-surface-dim: #F8FAFC;
@@ -120,21 +125,26 @@
   --color-info-text: #1E40AF;
 
   --color-overlay: rgba(0, 0, 0, 0.5);
-  --color-focus-ring: rgba(99, 102, 241, 0.4);
+  --color-focus-ring: rgba(220, 38, 38, 0.4);
 }
 
 /* ── Dark Theme ── */
 [data-theme="dark"] {
-  --color-primary-50: #1E1B4B;
-  --color-primary-100: #252262;
-  --color-primary-200: #312E81;
-  --color-primary-300: #4338CA;
-  --color-primary-400: #6366F1;
-  --color-primary-500: #818CF8;
-  --color-primary-600: #A5B4FC;
-  --color-primary-700: #C7D2FE;
-  --color-primary-800: #E0E7FF;
-  --color-primary-900: #EEF2FF;
+  /* Maruti Nursery Dark Theme - RED, WHITE, BLACK */
+  --color-primary-50: #450A0A;
+  --color-primary-100: #7F1D1D;
+  --color-primary-200: #991B1B;
+  --color-primary-300: #B91C1C;
+  --color-primary-400: #DC2626;
+  --color-primary-500: #EF4444;
+  --color-primary-600: #F87171;
+  --color-primary-700: #FCA5A5;
+  --color-primary-800: #FECACA;
+  --color-primary-900: #FEF2F2;
+
+  /* Accent Colors - Black/Gray */
+  --color-accent-500: #1F2937;
+  --color-accent-600: #111827;
 
   --color-surface: #1E293B;
   --color-surface-dim: #0F172A;
@@ -164,7 +174,7 @@
   --color-info-text: #93C5FD;
 
   --color-overlay: rgba(0, 0, 0, 0.7);
-  --color-focus-ring: rgba(129, 140, 248, 0.4);
+  --color-focus-ring: rgba(239, 68, 68, 0.4);
 
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4), 0 2px 4px -2px rgba(0,0,0,0.3);

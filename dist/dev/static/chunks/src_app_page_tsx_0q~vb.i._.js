@@ -1,0 +1,5 @@
+(globalThis["TURBOPACK_CHUNK_LISTS"] || (globalThis["TURBOPACK_CHUNK_LISTS"] = [])).push({
+    script: typeof document === "object" ? document.currentScript : undefined,
+    chunks: ["static/chunks/src_components_ui_0380_79._.js","static/chunks/src_components_layout_032ln7o._.js","static/chunks/src_components_0sm339s._.js","static/chunks/src_0t-6p07._.js","static/chunks/node_modules_next_0bgzfss._.js","static/chunks/node_modules_@firebase_auth_dist_esm_0xvxd7g._.js","static/chunks/node_modules_@firebase_firestore_dist_03p4vl~._.js","static/chunks/node_modules_@firebase_storage_dist_index_esm_005w5vr.js","static/chunks/node_modules_date-fns_0jzutpu._.js","static/chunks/node_modules_recharts_es6_util_0ps6~qu._.js","static/chunks/node_modules_recharts_es6_state_0-kb33h._.js","static/chunks/node_modules_recharts_es6_component_0fo~hz1._.js","static/chunks/node_modules_recharts_es6_cartesian_0te~~zj._.js","static/chunks/node_modules_recharts_es6_0w0n1n9._.js","static/chunks/node_modules_02lp5zo._.js","static/chunks/src_components_098qcc9._.css"],
+    source: "dynamic"
+});

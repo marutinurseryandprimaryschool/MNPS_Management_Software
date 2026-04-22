@@ -1,0 +1,182 @@
+/* [project]/src/components/ui/Button.module.css [app-client] (css) */
+.Button-module__8RiFmG__button {
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
+  border: none;
+  font-weight: 600;
+  display: inline-flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.Button-module__8RiFmG__button:active:not(:disabled) {
+  transform: scale(.98);
+}
+
+.Button-module__8RiFmG__button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.Button-module__8RiFmG__sm {
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: .75rem;
+}
+
+.Button-module__8RiFmG__md {
+  height: 40px;
+  padding: 0 var(--space-4);
+  font-size: .875rem;
+}
+
+.Button-module__8RiFmG__lg {
+  height: 48px;
+  padding: 0 var(--space-6);
+  font-size: .9375rem;
+}
+
+@media (max-width: 639px) {
+  .Button-module__8RiFmG__md {
+    height: 44px;
+  }
+
+  .Button-module__8RiFmG__lg {
+    height: 48px;
+  }
+}
+
+.Button-module__8RiFmG__primary {
+  background: var(--color-primary-500);
+  color: #fff;
+}
+
+.Button-module__8RiFmG__primary:hover:not(:disabled) {
+  background: var(--color-primary-600);
+}
+
+.Button-module__8RiFmG__primary:active:not(:disabled) {
+  background: var(--color-primary-700);
+}
+
+.Button-module__8RiFmG__secondary {
+  color: var(--color-primary-500);
+  border: 1.5px solid var(--color-primary-500);
+  background: none;
+}
+
+.Button-module__8RiFmG__secondary:hover:not(:disabled) {
+  background: var(--color-primary-50);
+}
+
+.Button-module__8RiFmG__ghost {
+  color: var(--color-text-secondary);
+  background: none;
+}
+
+.Button-module__8RiFmG__ghost:hover:not(:disabled) {
+  background: var(--color-surface-variant);
+  color: var(--color-text-primary);
+}
+
+.Button-module__8RiFmG__danger {
+  background: var(--color-error);
+  color: #fff;
+}
+
+.Button-module__8RiFmG__danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.Button-module__8RiFmG__icon {
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-full);
+  background: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.Button-module__8RiFmG__button.Button-module__8RiFmG__icon:hover:not(:disabled) {
+  background: var(--color-surface-variant);
+  color: var(--color-text-primary);
+}
+
+.Button-module__8RiFmG__fullWidth {
+  width: 100%;
+}
+
+.Button-module__8RiFmG__loading {
+  pointer-events: none;
+}
+
+.Button-module__8RiFmG__spinner {
+  animation: 1s linear infinite Button-module__8RiFmG__spin;
+  display: inline-flex;
+}
+
+.Button-module__8RiFmG__icon {
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  display: inline-flex;
+}
+
+.Button-module__8RiFmG__icon > svg, .Button-module__8RiFmG__icon > span > svg {
+  display: block;
+}
+
+.Button-module__8RiFmG__fab {
+  bottom: calc(var(--bottom-nav-height) + var(--space-4));
+  right: var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-500);
+  color: #fff;
+  width: 56px;
+  height: 56px;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  z-index: 50;
+  border: none;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  position: fixed;
+}
+
+.Button-module__8RiFmG__fab:hover {
+  background: var(--color-primary-600);
+  transform: scale(1.05);
+}
+
+.Button-module__8RiFmG__fab:active {
+  transform: scale(.95);
+}
+
+@media (min-width: 1024px) {
+  .Button-module__8RiFmG__fab {
+    bottom: var(--space-8);
+    right: var(--space-8);
+  }
+}
+
+@keyframes Button-module__8RiFmG__spin {
+  from {
+    transform: rotate(0);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/*# sourceMappingURL=src_components_ui_Button_module_css_0w3-wzy._.single.css.map*/

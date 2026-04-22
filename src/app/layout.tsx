@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CampusOS — School Management System',
-  description: 'Complete school management platform with student management, timetable scheduling, attendance tracking, fee management, and parent-teacher communication.',
-  keywords: 'school management, student management, timetable, attendance, fees, education, SaaS',
+  title: 'Maruti Nursery & Primary School — Management System',
+  description: 'Maruti Nursery & Primary School - Nurturing young minds for a brighter tomorrow. Complete school management platform for students, teachers, attendance, fees, and communication.',
+  keywords: 'Maruti School, nursery school, primary school, education, school management, student management, timetable, attendance, fees',
 };
 
 export default function RootLayout({
@@ -22,7 +22,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" content="#4F46E5" />
+        <meta name="theme-color" content="#DC2626" />
       </head>
       <body>
         {children}

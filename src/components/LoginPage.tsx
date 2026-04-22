@@ -1,19 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '@/types/enums';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { SchoolIcon, UserIcon, AwardIcon, BriefcaseIcon, GraduationCapIcon, UsersIcon, BookOpenIcon, CalendarIcon, SparklesIcon } from '@/components/ui/Icons';
+import { UserIcon, AwardIcon, BriefcaseIcon, GraduationCapIcon, UsersIcon, BookOpenIcon, CalendarIcon, SparklesIcon } from '@/components/ui/Icons';
 import styles from './LoginPage.module.css';
 
 const DEMO_ACCOUNTS = [
-  { role: UserRole.ADMIN, icon: <UserIcon size={20} />, label: 'Admin', color: '#4F46E5' },
-  { role: UserRole.PRINCIPAL, icon: <AwardIcon size={20} />, label: 'Principal', color: '#7C3AED' },
-  { role: UserRole.CORRESPONDENT, icon: <BriefcaseIcon size={20} />, label: 'Correspondent', color: '#DB2777' },
-  { role: UserRole.TEACHER, icon: <GraduationCapIcon size={20} />, label: 'Teacher', color: '#059669' },
-  { role: UserRole.PARENT, icon: <UsersIcon size={20} />, label: 'Parent', color: '#D97706' },
+  { role: UserRole.ADMIN, icon: <UserIcon size={20} />, label: 'Admin', color: '#DC2626' },
+  { role: UserRole.PRINCIPAL, icon: <AwardIcon size={20} />, label: 'Principal', color: '#B91C1C' },
+  { role: UserRole.CORRESPONDENT, icon: <BriefcaseIcon size={20} />, label: 'Correspondent', color: '#1F2937' },
+  { role: UserRole.TEACHER, icon: <GraduationCapIcon size={20} />, label: 'Teacher', color: '#EF4444' },
+  { role: UserRole.PARENT, icon: <UsersIcon size={20} />, label: 'Parent', color: '#991B1B' },
 ];
 
 const FEATURES = [
@@ -43,11 +44,11 @@ export default function LoginPage() {
   const handleQuickLogin = async (role: UserRole) => {
     setLoading(true);
     const emails: Record<UserRole, string> = {
-      [UserRole.ADMIN]: 'admin@campusos.demo',
-      [UserRole.PRINCIPAL]: 'principal@campusos.demo',
-      [UserRole.CORRESPONDENT]: 'correspondent@campusos.demo',
-      [UserRole.TEACHER]: 'teacher@campusos.demo',
-      [UserRole.PARENT]: 'parent@campusos.demo',
+      [UserRole.ADMIN]: 'admin@marutischool.edu',
+      [UserRole.PRINCIPAL]: 'principal@marutischool.edu',
+      [UserRole.CORRESPONDENT]: 'correspondent@marutischool.edu',
+      [UserRole.TEACHER]: 'teacher@marutischool.edu',
+      [UserRole.PARENT]: 'parent@marutischool.edu',
     };
     try {
       await login(emails[role], 'demo1234');
@@ -64,19 +65,26 @@ export default function LoginPage() {
         <div className={styles.brandingContent}>
           <div className={styles.logoRow}>
             <div className={styles.logoMarkLarge}>
-              <SchoolIcon size={32} color="white" />
+              <Image
+                src="/MARUTI.png.bv.webp"
+                alt="Maruti Nursery & Primary School Logo"
+                width={80}
+                height={80}
+                className={styles.logoImage}
+                priority
+              />
             </div>
-            <span className={styles.logoText}>CampusOS</span>
+            <span className={styles.logoText}>Maruti School</span>
           </div>
 
           <h1 className={styles.brandingTitle}>
-            AJK School<br />
-            <span className={styles.brandingHighlight}>Management System</span>
+            MARUTI NURSERY<br />
+            <span className={styles.brandingHighlight}>& PRIMARY SCHOOL</span>
           </h1>
 
           <p className={styles.brandingSubtitle}>
-            Streamline your school operations with our comprehensive platform.
-            Manage students, teachers, attendance, fees, and communication—all in one place.
+            Nurturing young minds for a brighter tomorrow. Excellence in education
+            through innovative learning and dedicated care for every child.
           </p>
 
           <div className={styles.features}>
@@ -90,18 +98,18 @@ export default function LoginPage() {
 
           <div className={styles.stats}>
             <div className={styles.statItem}>
-              <span className={styles.statNumber}>500+</span>
-              <span className={styles.statLabel}>Schools</span>
+              <span className={styles.statNumber}>25+</span>
+              <span className={styles.statLabel}>Years of Excellence</span>
             </div>
             <div className={styles.statDivider} />
             <div className={styles.statItem}>
-              <span className={styles.statNumber}>50K+</span>
+              <span className={styles.statNumber}>1000+</span>
               <span className={styles.statLabel}>Students</span>
             </div>
             <div className={styles.statDivider} />
             <div className={styles.statItem}>
-              <span className={styles.statNumber}>99.9%</span>
-              <span className={styles.statLabel}>Uptime</span>
+              <span className={styles.statNumber}>50+</span>
+              <span className={styles.statLabel}>Expert Teachers</span>
             </div>
           </div>
         </div>
@@ -171,7 +179,7 @@ export default function LoginPage() {
           </div>
 
           <p className={styles.footer}>
-            © 2026 CampusOS. All rights reserved.
+            © 2026 Maruti Nursery & Primary School. All rights reserved.
           </p>
         </div>
       </div>
