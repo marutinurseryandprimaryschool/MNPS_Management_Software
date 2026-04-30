@@ -13,6 +13,9 @@ import {
   SchoolPlan,
   DayOfWeek,
   AssignmentStatus,
+  ExamTerm,
+  MonthlyExam,
+  CoScholasticArea,
 } from './enums';
 
 /* ============================================
@@ -107,17 +110,51 @@ export interface Class {
 export interface Student extends Timestamps {
   id: string;
   admissionNumber: string;
+  emisId?: string;
   name: string;
+  nameTamil?: string;
+  previousBalance?: number;
   dob: Date;
   gender: 'male' | 'female' | 'other';
   bloodGroup: string;
   address: string;
+  pinCode?: string;
   photo: string;
   classId: string;
   sectionId: string;
   parentIds: string[];
   status: StudentStatus;
   archiveReason?: string;
+  // Contact
+  phone?: string;
+  phoneVerifyStatus?: string;
+  email?: string;
+  dateOfJoining?: Date;
+  // Father details
+  fatherName?: string;
+  fatherOccupation?: string;
+  fatherEducation?: string;
+  // Mother details
+  motherName?: string;
+  motherOccupation?: string;
+  motherEducation?: string;
+  // Guardian details
+  guardianName?: string;
+  guardianOccupation?: string;
+  // Identity
+  aadhaarNumber?: string;
+  // Academic
+  religion?: string;
+  mediumOfInstruction?: string;
+  community?: string;
+  disabilityGroupName?: string;
+  groupCode?: string;
+  motherTongue?: string;
+  // Transportation
+  transportType?: 'out' | 'bus';
+  routeId?: string;
+  routeName?: string;
+  academicYear: string;
   // denormalized
   className?: string;
   sectionName?: string;
@@ -197,6 +234,7 @@ export interface Attendance {
   period: number;
   subjectId: string;
   teacherId: string;
+  academicYear: string;
   records: AttendanceRecord[];
   submittedAt: Date;
   editedAt?: Date;
@@ -225,6 +263,7 @@ export interface Marks {
   sectionId: string;
   subjectId: string;
   teacherId: string;
+  academicYear: string;
   maxMarks: number;
   records: MarksRecord[];
   status: MarksStatus;
@@ -256,23 +295,6 @@ export interface Assignment extends Timestamps {
   dueDate: Date;
   attachments: FileAttachment[];
   status: AssignmentStatus;
-  // denormalized
-  className?: string;
-  sectionName?: string;
-  subjectName?: string;
-  teacherName?: string;
-}
-
-// ── Material ──
-export interface Material extends Timestamps {
-  id: string;
-  title: string;
-  description: string;
-  classId: string;
-  sectionId: string;
-  subjectId: string;
-  teacherId: string;
-  files: FileAttachment[];
   // denormalized
   className?: string;
   sectionName?: string;
@@ -319,34 +341,18 @@ export interface FeePayment {
   category: string;
   receivedBy: string;
   paidAt: Date;
+  academicYear: string;
   createdAt: Date;
   // denormalized
   className?: string;
-}
-
-// ── Chat ──
-export interface Chat extends Timestamps {
-  id: string;
-  participants: string[];
-  participantNames: Record<string, string>;
-  participantRoles: Record<string, 'teacher' | 'parent'>;
-  lastMessage: {
-    text: string;
-    senderId: string;
-    sentAt: Date;
-  };
-  unreadCount: Record<string, number>;
-}
-
-// ── Message ──
-export interface Message {
-  id: string;
-  senderId: string;
-  text: string;
-  attachments: FileAttachment[];
-  readBy: string[];
-  sentAt: Date;
-  readAt?: Date;
+  sectionId?: string;
+  sectionName?: string;
+  admissionNumber?: string;
+  remarks?: string;
+  // teacher attribution
+  collectedBy?: string;
+  collectedByName?: string;
+  collectedByEmail?: string;
 }
 
 // ── Notification ──
@@ -391,7 +397,6 @@ export interface TeacherDashboardData {
   currentPeriod: TimetableSlot | null;
   nextPeriod: TimetableSlot | null;
   pendingAttendances: number;
-  unreadMessages: number;
 }
 
 export interface ParentDashboardData {
@@ -401,5 +406,124 @@ export interface ParentDashboardData {
   avgGrade: string;
   pendingAssignments: Assignment[];
   pendingFees: number;
-  unreadMessages: number;
+}
+
+// ── Report Card: Subject Term Score ──
+export interface SubjectTermScore {
+  subjectId: string;
+  subjectName: string;
+  fa: number;           // out of 40
+  sa: number;           // raw SA score (input by staff)
+  saMax: number;        // SA maximum marks (default 60, flexible)
+  saNormalized: number; // SA normalized to 60
+  total: number;        // FA + SA_normalized (out of 100)
+  grade: string;        // auto-calculated
+}
+
+// ── Report Card: Term Summary ──
+export interface TermSummary {
+  term: ExamTerm;
+  subjectScores: SubjectTermScore[];
+  termTotal: number;        // sum of all subject totals
+  maxTotal: number;         // subjects * 100
+  average: number;          // percentage
+  grade: string;            // overall term grade
+  rank?: number;            // class rank
+}
+
+// ── Report Card: Co-Scholastic Record ──
+export interface CoScholasticRecord {
+  area: CoScholasticArea;
+  grades: Partial<Record<ExamTerm, string>>; // grade per term (A/B/C/D/E)
+}
+
+// ── Report Card: Attendance per Term ──
+export interface AttendanceTermRecord {
+  term: ExamTerm;
+  daysPresent: number;
+  totalWorkingDays: number;
+}
+
+// ── Report Card: Signature ──
+export interface SignatureRecord {
+  classTeacher: string;
+  principal: string;
+  parent: string;
+}
+
+// ── Bus Route ──
+export interface BusRoute extends Timestamps {
+  id: string;
+  routeName: string;
+  fee: number;
+  stops?: string[];
+  vehicleNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+}
+
+// ── Report Card (per student per academic year) ──
+export interface ReportCard extends Timestamps {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  classId: string;
+  sectionId: string;
+  academicYear: string;
+  // Term data
+  terms: Partial<Record<ExamTerm, TermSummary>>;
+  // Co-scholastic
+  coScholastic: CoScholasticRecord[];
+  // Attendance
+  attendance: AttendanceTermRecord[];
+  // Remarks per term
+  remarks: Partial<Record<ExamTerm, string>>;
+  // Signatures
+  signatures: Partial<Record<ExamTerm, SignatureRecord>>;
+  // Status
+  status: 'draft' | 'published';
+  // Denormalized
+  className?: string;
+  sectionName?: string;
+}
+
+export interface AssessmentSession {
+  id: string;
+  schoolId: string;
+  type: 'weekly' | 'monthly' | 'term';
+  name: string;
+  month?: MonthlyExam;
+  week?: string;
+  term?: ExamTerm;
+  academicTerm?: string;
+  classId: string;
+  sectionId: string;
+  className: string;
+  sectionName: string;
+  status: 'open' | 'closed' | 'published';
+  maxMarks: number;
+  subjects: { id: string; name: string }[];
+  academicYear: string;
+  createdBy: string;
+  createdAt: any;
+}
+
+export interface WeeklyTest {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  sectionId: string;
+  subjectId: string;
+  teacherId: string;
+  month: string; // e.g., "june"
+  academicYear: string;
+  weeks: {
+    W1?: number;
+    W2?: number;
+    W3?: number;
+    W4?: number;
+  };
+  updatedAt: any;
 }

@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# turbopack / dev build cache
+/dist
+
+# local debug scripts
+check-teacher.js

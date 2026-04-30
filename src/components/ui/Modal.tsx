@@ -41,7 +41,7 @@ export default function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay}>
       <div className={cn(styles.modal, styles[size])} onClick={e => e.stopPropagation()}>
         {(title || showClose) && (
           <div className={styles.header}>
@@ -81,7 +81,7 @@ export function BottomSheet({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay}>
       <div className={styles.bottomSheet} onClick={e => e.stopPropagation()}>
         <div className={styles.handle} />
         {title && (
@@ -118,7 +118,7 @@ export function ConfirmDialog({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay}>
       <div className={cn(styles.modal, styles.sm)} onClick={e => e.stopPropagation()}>
         <div className={styles.body} style={{ textAlign: 'center', padding: 'var(--space-6)' }}>
           <h3 style={{ font: 'var(--text-heading-2)', marginBottom: 'var(--space-2)' }}>{title}</h3>

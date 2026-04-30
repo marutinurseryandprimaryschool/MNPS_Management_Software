@@ -5,6 +5,7 @@
 export enum UserRole {
   ADMIN = 'admin',
   TEACHER = 'teacher',
+  STAFF = 'staff',
   PARENT = 'parent',
   PRINCIPAL = 'principal',
   CORRESPONDENT = 'correspondent',
@@ -90,6 +91,62 @@ export enum AssignmentStatus {
   ACTIVE = 'active',
   ARCHIVED = 'archived',
 }
+
+export enum ExamTerm {
+  I_MID_TERM = 'i_mid_term',
+  QUARTERLY = 'quarterly',
+  II_MID_TERM = 'ii_mid_term',
+  HALF_YEARLY = 'half_yearly',
+  III_MID_TERM = 'iii_mid_term',
+  ANNUAL = 'annual',
+}
+
+export enum MonthlyExam {
+  JUNE = 'june',
+  JULY = 'july',
+  AUGUST = 'august',
+  SEPTEMBER = 'september',
+  OCTOBER = 'october',
+  NOVEMBER = 'november',
+  DECEMBER = 'december',
+  JANUARY = 'january',
+  FEBRUARY = 'february',
+  MARCH = 'march',
+}
+
+export const EXAM_TERM_LABELS: Record<ExamTerm, string> = {
+  [ExamTerm.I_MID_TERM]: 'I Mid Term',
+  [ExamTerm.QUARTERLY]: 'Quarterly',
+  [ExamTerm.II_MID_TERM]: 'II Mid Term',
+  [ExamTerm.HALF_YEARLY]: 'Half Yearly',
+  [ExamTerm.III_MID_TERM]: 'III Mid Term',
+  [ExamTerm.ANNUAL]: 'Annual',
+};
+
+export const EXAM_TERMS_ORDER: ExamTerm[] = [
+  ExamTerm.I_MID_TERM,
+  ExamTerm.QUARTERLY,
+  ExamTerm.II_MID_TERM,
+  ExamTerm.HALF_YEARLY,
+  ExamTerm.III_MID_TERM,
+  ExamTerm.ANNUAL,
+];
+
+export enum CoScholasticArea {
+  NEATNESS = 'neatness',
+  LIFE_SKILLS = 'life_skills',
+  ATTITUDES_VALUES = 'attitudes_values',
+  YOGA_HEALTH_WELLNESS = 'yoga_health_wellness',
+  CO_CURRICULAR = 'co_curricular',
+}
+
+export const CO_SCHOLASTIC_LABELS: Record<CoScholasticArea, string> = {
+  [CoScholasticArea.NEATNESS]: 'Neatness',
+  [CoScholasticArea.LIFE_SKILLS]: 'Life Skills',
+  [CoScholasticArea.ATTITUDES_VALUES]: 'Attitudes and Values',
+  [CoScholasticArea.YOGA_HEALTH_WELLNESS]: 'Yoga, Health and Wellness',
+  [CoScholasticArea.CO_CURRICULAR]: 'Co-Curricular Activities',
+};
 
 export const DAYS_OF_WEEK = [
   DayOfWeek.MONDAY,

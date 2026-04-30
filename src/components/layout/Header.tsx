@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '@/types/enums';
 import { Avatar } from '@/components/ui/SharedUI';
-import { DEMO_NOTIFICATIONS } from '@/lib/demo-data';
+import { NotificationsService } from '@/lib/firestore-service';
 import {
   BellIcon, ArrowLeftIcon, LogOutIcon,
   ChevronDownIcon, CreditCardIcon, ClipboardCheckIcon,
@@ -19,6 +19,7 @@ const ROLE_ICONS: Record<string, React.ReactNode> = {
   [UserRole.CORRESPONDENT]: <BriefcaseIcon size={14} />,
   [UserRole.TEACHER]: <GraduationCapIcon size={14} />,
   [UserRole.PARENT]: <UsersIcon size={14} />,
+  [UserRole.STAFF]: <BriefcaseIcon size={14} />,
 };
 
 const NOTIF_ICONS: Record<string, React.ReactNode> = {
@@ -30,6 +31,14 @@ const NOTIF_ICONS: Record<string, React.ReactNode> = {
   'new_message': <FileTextIcon size={16} />,
 };
 
+interface NotifData {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  readBy: string[];
+}
+
 export default function Header({
   title,
   onBack,
@@ -37,11 +46,19 @@ export default function Header({
   title?: string;
   onBack?: () => void;
 }) {
-  const { user, logout, switchRole, role } = useAuth();
+  const { user, logout, role } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
+  const [notifications, setNotifications] = useState<NotifData[]>([]);
 
-  const unreadCount = DEMO_NOTIFICATIONS.filter(n => !n.readBy.includes(user?.id || '')).length;
+  useEffect(() => {
+    if (!user || !role) return;
+    NotificationsService.getForUser(user.id, role).then(data => {
+      setNotifications(data as unknown as NotifData[]);
+    }).catch(console.error);
+  }, [user, role]);
+
+  const unreadCount = notifications.filter(n => !n.readBy?.includes(user?.id || '')).length;
 
   return (
     <header className={styles.header}>
@@ -67,14 +84,17 @@ export default function Header({
                 <span style={{ fontWeight: 600 }}>Notifications</span>
                 <span style={{ font: 'var(--text-caption)', color: 'var(--color-text-tertiary)' }}>{unreadCount} unread</span>
               </div>
-              {DEMO_NOTIFICATIONS.slice(0, 5).map(n => (
+              {notifications.length === 0 && (
+                <div style={{ padding: 'var(--space-4)', textAlign: 'center', font: 'var(--text-body-sm)', color: 'var(--color-text-tertiary)' }}>No notifications yet</div>
+              )}
+              {notifications.slice(0, 5).map(n => (
                 <div key={n.id} className={styles.notifItem}>
                   <span className={styles.notifIcon}>
                     {NOTIF_ICONS[n.type] || <FileTextIcon size={16} />}
                   </span>
                   <div>
                     <div style={{ font: 'var(--text-body-sm)', fontWeight: 500 }}>{n.title}</div>
-                    <div style={{ font: 'var(--text-caption)', color: 'var(--color-text-tertiary)' }}>{n.body.slice(0, 60)}...</div>
+                    <div style={{ font: 'var(--text-caption)', color: 'var(--color-text-tertiary)' }}>{n.body?.slice(0, 60)}{n.body?.length > 60 ? '...' : ''}</div>
                   </div>
                 </div>
               ))}
@@ -100,14 +120,7 @@ export default function Header({
                 </div>
               </div>
               <div className={styles.divider} />
-              <div className={styles.dropdownLabel}>Switch Role (Demo)</div>
-              {Object.values(UserRole).map(r => (
-                <button key={r} className={`${styles.dropdownItem} ${r === role ? styles.activeItem : ''}`}
-                  onClick={() => { switchRole(r); setShowMenu(false); }}>
-                  <span className={styles.roleIcon}>{ROLE_ICONS[r]}</span>
-                  {r.charAt(0).toUpperCase() + r.slice(1)}
-                </button>
-              ))}
+              <div style={{ padding: 'var(--space-2) var(--space-4)', font: 'var(--text-caption)', color: 'var(--color-text-tertiary)' }}>{user?.email}</div>
               <div className={styles.divider} />
               <button className={`${styles.dropdownItem} ${styles.logoutItem}`} onClick={logout}>
                 <LogOutIcon size={16} /> Logout

@@ -7,8 +7,8 @@ import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import Header from '@/components/layout/Header';
 import {
-  UsersIcon, SchoolIcon, ClipboardCheckIcon, MessageCircleIcon,
-  BarChartIcon, SettingsIcon, FileTextIcon, FolderIcon,
+  UsersIcon, SchoolIcon, ClipboardCheckIcon,
+  BarChartIcon, SettingsIcon, FileTextIcon,
   BookOpenIcon, CreditCardIcon
 } from '@/components/ui/Icons';
 import styles from './DashboardLayout.module.css';
@@ -20,18 +20,26 @@ import AdminTeachers from './admin/AdminTeachers';
 import AdminClasses from './admin/AdminClasses';
 import AdminTimetable from './admin/AdminTimetable';
 import AdminAttendance from './admin/AdminAttendance';
+import AdminExams from './admin/AdminExams';
+import AdminExamResults from './admin/AdminExamResults';
+import SharedReportCard from './shared/SharedReportCard';
+import TeacherCoScholastic from './teacher/TeacherCoScholastic';
 import AdminFees from './admin/AdminFees';
-import AdminChat from './admin/AdminChat';
 import AdminReports from './admin/AdminReports';
 import AdminSettings from './admin/AdminSettings';
+import AdminBus from './admin/AdminBus';
 
 import TeacherDashboard from './teacher/TeacherDashboard';
 import TeacherTimetable from './teacher/TeacherTimetable';
 import TeacherAttendance from './teacher/TeacherAttendance';
 import TeacherMarks from './teacher/TeacherMarks';
 import TeacherAssignments from './teacher/TeacherAssignments';
-import TeacherMaterials from './teacher/TeacherMaterials';
-import TeacherChat from './teacher/TeacherChat';
+import TeacherFees from './teacher/TeacherFees';
+import TeacherReportCard from './teacher/TeacherReportCard';
+import TeacherFormative from './teacher/TeacherFormative';
+import TeacherClassOverview from './teacher/TeacherClassOverview';
+import TeacherWeeklyMarks from './teacher/TeacherWeeklyMarks';
+import TeacherExamMarks from './teacher/TeacherExamMarks';
 
 import ParentDashboard from './parent/ParentDashboard';
 import ParentAttendance from './parent/ParentAttendance';
@@ -39,7 +47,6 @@ import ParentTimetable from './parent/ParentTimetable';
 import ParentMarks from './parent/ParentMarks';
 import ParentAssignments from './parent/ParentAssignments';
 import ParentFees from './parent/ParentFees';
-import ParentChat from './parent/ParentChat';
 
 const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -47,14 +54,27 @@ const PAGE_TITLES: Record<string, string> = {
   teachers: 'Teachers',
   classes: 'Classes & Sections',
   timetable: 'Timetable',
-  attendance: 'Attendance',
+  attendance: 'Attendance Management',
+  'fee-overview': 'Fee Overview',
+  'fee-structures': 'Fee Structures',
+  'fee-payments': 'Payments',
   fees: 'Fee Management',
-  chat: 'Messages',
   reports: 'Reports',
   settings: 'Settings',
-  marks: 'Marks & Grades',
   assignments: 'Assignments',
-  materials: 'Study Materials',
+  'weekly-marks': 'Weekly Test Marks',
+  'exam-marks': 'Exam Marks Entry',
+  'exam-results': 'Class Exam Results',
+  'exams': 'Academic Calendar',
+  'report-card': 'Student Report Card',
+  'co-scholastic': 'Co-Scholastic & Remarks',
+  'collect-fees': 'Collect Fees',
+  'bus-students': 'Bus Commuters List',
+  'bus-routes': 'Transportation Routes',
+  'my-class': 'My Class Overview',
+  'class-students': 'My Students',
+  'class-attendance': 'Class Attendance',
+  'class-performance': 'Class Performance',
 };
 
 export default function DashboardLayout() {
@@ -83,23 +103,38 @@ export default function DashboardLayout() {
         case 'classes': return <AdminClasses />;
         case 'timetable': return <AdminTimetable />;
         case 'attendance': return <AdminAttendance />;
+        case 'exams': return <AdminExams />;
+        case 'exam-results': return <AdminExamResults />;
+        case 'report-card': return <SharedReportCard view="admin" />;
+
         case 'fees': return <AdminFees />;
-        case 'chat': return <AdminChat />;
+        case 'fee-overview': return <AdminFees subPage="overview" />;
+        case 'fee-structures': return <AdminFees subPage="structures" />;
+        case 'fee-payments': return <AdminFees subPage="payments" />;
         case 'reports': return <AdminReports />;
         case 'settings': return <AdminSettings />;
+        case 'bus-students': return <AdminBus subPage="students" />;
+        case 'bus-routes': return <AdminBus subPage="routes" />;
         default: return <AdminDashboard onNavigate={handleNavigate} />;
       }
     }
     
-    if (role === UserRole.TEACHER) {
+    if (role === UserRole.TEACHER || role === UserRole.STAFF) {
       switch (activePage) {
         case 'dashboard': return <TeacherDashboard onNavigate={handleNavigate} />;
         case 'timetable': return <TeacherTimetable />;
         case 'attendance': return <TeacherAttendance />;
-        case 'marks': return <TeacherMarks />;
+        case 'weekly-marks': return <TeacherWeeklyMarks />;
+        case 'exam-marks': return <TeacherExamMarks />;
+        case 'co-scholastic': return <TeacherCoScholastic />;
+        case 'report-card': return <SharedReportCard view="teacher" />;
         case 'assignments': return <TeacherAssignments />;
-        case 'materials': return <TeacherMaterials />;
-        case 'chat': return <TeacherChat />;
+        case 'collect-fees': return <TeacherFees />;
+        case 'my-class': return <TeacherClassOverview view="dashboard" />;
+        case 'class-students': return <TeacherClassOverview view="students" />;
+        case 'class-attendance': return <TeacherClassOverview view="attendance" />;
+        case 'class-performance': return <TeacherClassOverview view="performance" />;
+
         default: return <TeacherDashboard onNavigate={handleNavigate} />;
       }
     }
@@ -109,10 +144,10 @@ export default function DashboardLayout() {
       case 'dashboard': return <ParentDashboard onNavigate={handleNavigate} />;
       case 'attendance': return <ParentAttendance />;
       case 'timetable': return <ParentTimetable />;
-      case 'marks': return <ParentMarks />;
+
       case 'assignments': return <ParentAssignments />;
       case 'fees': return <ParentFees />;
-      case 'chat': return <ParentChat />;
+      case 'report-card': return <SharedReportCard view="parent" />;
       default: return <ParentDashboard onNavigate={handleNavigate} />;
     }
   };
@@ -122,7 +157,7 @@ export default function DashboardLayout() {
       <Sidebar activePage={activePage} onNavigate={handleSidebarNavigate} onCollapsedChange={setSidebarCollapsed} />
 
       <div className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ''}`}>
-        <Header title={PAGE_TITLES[activePage] || 'CampusOS'} />
+        <Header title={PAGE_TITLES[activePage] || 'Maruti School'} />
         
         <main className={styles.content}>
           {renderPage()}
@@ -157,18 +192,15 @@ function MoreMenu({
         { id: 'teachers', icon: <UsersIcon size={22} />, label: 'Teachers' },
         { id: 'classes', icon: <SchoolIcon size={22} />, label: 'Classes' },
         { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attendance' },
-        { id: 'chat', icon: <MessageCircleIcon size={22} />, label: 'Messages' },
         { id: 'reports', icon: <BarChartIcon size={22} />, label: 'Reports' },
         { id: 'settings', icon: <SettingsIcon size={22} />, label: 'Settings' },
       ]
-    : role === UserRole.TEACHER
+    : (role === UserRole.TEACHER || role === UserRole.STAFF)
     ? [
-        { id: 'marks', icon: <FileTextIcon size={22} />, label: 'Marks' },
         { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assignments' },
-        { id: 'materials', icon: <FolderIcon size={22} />, label: 'Materials' },
       ]
     : [
-        { id: 'marks', icon: <FileTextIcon size={22} />, label: 'Marks' },
+
         { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assignments' },
         { id: 'fees', icon: <CreditCardIcon size={22} />, label: 'Fees' },
       ];

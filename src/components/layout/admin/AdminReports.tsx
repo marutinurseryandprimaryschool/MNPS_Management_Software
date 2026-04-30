@@ -1,77 +1,72 @@
 'use client';
 
-import React from 'react';
-import { DEMO_ADMIN_STATS, DEMO_ATTENDANCE_TREND, DEMO_FEE_BY_CLASS } from '@/lib/demo-data';
-import { DataCard } from '@/components/ui/Card';
-import { formatCurrency } from '@/lib/utils';
-import { GraduationCapIcon, UsersIcon, BarChartIcon, CreditCardIcon } from '@/components/ui/Icons';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
-
-const COLORS = ['var(--color-primary-500)', 'var(--color-success)', 'var(--color-warning)', 'var(--color-info)'];
+import React, { useState, useEffect } from 'react';
+import { StudentsService, TeachersService, FeePaymentsService } from '@/lib/firestore-service';
+import { useSchool } from '@/context/SchoolContext';
+import { formatCompactCurrency } from '@/lib/utils';
+import { BarChartIcon, CreditCardIcon, GraduationCapIcon, UsersIcon } from '@/components/ui/Icons';
 
 export default function AdminReports() {
-  const genderData = [
-    { name: 'Male', value: 243 },
-    { name: 'Female', value: 177 },
+  const { school } = useSchool();
+  const [stats, setStats] = useState({ totalStudents: 0, totalTeachers: 0, totalFee: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!school?.academicYear) return;
+    Promise.all([
+      StudentsService.getAll(school.academicYear),
+      TeachersService.getAll(),
+      FeePaymentsService.getAll(school.academicYear),
+    ]).then(([students, teachers, payments]) => {
+      const totalFee = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      setStats({ totalStudents: students.length, totalTeachers: teachers.length, totalFee });
+    }).catch(console.error).finally(() => setLoading(false));
+  }, [school?.academicYear]);
+
+  if (loading) {
+    return <div className="page-container"><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><span className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>Loading reports...</span></div></div>;
+  }
+
+  const cards = [
+    { icon: <GraduationCapIcon size={24} />, label: 'Total Students', value: stats.totalStudents, color: 'var(--color-primary-500)' },
+    { icon: <UsersIcon size={24} />, label: 'Total Teachers', value: stats.totalTeachers, color: 'var(--color-info)' },
+    { icon: <CreditCardIcon size={24} />, label: 'Total Fee Collected', value: formatCompactCurrency(stats.totalFee), color: 'var(--color-success)' },
   ];
 
   return (
     <div className="page-container">
       <div className="page-header">
-        <h2 className="text-h1">Reports & Analytics</h2>
-      </div>
-
-      <div className="grid-4" style={{ marginBottom: 'var(--space-6)' }}>
-        <DataCard icon={<GraduationCapIcon size={24} />} value={DEMO_ADMIN_STATS.totalStudents} label="Total Students" color="var(--color-primary-500)" />
-        <DataCard icon={<UsersIcon size={24} />} value={DEMO_ADMIN_STATS.totalTeachers} label="Total Teachers" color="var(--color-info)" />
-        <DataCard icon={<BarChartIcon size={24} />} value={`${DEMO_ADMIN_STATS.avgAttendance}%`} label="Avg Attendance" color="var(--color-success)" />
-        <DataCard icon={<CreditCardIcon size={24} />} value={formatCurrency(DEMO_ADMIN_STATS.totalFeeCollected)} label="Total Collection" color="var(--color-warning)" />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }} className="responsive-grid-2">
-        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 'var(--space-4)' }}>
-          <h3 className="text-h3" style={{ marginBottom: 'var(--space-4)' }}>Fee Collection Comparison</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={DEMO_FEE_BY_CLASS}>
-              <XAxis dataKey="class" tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'var(--color-text-tertiary)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}K`} />
-              <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 13 }} />
-              <Bar dataKey="collected" fill="var(--color-primary-500)" radius={[4, 4, 0, 0]} barSize={24} name="Collected" />
-              <Bar dataKey="target" fill="var(--color-surface-variant)" radius={[4, 4, 0, 0]} barSize={24} name="Target" />
-            </BarChart>
-          </ResponsiveContainer>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <BarChartIcon size={24} />
+          <h2 className="text-h1">Reports</h2>
         </div>
+      </div>
 
-        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 'var(--space-4)' }}>
-          <h3 className="text-h3" style={{ marginBottom: 'var(--space-4)' }}>Student Gender Distribution</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={genderData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5} dataKey="value">
-                {genderData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={index === 0 ? 'var(--color-primary-500)' : 'var(--color-info)'} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
-              <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--color-primary-500)' }} />
-              <span className="text-caption">Male (243)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
-              <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--color-info)' }} />
-              <span className="text-caption">Female (177)</span>
+      <div className="grid-3" style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+        {cards.map((card, i) => (
+          <div key={i} style={{
+            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-sm)', padding: 'var(--space-5)',
+            border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)',
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 'var(--radius-md)',
+              background: `color-mix(in srgb, ${card.color} 10%, transparent)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.color,
+            }}>{card.icon}</div>
+            <div>
+              <div className="text-h2">{card.value}</div>
+              <div className="text-caption">{card.label}</div>
             </div>
           </div>
-        </div>
+        ))}
       </div>
 
-      <style jsx>{`
-        @media (max-width: 768px) {
-          .responsive-grid-2 { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
+      <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)', padding: 'var(--space-6)', border: '1px solid var(--color-border)' }}>
+        <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', textAlign: 'center' }}>
+          Detailed reports and charts will be available as more data is added to the system.
+        </p>
+      </div>
     </div>
   );
 }

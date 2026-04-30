@@ -1,14 +1,45 @@
 'use client';
 
-import React from 'react';
-import { DEMO_MARKS, DEMO_SCHOOL } from '@/lib/demo-data';
+import React, { useState, useEffect } from 'react';
+import { MarksService, StudentsService } from '@/lib/firestore-service';
+import { useAuth } from '@/context/AuthContext';
+import { useSchool } from '@/context/SchoolContext';
 import { Badge } from '@/components/ui/SharedUI';
-import { DataCard } from '@/components/ui/Card';
-import { FileTextIcon, BarChartIcon, AwardIcon } from '@/components/ui/Icons';
+import type { Marks, Student } from '@/types/models';
 
 export default function ParentMarks() {
-  const marks = DEMO_MARKS[0];
-  const childMarks = marks.records[0]; // demo: first student's marks
+  const { user } = useAuth();
+  const { school } = useSchool();
+  const [allMarks, setAllMarks] = useState<Marks[]>([]);
+  const [child, setChild] = useState<Student | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        if (!user || !school?.academicYear) return;
+        const allStudents = await StudentsService.getAll(school.academicYear);
+        const myChild = (allStudents as unknown as Student[]).find(s =>
+          s.email?.toLowerCase() === user.email?.toLowerCase()
+        );
+        setChild(myChild || null);
+        const marks = await MarksService.getAll(school.academicYear);
+        setAllMarks(marks as unknown as Marks[]);
+      } catch (error) {
+        console.error('Error:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [user, school?.academicYear]);
+
+  if (loading) {
+    return <div className="page-container"><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><span className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>Loading...</span></div></div>;
+  }
+
+  // Filter marks for child's class
+  const childMarks = allMarks.filter(m => m.classId === child?.classId);
 
   return (
     <div className="page-container">
@@ -16,42 +47,37 @@ export default function ParentMarks() {
         <h2 className="text-h1">Marks & Grades</h2>
       </div>
 
-      <div className="grid-3" style={{ marginBottom: 'var(--space-4)' }}>
-        <DataCard icon={<FileTextIcon size={24} />} value={childMarks?.grade || 'B+'} label="Avg Grade" color="var(--color-info)" />
-        <DataCard icon={<BarChartIcon size={24} />} value={`${childMarks?.marksObtained || 0}/${marks.maxMarks}`} label="Last Exam" color="var(--color-primary-500)" />
-        <DataCard icon={<AwardIcon size={24} />} value="5th" label="Class Rank" color="var(--color-warning)" />
-      </div>
-
-      <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
-        <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-surface-variant)', borderBottom: '1px solid var(--color-border)' }}>
-          <h3 className="text-h3">{marks.examName}</h3>
-          <p className="text-caption">{marks.subjectName} • Max Marks: {marks.maxMarks}</p>
+      {!child ? (
+        <div style={{ textAlign: 'center', padding: 'var(--space-8)', background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+          <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>No child linked to your account.</p>
         </div>
-        <div style={{ padding: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-            <div>
-              <span className="text-display" style={{ color: 'var(--color-primary-500)' }}>{childMarks?.marksObtained}</span>
-              <span className="text-h2" style={{ color: 'var(--color-text-tertiary)' }}>/{marks.maxMarks}</span>
-            </div>
-            <Badge variant="success" size="md">{childMarks?.grade}</Badge>
-          </div>
-          <div className="divider" />
-          <h4 className="text-overline" style={{ marginBottom: 'var(--space-2)' }}>All Subjects</h4>
-          {['Mathematics', 'English', 'Science', 'Hindi', 'Social Studies'].map((sub, i) => {
-            const m = 60 + Math.floor(Math.random() * 35);
-            const grade = DEMO_SCHOOL.settings.gradeScale.find(g => m >= g.min && m <= g.max)?.grade || 'C';
+      ) : childMarks.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 'var(--space-8)', background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+          <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>No marks published yet for {child.name}.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {childMarks.map(m => {
+            const record = m.records?.find(r => r.studentId === child.id);
             return (
-              <div key={sub} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-2) 0', borderBottom: '1px solid var(--color-divider)' }}>
-                <span className="text-body-sm">{sub}</span>
-                <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                  <span className="text-body-sm" style={{ fontWeight: 600 }}>{m}/100</span>
-                  <Badge variant={m >= 80 ? 'success' : m >= 50 ? 'info' : 'error'}>{grade}</Badge>
+              <div key={m.id} style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 'var(--space-4)', border: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 className="text-h3">{m.examName}</h3>
+                    <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>{m.subjectName} • Max: {m.maxMarks}</p>
+                  </div>
+                  {record && (
+                    <div style={{ textAlign: 'right' }}>
+                      <div className="text-h2" style={{ color: 'var(--color-primary-500)' }}>{record.marksObtained}/{m.maxMarks}</div>
+                      <Badge variant="info">{record.grade}</Badge>
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -9,15 +9,17 @@ export function Badge({
   size = 'sm',
 }: {
   children: React.ReactNode;
-  variant?: 'default' | 'success' | 'error' | 'warning' | 'info';
+  variant?: 'default' | 'success' | 'error' | 'warning' | 'info' | 'primary' | 'outline';
   size?: 'sm' | 'md';
 }) {
   const colors = {
-    default: { bg: 'var(--color-surface-variant)', color: 'var(--color-text-secondary)' },
-    success: { bg: 'var(--color-success-bg)', color: 'var(--color-success)' },
-    error: { bg: 'var(--color-error-bg)', color: 'var(--color-error)' },
-    warning: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
-    info: { bg: 'var(--color-info-bg)', color: 'var(--color-info)' },
+    default: { bg: 'var(--color-surface-variant)', color: 'var(--color-text-secondary)', border: 'none' },
+    success: { bg: 'var(--color-success-bg)', color: 'var(--color-success)', border: 'none' },
+    error: { bg: 'var(--color-error-bg)', color: 'var(--color-error)', border: 'none' },
+    warning: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)', border: 'none' },
+    info: { bg: 'var(--color-info-bg)', color: 'var(--color-info)', border: 'none' },
+    primary: { bg: 'var(--color-primary-50)', color: 'var(--color-primary-700)', border: 'none' },
+    outline: { bg: 'transparent', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' },
   };
   
   return (
@@ -25,9 +27,12 @@ export function Badge({
       display: 'inline-flex', alignItems: 'center', gap: '4px',
       padding: size === 'sm' ? '2px 8px' : '4px 12px',
       borderRadius: 'var(--radius-full)',
-      background: colors[variant].bg, color: colors[variant].color,
+      background: colors[variant].bg, 
+      color: colors[variant].color,
+      border: colors[variant].border,
       font: size === 'sm' ? 'var(--text-overline)' : 'var(--text-caption)',
       fontWeight: 600, whiteSpace: 'nowrap',
+      width: 'fit-content',
     }}>
       {children}
     </span>
@@ -147,9 +152,12 @@ export function Tabs({
             font: 'var(--text-body)',
             fontWeight: activeTab === tab.id ? 600 : 400,
             color: activeTab === tab.id ? 'var(--color-primary-500)' : 'var(--color-text-secondary)',
+            borderTop: 'none',
+            borderLeft: 'none',
+            borderRight: 'none',
             borderBottom: activeTab === tab.id ? '2px solid var(--color-primary-500)' : '2px solid transparent',
             marginBottom: '-2px',
-            background: 'none', border: 'none', cursor: 'pointer',
+            background: 'none', cursor: 'pointer',
             whiteSpace: 'nowrap',
             transition: 'all 150ms ease',
             display: 'flex', alignItems: 'center', gap: '6px',

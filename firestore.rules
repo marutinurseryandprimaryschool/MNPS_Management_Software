@@ -3,18 +3,156 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Rule for user profiles:
-    // Allow users to read and write their own profile document (used for our auto-seeding)
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Helper: Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
     }
     
-    // Global fallback for authenticated users:
-    // Allow any logged-in user to read the rest of the database (e.g. classes, timetable)
-    // NOTE: For a production app, you will want to restrict this further based on user roles
-    match /{document=**} {
-      allow read: if request.auth != null;
-      allow write: if false; // Only allow writes explicitly defined above
+    // Helper: Check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Helper: Check if user is admin-like (admin, principal, correspondent)
+    function isAdminLike() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'principal', 'correspondent'];
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAdminLike();
+      allow create: if isAuthenticated();
+    }
+    
+    // School settings (singleton doc)
+    match /school/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+      allow create: if isAuthenticated();
+    }
+    
+    // Students
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+    }
+    
+    // Teachers
+    match /teachers/{teacherId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+    }
+    
+    // Classes
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+    }
+    
+    // Timetables
+    match /timetables/{timetableId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+    }
+    
+    // Attendance
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Marks
+    match /marks/{marksId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Teacher Assignments
+    match /teacherAssignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+    }
+    
+    // Assignments
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Materials
+    match /materials/{materialId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Fee Structures
+    match /feeStructures/{feeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+    }
+    
+    // Fee Payments
+    match /feePayments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Chats
+    match /chats/{chatId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+      
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
+    }
+    
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+      allow update: if isAuthenticated();
+    }
+
+    // Report Cards
+    match /reportCards/{reportCardId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Co-Scholastic Records
+    match /coScholasticRecords/{recordId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Bus Routes
+    match /busRoutes/{routeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
+    }
+
+    // Weekly Tests
+    match /weeklyTests/{testId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Assessment Sessions
+    match /assessmentSessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Academic Calendars
+    match /academicCalendars/{year} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminLike();
     }
   }
 }

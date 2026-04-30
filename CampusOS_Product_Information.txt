@@ -1,0 +1,453 @@
+================================================================================
+                         CAMPUSOS — PRODUCT INFORMATION
+              Complete School Management System for Modern Schools
+================================================================================
+
+Product Name    : CampusOS
+Version         : 1.0.0
+Category        : School Management System (SaaS)
+Target Market   : Nursery Schools, Primary Schools, K-12 Institutions
+Built With      : Next.js 16, React 19, Firebase (Firestore + Auth), TypeScript
+Deployment      : Cloud-hosted (Vercel / any Node.js platform)
+Pricing Model   : Free / Standard / Premium / Enterprise tiers available
+
+================================================================================
+                              PRODUCT OVERVIEW
+================================================================================
+
+CampusOS is a modern, cloud-based School Management System designed specifically
+for nursery and primary schools. It digitizes every aspect of school operations
+— from student enrollment and attendance tracking to timetable scheduling, fee
+management, marks/grades, and parent communication — all from a single,
+beautifully designed web dashboard.
+
+Built on enterprise-grade technology (Next.js + Firebase), CampusOS requires
+zero server setup, works on any device with a browser, and scales effortlessly
+from a 50-student nursery to a 1000+ student primary school.
+
+================================================================================
+                            KEY VALUE PROPOSITIONS
+================================================================================
+
+1. ZERO INFRASTRUCTURE COST
+   - No servers to maintain. Fully cloud-hosted on Firebase.
+   - Works on any device — desktop, tablet, or mobile phone.
+   - No app installation required — runs entirely in the browser.
+
+2. ROLE-BASED ACCESS FOR EVERYONE
+   - Admins, Principals, Teachers, and Parents each get a tailored dashboard.
+   - Google Sign-In for staff (secure, no passwords to remember).
+   - Simple phone+DOB login for parents (no Google account needed).
+
+3. ENTERPRISE-GRADE SECURITY
+   - Firebase Authentication with Google OAuth 2.0.
+   - Firestore Security Rules enforce role-based access at the database level.
+   - Data encrypted in transit and at rest (Google Cloud infrastructure).
+
+4. REAL-TIME DATA
+   - All data updates in real-time across all connected devices.
+   - Teachers mark attendance → Parents see it instantly.
+   - Fee payments recorded → Dashboard stats update immediately.
+
+5. BULK OPERATIONS
+   - Import hundreds of students from Excel/CSV files in one click.
+   - Intelligent column mapping supports 40+ field variations.
+   - Auto-distributes students to sections based on Excel data.
+
+================================================================================
+                           USER ROLES & ACCESS
+================================================================================
+
+ROLE              ACCESS LEVEL
+─────────────────────────────────────────────────────────────────────────────
+Admin             Full system access. Manage all modules, users, settings.
+Principal         Administrative access similar to Admin.
+Correspondent     Administrative access similar to Admin.
+Teacher           Attendance, marks, fees (collection), timetable (own classes).
+Parent            View-only: child's attendance, marks, fees, timetable.
+─────────────────────────────────────────────────────────────────────────────
+
+AUTHENTICATION METHODS:
+• Staff Login   → Google Sign-In (school-registered Google accounts)
+• Parent Login  → Last 4 digits of phone number + Student Date of Birth
+                  (No Google account required — uses Firebase Anonymous Auth)
+
+FIRST-USER SETUP:
+• The very first person to sign in is automatically made the Admin.
+• Admin can then pre-register other users by email with assigned roles.
+• When pre-registered users sign in with Google, they auto-receive their role.
+
+================================================================================
+                              MODULES & FEATURES
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 1: ADMIN DASHBOARD
+────────────────────────────────────────────────────────────────────────────
+• At-a-glance statistics: Total Students, Teachers, Classes, Fee Collected
+• Personalized greeting with time-of-day context
+• Quick Actions panel: Add Student, Create Timetable, Record Payment, etc.
+• Recent Notifications feed
+• Responsive grid layout — works on mobile and desktop
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 2: STUDENT MANAGEMENT
+────────────────────────────────────────────────────────────────────────────
+• Class-wise and section-wise student organization
+• Color-coded class cards with student count per section
+• Add students manually with comprehensive multi-tab form:
+    - Basic Info: Name, Name in Tamil, DOB, Gender, Blood Group, Address
+    - Parents: Father/Mother/Guardian name, occupation, education
+    - Academic: EMIS ID, Admission Number, Religion, Community, Medium
+    - Contact: Phone, Email, Aadhaar Number
+• BULK EXCEL UPLOAD:
+    - Drag-and-drop or click-to-upload Excel/CSV files
+    - Intelligent column mapping (supports 40+ header variations)
+    - Auto-parses sections from class column (e.g., "1-A" → Class 1, Section A)
+    - Preview table before uploading
+    - Section distribution summary for class-level uploads
+• Detailed student profile view with all personal, academic, and contact data
+• Live search across name, EMIS ID, admission number, and father name
+• Edit and delete with confirmation
+• "View All Students" mode for cross-class search
+• Student status tracking (Active / Archived)
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 3: TEACHER MANAGEMENT
+────────────────────────────────────────────────────────────────────────────
+• Add teachers with Employee ID, subjects, and class assignments
+• Assign teachers to specific classes, sections, and subjects
+• Teacher availability tracking (day-wise, period-wise)
+• Teacher profile with assigned classes and subject specializations
+• Edit and remove teacher records
+• Auto-syncs with User Management (teacher role)
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 4: CLASS & SECTION MANAGEMENT
+────────────────────────────────────────────────────────────────────────────
+• Create classes with custom ordering
+• Multiple sections per class (A, B, C, etc.)
+• Define subjects per class with:
+    - Subject name, code, and weekly periods
+• Assign class teachers to sections
+• Set maximum capacity per section
+• Academic year tracking
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 5: TIMETABLE MANAGEMENT
+────────────────────────────────────────────────────────────────────────────
+• Visual timetable grid (Days × Periods)
+• DRAG-AND-DROP editor:
+    - Subject palette with assigned teacher names
+    - Drag subjects from palette onto grid cells
+    - Move existing slots by dragging between cells
+    - Remove slots with one click
+• AUTO-GENERATE feature:
+    - Automatically fills the entire timetable
+    - Round-robin subject distribution
+    - Respects teacher assignments and avoids double-booking
+    - Conflict detection (teacher unavailable, double-booked, empty slots)
+• Configurable school settings:
+    - Periods per day (default: 8)
+    - School days (Mon–Sat configurable)
+    - Period timings with start/end times
+    - Break and lunch period support
+    - Max periods per teacher per day
+    - Max consecutive periods
+• Color-coded subjects for visual clarity
+• Today's column highlighted
+• Publish/Draft/Archive status
+• Version tracking
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 6: ATTENDANCE TRACKING
+────────────────────────────────────────────────────────────────────────────
+
+FOR TEACHERS:
+• Period-wise attendance marking
+• Student list with one-tap Present/Absent/Late toggle
+• Auto-loads class and students from teacher's timetable
+• Live search within student list
+• Submit and edit attendance records
+
+FOR ADMIN:
+• Date-wise attendance overview across all classes
+• Filter by class
+• Visual cards showing Present/Absent counts with percentage
+• Color-coded progress bars (green = good, yellow = warning, red = poor)
+• Drill-down modal showing absent and present student lists
+• Teacher attribution (who submitted each record)
+
+FOR PARENTS:
+• View child's attendance history
+• Attendance percentage calculation
+• Period-wise attendance details
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 7: MARKS & GRADES
+────────────────────────────────────────────────────────────────────────────
+
+FOR TEACHERS:
+• Create exam entries (exam type, name, max marks)
+• Enter marks for all students in a class/section
+• Auto-grade calculation based on configurable grade scale:
+    A+ (90-100), A (80-89), B+ (70-79), B (60-69),
+    C+ (50-59), C (40-49), D (30-39), F (0-29)
+• Draft and Publish workflow
+• Add remarks per student
+• Live search within student list
+
+FOR PARENTS:
+• View child's marks across all exams
+• Grade and percentage display
+• Average grade calculation
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 8: FEE MANAGEMENT
+────────────────────────────────────────────────────────────────────────────
+
+FEE STRUCTURES:
+• Class-wise fee structure configuration
+• Term-based fees (Term 1, Term 2, Term 3)
+• Extracurricular fee category
+• Custom additional fees (Transport, Books, Uniform, etc.)
+• Total auto-calculation
+• Edit and delete structures
+
+FEE OVERVIEW DASHBOARD:
+• Grand summary: Total Expected vs Collected vs Pending
+• Category-wise breakdown with mini progress bars
+• Class-wise and section-wise summary cards
+• Click any class card to drill down to student-level fee status
+
+STUDENT-LEVEL FEE TRACKING:
+• Per-student: Total paid, pending amount, fully-paid status
+• Category-wise payment status (PAID / PARTIAL / PENDING)
+• Balance tracking with partial payment support
+• Click any student to instantly record a payment
+
+PAYMENT RECORDING:
+• Searchable student selection
+• Auto-fills amount based on category balance
+• Payment modes: Cash, UPI, Cheque, Bank Transfer
+• Reference number tracking
+• Auto-generated receipt numbers (RCP-XXXXXX)
+• Staff attribution (who collected the payment)
+
+PAYMENT HISTORY:
+• Staff-wise collection summary cards
+• Filter by staff member
+• Detailed transaction log with student, class, category, mode, date
+• Receipt number tracking
+
+FOR TEACHERS:
+• Teachers can also collect and record fee payments
+• All collections attributed to the collecting teacher
+• Full fee status visibility per student
+
+FOR PARENTS:
+• View total fees, amount paid, and pending balance
+• Payment history with receipt numbers
+• Category-wise breakdown
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 9: ASSIGNMENTS
+────────────────────────────────────────────────────────────────────────────
+• Teachers can create assignments with title, description, and due date
+• Class and section-specific assignments
+• File attachment support
+• Active/Archived status
+• Parents can view upcoming and past assignments for their child
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 10: SETTINGS & ADMINISTRATION
+────────────────────────────────────────────────────────────────────────────
+
+USER MANAGEMENT:
+• Add users by Google email with pre-assigned roles
+• Role options: Admin, Principal, Correspondent, Teacher, Parent
+• User status tracking (Active / Pending)
+• Edit user roles and details
+• Remove users (with protection for admin accounts)
+• Grouped display by role with user counts
+
+SCHOOL INFORMATION:
+• School name, address, phone, email
+• Academic year configuration
+• Logo management
+
+ACADEMIC SETTINGS:
+• Admission number prefix (e.g., MNS)
+• Periods per day
+• Max periods per teacher per day
+• Max consecutive periods
+• Grade scale configuration
+
+APPEARANCE:
+• Theme management (Light mode)
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 11: PARENT PORTAL
+────────────────────────────────────────────────────────────────────────────
+• Dedicated parent dashboard showing:
+    - Child's profile information
+    - Today's attendance status
+    - Overall attendance percentage
+    - Average grade
+    - Pending assignments
+    - Pending fee balance
+• View child's full timetable
+• View attendance history
+• View marks and grades
+• View fee status and payment history
+• View assignments
+• No Google account required — login with phone + DOB
+
+────────────────────────────────────────────────────────────────────────────
+MODULE 12: TEACHER PORTAL
+────────────────────────────────────────────────────────────────────────────
+• Teacher dashboard showing:
+    - Today's classes from timetable
+    - Current and next period
+    - Pending attendance count
+• Mark attendance for assigned classes
+• Enter and publish marks/grades
+• Collect fee payments
+• View personal timetable
+• Create and manage assignments
+
+================================================================================
+                           UI/UX DESIGN HIGHLIGHTS
+================================================================================
+
+• MODERN DESIGN SYSTEM
+    - Custom CSS design tokens (colors, spacing, typography, shadows)
+    - Consistent component library: Button, Card, Modal, Input, Toast, etc.
+    - Avatar generation with initials
+    - Badge system (success, warning, info, default)
+    - Tab navigation components
+
+• RESPONSIVE LAYOUT
+    - Sidebar navigation for desktop
+    - Bottom navigation bar for mobile
+    - Collapsible sidebar with overlay
+    - Grid layouts that adapt to screen size
+
+• PREMIUM UI ELEMENTS
+    - Gradient summary cards
+    - Color-coded class cards
+    - Progress bars for attendance and fees
+    - Hover effects and transitions
+    - Drag-and-drop timetable editor
+    - Searchable dropdown selects
+    - Toast notifications
+    - Loading states
+
+• ACCESSIBILITY
+    - Semantic HTML structure
+    - Keyboard navigable
+    - Clear visual hierarchy
+    - Readable typography
+
+================================================================================
+                          TECHNICAL ARCHITECTURE
+================================================================================
+
+FRONTEND:
+├── Framework      : Next.js 16 (App Router)
+├── UI Library     : React 19
+├── Language       : TypeScript 5
+├── Styling        : CSS Modules + Global Design Tokens
+├── Charts         : Recharts 3.8
+├── Forms          : React Hook Form 7.72
+├── Excel Import   : SheetJS (xlsx) 0.18
+├── PDF Export     : jsPDF 4.2
+└── Date Utilities : date-fns 4.1
+
+BACKEND:
+├── Database       : Firebase Firestore (NoSQL, real-time)
+├── Authentication : Firebase Auth (Google OAuth + Anonymous)
+├── Security       : Firestore Security Rules (role-based)
+└── Hosting        : Vercel / any Node.js platform
+
+DATA COLLECTIONS:
+├── users          : User profiles with roles
+├── students       : Student records (40+ fields)
+├── teachers       : Teacher profiles with assignments
+├── classes        : Class definitions with sections & subjects
+├── timetables     : Timetable slots per class/section
+├── attendance     : Period-wise attendance records
+├── marks          : Exam marks with grades
+├── feeStructures  : Class-wise fee configurations
+├── feePayments    : Payment transaction records
+├── assignments    : Class assignments
+├── notifications  : System notifications
+├── chats          : Chat messages (with subcollection)
+└── school         : School settings (singleton)
+
+================================================================================
+                        COMPETITIVE ADVANTAGES
+================================================================================
+
+1. NO APP DOWNLOAD REQUIRED — Works entirely in the browser
+2. PARENT-FRIENDLY LOGIN — Phone + DOB, no Google account needed
+3. EXCEL IMPORT — Migrate from paper/existing systems in minutes
+4. DRAG-AND-DROP TIMETABLE — Visual, intuitive scheduling
+5. REAL-TIME SYNC — All changes reflect instantly across all users
+6. ROLE-BASED SECURITY — Data access controlled at the database level
+7. MULTI-LANGUAGE SUPPORT — Student names in Tamil supported
+8. INDIAN EDUCATION COMPLIANT — EMIS ID, Aadhaar, Community fields
+9. ZERO MAINTENANCE — Cloud-hosted, auto-scaling, no server management
+10. AFFORDABLE — Built on Firebase free/pay-as-you-go model
+
+================================================================================
+                          IDEAL CUSTOMER PROFILE
+================================================================================
+
+• Nursery and Primary Schools (Pre-KG to Class 8)
+• Schools with 50 to 1000+ students
+• Schools currently using paper registers or basic spreadsheets
+• Schools looking to digitize without heavy IT infrastructure
+• Schools wanting parent engagement through a digital portal
+• Schools in India (designed for Indian education standards)
+• School chains looking for a standardized management platform
+
+================================================================================
+                         PRICING TIERS (SUGGESTED)
+================================================================================
+
+PLAN          FEATURES                                        PRICE
+─────────────────────────────────────────────────────────────────────────────
+Free          Up to 50 students, basic features               ₹0/month
+Standard      Up to 500 students, all core modules            ₹999/month
+Premium       Up to 1000 students, advanced reports, PDF      ₹1,999/month
+Enterprise    Unlimited students, custom branding, support    Custom pricing
+─────────────────────────────────────────────────────────────────────────────
+
+================================================================================
+                          DEPLOYMENT OPTIONS
+================================================================================
+
+1. CLOUD HOSTED (Recommended)
+   - Deploy to Vercel with one click
+   - Firebase handles all backend services
+   - Zero server management
+   - Auto-scaling
+
+2. SELF-HOSTED
+   - Run on any Node.js server
+   - Use own Firebase project
+   - Full data ownership
+
+================================================================================
+                        SUPPORT & CONTACT
+================================================================================
+
+Product        : CampusOS — School Management System
+Developer      : Maruti Nursery & Primary School (Initial deployment)
+Technology     : Next.js + Firebase + TypeScript
+License        : Proprietary
+
+================================================================================
+                          END OF DOCUMENT
+================================================================================

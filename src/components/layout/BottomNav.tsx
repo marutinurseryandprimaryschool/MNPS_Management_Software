@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '@/types/enums';
 import {
   DashboardIcon, GraduationCapIcon, CalendarIcon,
-  CreditCardIcon, ClipboardCheckIcon, MessageCircleIcon,
+  CreditCardIcon, ClipboardCheckIcon,
   GridIcon, FileTextIcon, BookOpenIcon
 } from '@/components/ui/Icons';
 import styles from './BottomNav.module.css';
@@ -26,9 +26,9 @@ const ADMIN_TABS: TabItem[] = [
 
 const TEACHER_TABS: TabItem[] = [
   { id: 'dashboard', icon: <DashboardIcon size={22} />, label: 'Home' },
-  { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
   { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attend.' },
-  { id: 'chat', icon: <MessageCircleIcon size={22} />, label: 'Chat' },
+  { id: 'collect-fees', icon: <CreditCardIcon size={22} />, label: 'Fees' },
+  { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assign.' },
   { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
 ];
 
@@ -36,7 +36,7 @@ const PARENT_TABS: TabItem[] = [
   { id: 'dashboard', icon: <DashboardIcon size={22} />, label: 'Home' },
   { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attend.' },
   { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
-  { id: 'chat', icon: <MessageCircleIcon size={22} />, label: 'Chat' },
+  { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assign.' },
   { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
 ];
 
@@ -47,6 +47,7 @@ function getTabsForRole(role: UserRole | null): TabItem[] {
     case UserRole.CORRESPONDENT:
       return ADMIN_TABS;
     case UserRole.TEACHER:
+    case UserRole.STAFF:
       return TEACHER_TABS;
     case UserRole.PARENT:
       return PARENT_TABS;
