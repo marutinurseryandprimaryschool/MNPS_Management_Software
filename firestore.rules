@@ -30,7 +30,7 @@ service cloud.firestore {
     
     // School settings (singleton doc)
     match /school/{docId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdminLike();
       allow create: if isAuthenticated();
     }

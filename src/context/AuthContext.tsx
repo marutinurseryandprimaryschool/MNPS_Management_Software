@@ -69,7 +69,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           // 2. User doc doesn't exist yet — check if ANY users exist (first user = admin)
-          const usersSnap = await getDocs(collection(db, 'users'));
+          const { limit } = await import('firebase/firestore');
+          const usersSnap = await getDocs(query(collection(db, 'users'), limit(1)));
 
           if (usersSnap.empty) {
             // First user ever — make them admin

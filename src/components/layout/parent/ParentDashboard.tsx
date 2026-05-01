@@ -21,11 +21,21 @@ export default function ParentDashboard({ onNavigate }: { onNavigate: (id: strin
     async function fetchData() {
       try {
         if (!user || !school?.academicYear) return;
-        const allStudents = await StudentsService.getAll(school.academicYear);
-        // Find children associated with this parent email
-        const myChildren = (allStudents as unknown as Student[]).filter(s =>
-          s.email?.toLowerCase() === user.email?.toLowerCase()
-        );
+        
+        // Use optimized query to fetch only this parent's children
+        let myChildren: Student[] = [];
+        
+        if (user.email) {
+          const results = await StudentsService.getByEmail(user.email, school.academicYear);
+          myChildren = results as unknown as Student[];
+        }
+        
+        // Fallback for parents who logged in with code/dob (might not have email in user object)
+        if (myChildren.length === 0 && user.phone) {
+          const results = await StudentsService.getByPhone(user.phone, school.academicYear);
+          myChildren = results as unknown as Student[];
+        }
+
         setChildren(myChildren);
 
         if (myChildren.length > 0) {
@@ -35,7 +45,7 @@ export default function ParentDashboard({ onNavigate }: { onNavigate: (id: strin
           setAssignments(classAssignments as unknown as Assignment[]);
         }
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error fetching dashboard data:', error);
       } finally {
         setLoading(false);
       }

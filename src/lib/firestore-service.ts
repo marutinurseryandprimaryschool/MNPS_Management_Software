@@ -130,6 +130,16 @@ export const StudentsService = {
     if (year) constraints.push(where('academicYear', '==', year));
     return getAll<DocumentData>('students', ...constraints);
   },
+  getByEmail: (email: string, year?: string) => {
+    const constraints = [where('email', '==', email)];
+    if (year) constraints.push(where('academicYear', '==', year));
+    return getAll<DocumentData>('students', ...constraints);
+  },
+  getByPhone: (phone: string, year?: string) => {
+    const constraints = [where('phone', '==', phone)];
+    if (year) constraints.push(where('academicYear', '==', year));
+    return getAll<DocumentData>('students', ...constraints);
+  },
 };
 
 // ── Teachers ──
