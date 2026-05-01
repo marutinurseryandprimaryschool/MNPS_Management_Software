@@ -1,9 +1,10 @@
 import { db } from './firebase';
 import {
   collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc,
-  query, where, orderBy, serverTimestamp, Timestamp,
+  query, where, serverTimestamp, Timestamp,
   type DocumentData, type QueryConstraint,
 } from 'firebase/firestore';
+import { TeacherAssignment } from '@/types/models';
 
 // ── Helpers ──
 
@@ -187,7 +188,7 @@ export const TeachersService = {
     const doc = await getById<DocumentData>('teacherAssignments', docId);
     return doc?.assignments || [];
   },
-  updateAssignments: async (teacherId: string, year: string, assignments: any[]) => {
+  updateAssignments: async (teacherId: string, year: string, assignments: TeacherAssignment[]) => {
     const docId = `${teacherId}_${year}`;
     const existingDoc = await getById<DocumentData>('teacherAssignments', docId);
     const data = { teacherId, academicYear: year, assignments };
@@ -460,10 +461,11 @@ export const AttendanceAggregationService = {
     
     const studentStats: Record<string, number> = {};
     results.forEach(doc => {
-      (doc.records || []).forEach((r: any) => {
+      ((doc.records as unknown[]) || []).forEach((r: unknown) => {
+        const record = r as { status: string; studentId: string };
         // Status is 'present' (string) as per TeacherAttendance.tsx
-        if (r.status === 'present' || r.status === 'Present') {
-          studentStats[r.studentId] = (studentStats[r.studentId] || 0) + 1;
+        if (record.status === 'present' || record.status === 'Present') {
+          studentStats[record.studentId] = (studentStats[record.studentId] || 0) + 1;
         }
       });
     });
@@ -479,7 +481,7 @@ export const SettingsService = {
     const doc = await getById<DocumentData>('academicCalendars', year);
     return doc || null;
   },
-  updateExamCalendar: async (year: string, data: Record<string, any>) => {
+  updateExamCalendar: async (year: string, data: Record<string, unknown>) => {
     const existingDoc = await getById('academicCalendars', year);
     if (existingDoc) {
       await update('academicCalendars', year, data);

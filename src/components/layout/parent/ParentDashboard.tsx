@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { DataCard } from '@/components/ui/Card';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
-import { StudentsService, AssignmentsService, FeePaymentsService } from '@/lib/firestore-service';
+import { StudentsService, AssignmentsService } from '@/lib/firestore-service';
 import { getGreeting } from '@/lib/utils';
 import { GraduationCapIcon, BookOpenIcon, CreditCardIcon, ClipboardCheckIcon } from '@/components/ui/Icons';
 import type { Student, Assignment } from '@/types/models';
@@ -61,7 +61,7 @@ export default function ParentDashboard({ onNavigate }: { onNavigate: (id: strin
         setAssignments(data as unknown as Assignment[]);
       });
     }
-  }, [activeChildId, school?.academicYear]);
+  }, [activeChildId, activeChild, school?.academicYear]);
 
   if (loading) {
     return <div className="page-container"><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><span className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>Loading...</span></div></div>;

@@ -316,7 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       // 2. Find student matching last 4 digits of phone and DOB (DDMMYYYY)
-      const match = students.find((s: any) => {
+      const match = (students as unknown as Student[]).find((s: Student) => {
         if (!s.phone || !s.dob) return false;
         
         // Clean phone: get last 4 digits
@@ -324,8 +324,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Clean DOB: DDMMYYYY
         let studentDob = '';
-        if (s.dob.toDate) {
-          const d = s.dob.toDate();
+        const dobDate = s.dob as { toDate?: () => Date }; // Handle potential Firestore timestamp
+        if (dobDate?.toDate) {
+          const d = dobDate.toDate();
           const day = String(d.getDate()).padStart(2, '0');
           const month = String(d.getMonth() + 1).padStart(2, '0');
           const year = d.getFullYear();
@@ -336,7 +337,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const year = s.dob.getFullYear();
           studentDob = `${day}${month}${year}`;
         } else if (typeof s.dob === 'string') {
-          studentDob = s.dob.replace(/\D/g, '');
+          studentDob = (s.dob as string).replace(/\D/g, '');
         }
 
         return last4 === code && studentDob === dob;
@@ -355,10 +356,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: anonUid,
         uid: anonUid,
         role: UserRole.PARENT,
-        name: (match as any).name,
-        email: (match as any).email || '',
-        phone: (match as any).phone || '',
-        photo: (match as any).photo || '',
+        name: (match as Student).name,
+        email: (match as Student).email || '',
+        phone: (match as Student).phone || '',
+        photo: (match as Student).photo || '',
         status: 'active',
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -369,7 +370,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await setDoc(doc(db, 'users', anonUid), {
         ...parentUser,
-        studentId: (match as any).id,
+        studentId: (match as Student).id,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -381,12 +382,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         error: null,
       });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Parent login error:", err);
-      let errorMsg = err.message || 'Parent login failed.';
+      const error = err as { message?: string; code?: string };
+      let errorMsg = error.message || 'Parent login failed.';
       
       // Handle specifically the Firebase restricted operation error
-      if (err.code === 'auth/admin-restricted-operation') {
+      if (error.code === 'auth/admin-restricted-operation') {
         errorMsg = 'Anonymous Sign-In is disabled. Please enable "Anonymous" in your Firebase Console (Authentication > Sign-in method) to allow parent logins.';
       }
 
