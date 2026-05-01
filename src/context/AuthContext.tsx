@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { UserRole } from '@/types/enums';
-import { User } from '@/types/models';
+import { User, Student } from '@/types/models';
 import { auth, db } from '@/lib/firebase';
 import { signInWithGoogle } from '@/lib/auth';
 import { onAuthStateChanged, signOut, signInAnonymously } from 'firebase/auth';
