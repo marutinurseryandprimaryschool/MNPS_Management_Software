@@ -429,28 +429,34 @@ export default function AdminStudents() {
     return (
       <div className="page-container">
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-          <button onClick={goBack} style={{
-            padding: 'var(--space-2)', background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center',
-            transition: 'background 150ms',
-          }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-variant)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-surface)')}
-          >
-            <ArrowLeftIcon size={20} />
-          </button>
-          <div style={{ flex: 1 }}>
-            <h2 className="text-h2" style={{ margin: 0 }}>{selectedClass.name} — Section {selectedSection.name}</h2>
-            <p className="text-body-sm" style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
-              {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
-            </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 240 }}>
+            <button onClick={goBack} style={{
+              padding: 'var(--space-2)', background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center',
+              transition: 'background 150ms', flexShrink: 0,
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-variant)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-surface)')}
+            >
+              <ArrowLeftIcon size={20} />
+            </button>
+            <div>
+              <h2 className="text-h2" style={{ margin: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+                <span style={{ whiteSpace: 'nowrap' }}>{selectedClass.name}</span>
+                <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+                <span style={{ whiteSpace: 'nowrap' }}>Section {selectedSection.name}</span>
+              </h2>
+              <p className="text-body-sm" style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
+                {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+              </p>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            <Button variant="secondary" onClick={() => { setUploadedRows([]); setUploadFileName(''); setShowUploadModal(true); }} icon={<UploadIcon size={18} />}>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'nowrap', flex: '1 1 auto', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => { setUploadedRows([]); setUploadFileName(''); setShowUploadModal(true); }} icon={<UploadIcon size={18} />} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 130 }}>
               Upload Excel
             </Button>
-            <Button variant="primary" onClick={openAdd} icon={<PlusIcon size={20} color="white" />}>
+            <Button variant="primary" onClick={openAdd} icon={<PlusIcon size={20} color="white" />} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 130 }}>
               Add Student
             </Button>
           </div>
@@ -462,52 +468,55 @@ export default function AdminStudents() {
         </div>
 
         {/* Student List */}
-        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--color-border)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1.5fr 1fr 0.8fr 0.6fr', padding: 'var(--space-2) var(--space-4)', background: 'var(--color-surface-variant)', borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--color-border)' }}>
-            <span className="text-overline">Student</span>
-            <span className="text-overline">Father Name</span>
-            <span className="text-overline">Phone</span>
-            <span className="text-overline">Status</span>
-            <span className="text-overline" style={{ textAlign: 'right' }}>Actions</span>
-          </div>
-
-          {filteredStudents.length === 0 ? (
-            <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
-              <UsersIcon size={40} />
-              <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', marginTop: 'var(--space-2)' }}>
-                No students in this section yet. Add one manually or upload an Excel file.
-              </p>
+        {/* Student List */}
+        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflowX: 'auto', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--color-border)' }}>
+          <div style={{ minWidth: 800 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1.5fr 1fr 0.8fr 0.6fr', gap: 'var(--space-4)', padding: 'var(--space-2) var(--space-4)', background: 'var(--color-surface-variant)', borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--color-border)' }}>
+              <span className="text-overline">Student</span>
+              <span className="text-overline">Father Name</span>
+              <span className="text-overline">Phone</span>
+              <span className="text-overline">Status</span>
+              <span className="text-overline" style={{ textAlign: 'right' }}>Actions</span>
             </div>
-          ) : filteredStudents.map(s => (
-            <div key={s.id}
-              style={{
-                display: 'grid', gridTemplateColumns: '2.5fr 1.5fr 1fr 0.8fr 0.6fr',
-                alignItems: 'center',
-                padding: 'var(--space-3) var(--space-4)',
-                borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--color-divider)',
-                transition: 'background 100ms',
-                cursor: 'pointer',
-              }}
-              onClick={() => setViewingStudent(s)}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-variant)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
-                <Avatar name={s.name} size={36} />
-                <div style={{ minWidth: 0 }}>
-                  <span style={{ font: 'var(--text-body)', fontWeight: 500, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                  {s.emisId && <span className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>EMIS: {s.emisId}</span>}
+
+            {filteredStudents.length === 0 ? (
+              <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
+                <UsersIcon size={40} />
+                <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', marginTop: 'var(--space-2)' }}>
+                  No students in this section yet. Add one manually or upload an Excel file.
+                </p>
+              </div>
+            ) : filteredStudents.map(s => (
+              <div key={s.id}
+                style={{
+                  display: 'grid', gridTemplateColumns: '2.5fr 1.5fr 1fr 0.8fr 0.6fr', gap: 'var(--space-4)',
+                  alignItems: 'center',
+                  padding: 'var(--space-3) var(--space-4)',
+                  borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--color-divider)',
+                  transition: 'background 100ms',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setViewingStudent(s)}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-variant)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                  <Avatar name={s.name} size={36} />
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ font: 'var(--text-body)', fontWeight: 500, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                    {s.emisId && <span className="text-caption" style={{ color: 'var(--color-text-tertiary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>EMIS: {s.emisId}</span>}
+                  </div>
+                </div>
+                <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.fatherName || '—'}</span>
+                <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.phone || '—'}</span>
+                <div style={{ minWidth: 0 }}><Badge variant={s.status === 'active' ? 'success' : 'default'}>{s.status}</Badge></div>
+                <div style={{ display: 'flex', gap: 'var(--space-1)', justifyContent: 'flex-end' }}>
+                  <button onClick={(e) => { e.stopPropagation(); openEdit(s); }} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary-500)' }}><EditIcon size={16} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error)' }}><TrashIcon size={16} /></button>
                 </div>
               </div>
-              <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)' }}>{s.fatherName || '—'}</span>
-              <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)' }}>{s.phone || '—'}</span>
-              <Badge variant={s.status === 'active' ? 'success' : 'default'}>{s.status}</Badge>
-              <div style={{ display: 'flex', gap: 'var(--space-1)', justifyContent: 'flex-end' }}>
-                <button onClick={(e) => { e.stopPropagation(); openEdit(s); }} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary-500)' }}><EditIcon size={16} /></button>
-                <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error)' }}><TrashIcon size={16} /></button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* ===== STUDENT DETAIL MODAL ===== */}
@@ -704,9 +713,9 @@ export default function AdminStudents() {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--color-border)' }}>
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSave}>{editingStudent ? 'Update' : 'Add Student'}</Button>
+          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'nowrap', justifyContent: 'flex-end', marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--color-border)' }}>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 100, justifyContent: 'center' }}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 100, justifyContent: 'center' }}>{editingStudent ? 'Update' : 'Add Student'}</Button>
           </div>
         </Modal>
 
@@ -828,14 +837,14 @@ export default function AdminStudents() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
           <button onClick={goBack} style={{
             padding: 'var(--space-2)', background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center',
+            borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0,
           }}
             onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-variant)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-surface)')}
           >
             <ArrowLeftIcon size={20} />
           </button>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
             <h2 className="text-h2" style={{ margin: 0 }}>All Students</h2>
             <p className="text-body-sm" style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
               {filteredStudents.length} of {students.length} students
@@ -847,48 +856,50 @@ export default function AdminStudents() {
           <SearchInput value={search} onChange={setSearch} placeholder="Search by name, EMIS ID, father name..." />
         </div>
 
-        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--color-border)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 1fr 0.8fr 0.6fr', padding: 'var(--space-2) var(--space-4)', background: 'var(--color-surface-variant)', borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--color-border)' }}>
-            <span className="text-overline">Student</span>
-            <span className="text-overline">Class</span>
-            <span className="text-overline">Father Name</span>
-            <span className="text-overline">Phone</span>
-            <span className="text-overline">Status</span>
-            <span className="text-overline" style={{ textAlign: 'right' }}>Actions</span>
-          </div>
+        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflowX: 'auto', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--color-border)' }}>
+          <div style={{ minWidth: 800 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 1fr 0.8fr 0.6fr', gap: 'var(--space-4)', padding: 'var(--space-2) var(--space-4)', background: 'var(--color-surface-variant)', borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--color-border)' }}>
+              <span className="text-overline">Student</span>
+              <span className="text-overline">Class</span>
+              <span className="text-overline">Father Name</span>
+              <span className="text-overline">Phone</span>
+              <span className="text-overline">Status</span>
+              <span className="text-overline" style={{ textAlign: 'right' }}>Actions</span>
+            </div>
 
-          {filteredStudents.length === 0 ? (
-            <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
-              <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>No students match your search.</p>
-            </div>
-          ) : filteredStudents.map(s => (
-            <div key={s.id}
-              style={{
-                display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 1fr 0.8fr 0.6fr',
-                alignItems: 'center',
-                padding: 'var(--space-3) var(--space-4)',
-                borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--color-divider)',
-                transition: 'background 100ms',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-variant)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
-                <Avatar name={s.name} size={36} />
-                <span style={{ font: 'var(--text-body)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+            {filteredStudents.length === 0 ? (
+              <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
+                <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>No students match your search.</p>
               </div>
-              <span style={{ font: 'var(--text-body-sm)', fontWeight: 500 }}>
-                {s.className || '—'}{s.sectionName ? `-${s.sectionName}` : ''}
-              </span>
-              <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)' }}>{s.fatherName || '—'}</span>
-              <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)' }}>{s.phone || '—'}</span>
-              <Badge variant={s.status === 'active' ? 'success' : 'default'}>{s.status}</Badge>
-              <div style={{ display: 'flex', gap: 'var(--space-1)', justifyContent: 'flex-end' }}>
-                <button onClick={() => openEdit(s)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary-500)' }}><EditIcon size={16} /></button>
-                <button onClick={() => handleDelete(s.id)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error)' }}><TrashIcon size={16} /></button>
+            ) : filteredStudents.map(s => (
+              <div key={s.id}
+                style={{
+                  display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 1fr 0.8fr 0.6fr', gap: 'var(--space-4)',
+                  alignItems: 'center',
+                  padding: 'var(--space-3) var(--space-4)',
+                  borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--color-divider)',
+                  transition: 'background 100ms',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-variant)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                  <Avatar name={s.name} size={36} />
+                  <span style={{ font: 'var(--text-body)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                </div>
+                <span style={{ font: 'var(--text-body-sm)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.className || '—'}{s.sectionName ? `-${s.sectionName}` : ''}
+                </span>
+                <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.fatherName || '—'}</span>
+                <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.phone || '—'}</span>
+                <div style={{ minWidth: 0 }}><Badge variant={s.status === 'active' ? 'success' : 'default'}>{s.status}</Badge></div>
+                <div style={{ display: 'flex', gap: 'var(--space-1)', justifyContent: 'flex-end' }}>
+                  <button onClick={() => openEdit(s)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary-500)' }}><EditIcon size={16} /></button>
+                  <button onClick={() => handleDelete(s.id)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error)' }}><TrashIcon size={16} /></button>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Edit modal for All Students view */}
@@ -963,9 +974,9 @@ export default function AdminStudents() {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--color-border)' }}>
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSave}>Update</Button>
+          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'nowrap', justifyContent: 'flex-end', marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--color-border)' }}>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 100, justifyContent: 'center' }}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 100, justifyContent: 'center' }}>Update</Button>
           </div>
         </Modal>
       </div>

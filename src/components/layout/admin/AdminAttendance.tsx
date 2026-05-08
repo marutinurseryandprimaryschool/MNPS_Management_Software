@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { AttendanceService, ClassesService } from '@/lib/firestore-service';
 import { useSchool } from '@/context/SchoolContext';
 import { Select } from '@/components/ui/Input';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { Avatar, Badge } from '@/components/ui/SharedUI';
 import Modal from '@/components/ui/Modal';
 import { ClipboardCheckIcon } from '@/components/ui/Icons';
@@ -69,7 +70,7 @@ export default function AdminAttendance() {
               background: 'var(--color-surface)', color: 'var(--color-text-primary)',
             }} />
         </div>
-        <Select label="Class" options={[{ value: '', label: 'All Classes' }, ...classes.map(c => ({ value: c.id, label: c.name }))]} value={selectedClass} onChange={e => setSelectedClass(e.target.value)} />
+        <SearchableSelect label="Class" options={[{ value: '', label: 'All Classes' }, ...classes.map(c => ({ value: c.id, label: c.name }))]} value={selectedClass} onChange={val => setSelectedClass(val)} />
       </div>
 
       {/* Attendance cards */}

@@ -23,6 +23,7 @@ import { serverTimestamp } from 'firebase/firestore';
 import { UserRole } from '@/types/enums';
 import Input from '@/components/ui/Input';
 import { Select } from '@/components/ui/Input';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { SunIcon, PlusIcon, UserIcon, EditIcon, TrashIcon } from '@/components/ui/Icons';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -412,8 +413,8 @@ export default function AdminSettings() {
       <div style={{ marginTop: 'var(--space-4)', background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 'var(--space-6)' }}>
         {activeTab === 'users' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+              <div style={{ flex: '1 1 200px' }}>
                 <h3 className="text-h3">User Management</h3>
                 <p className="text-caption" style={{ color: 'var(--color-text-tertiary)', marginTop: 'var(--space-1)' }}>
                   Add users by email. When they sign in with Google using that email, they&apos;ll be assigned the role you set here.
@@ -449,21 +450,22 @@ export default function AdminSettings() {
                           <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'currentColor' }} />
                           {section.title} — {sectionUsers.length}
                         </h4>
-                        <div style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', overflow: 'hidden', background: 'var(--color-surface)' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 0.5fr', padding: 'var(--space-2) var(--space-4)', background: 'var(--color-surface-variant)', borderBottom: '1px solid var(--color-border)' }}>
-                            <span className="text-overline" style={{ fontSize: '0.65rem' }}>Name</span>
-                            <span className="text-overline" style={{ fontSize: '0.65rem' }}>Email</span>
-                            <span className="text-overline" style={{ fontSize: '0.65rem' }}>Role</span>
-                            <span className="text-overline" style={{ fontSize: '0.65rem' }}>Status</span>
-                            <span className="text-overline" style={{ fontSize: '0.65rem', textAlign: 'right' }}>Actions</span>
-                          </div>
-                          {sectionUsers.map(u => (
-                            <div key={u.id} style={{
-                              display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 0.5fr',
-                              alignItems: 'center',
-                              padding: 'var(--space-2) var(--space-4)',
-                              borderBottom: '1px solid var(--color-divider)',
-                            }}>
+                        <div className="hide-scrollbar" style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', overflowX: 'auto', background: 'var(--color-surface)' }}>
+                          <div style={{ minWidth: 700 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 80px', gap: 'var(--space-4)', padding: 'var(--space-2) var(--space-4)', background: 'var(--color-surface-variant)', borderBottom: '1px solid var(--color-border)' }}>
+                              <span className="text-overline" style={{ fontSize: '0.65rem' }}>Name</span>
+                              <span className="text-overline" style={{ fontSize: '0.65rem' }}>Email</span>
+                              <span className="text-overline" style={{ fontSize: '0.65rem' }}>Role</span>
+                              <span className="text-overline" style={{ fontSize: '0.65rem' }}>Status</span>
+                              <span className="text-overline" style={{ fontSize: '0.65rem', textAlign: 'right' }}>Actions</span>
+                            </div>
+                            {sectionUsers.map(u => (
+                              <div key={u.id} style={{
+                                display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 80px', gap: 'var(--space-4)',
+                                alignItems: 'center',
+                                padding: 'var(--space-2) var(--space-4)',
+                                borderBottom: '1px solid var(--color-divider)',
+                              }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
                                 <Avatar name={u.name || u.email} size={28} />
                                 <span style={{ font: 'var(--text-body-sm)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name || 'Unnamed'}</span>
@@ -491,6 +493,7 @@ export default function AdminSettings() {
                               </div>
                             </div>
                           ))}
+                          </div>
                         </div>
                       </div>
                     );
@@ -680,7 +683,7 @@ export default function AdminSettings() {
           <Input label="Name (optional)" placeholder="Full name" value={userForm.name} onChange={e => setUserForm(p => ({ ...p, name: e.target.value }))} />
           <Input label="Google Email" placeholder="user@gmail.com" type="email" required value={userForm.email} onChange={e => setUserForm(p => ({ ...p, email: e.target.value }))} />
           <div className="grid-2">
-            <Select label="Role" options={roleOptions} value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value as UserRole }))} />
+            <SearchableSelect label="Role" options={roleOptions} value={userForm.role} onChange={val => setUserForm(p => ({ ...p, role: val as UserRole }))} />
             <Input label="Phone (optional)" placeholder="+91 XXXXX XXXXX" value={userForm.phone} onChange={e => setUserForm(p => ({ ...p, phone: e.target.value }))} />
           </div>
           {userForm.role === UserRole.TEACHER && (
@@ -699,7 +702,7 @@ export default function AdminSettings() {
           <Input label="Name" placeholder="Full name" value={userForm.name} onChange={e => setUserForm(p => ({ ...p, name: e.target.value }))} />
           <Input label="Email" value={editingUser?.email || ''} disabled />
           <div className="grid-2">
-            <Select label="Role" options={roleOptions} value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value as UserRole }))} />
+            <SearchableSelect label="Role" options={roleOptions} value={userForm.role} onChange={val => setUserForm(p => ({ ...p, role: val as UserRole }))} />
             <Input label="Phone" placeholder="+91 XXXXX XXXXX" value={userForm.phone} onChange={e => setUserForm(p => ({ ...p, phone: e.target.value }))} />
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', marginTop: 'var(--space-2)' }}>

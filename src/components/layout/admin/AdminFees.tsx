@@ -673,11 +673,11 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
       {/* ═══ ADD/EDIT FEE STRUCTURE MODAL ═══ */}
       <Modal isOpen={showStructureModal} onClose={() => setShowStructureModal(false)} title={editingStructure ? 'Edit Fee Structure' : 'Add Fee Structure'} size="lg">
         <div style={{ display:'flex',flexDirection:'column',gap:'var(--space-4)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)', alignItems: 'start' }}>
+          <div className="grid-2" style={{ gap: 'var(--space-6)', alignItems: 'start' }}>
             {/* Left Column: Base Fees */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <Select label="Class" options={[{ value:'',label:'Select Class' },...classes.map(c => ({ value:c.id,label:c.name }))]}
-                value={structureForm.classId} onChange={e => setStructureForm(p => ({...p,classId:e.target.value}))} />
+              <SearchableSelect label="Class" options={[{ value:'',label:'Select Class' },...classes.map(c => ({ value:c.id,label:c.name }))]}
+                value={structureForm.classId} onChange={val => setStructureForm(p => ({...p,classId:val}))} />
 
               <div style={{ padding:'var(--space-3) var(--space-4)',background:'#F0F9FF',border:'1px solid #BAE6FD',borderRadius:'var(--radius-md)' }}>
                 <span className="text-caption" style={{ color:'#0369A1',fontWeight:600 }}>Academic Fees (per year)</span>
@@ -786,9 +786,9 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
             </span>
           </div>
 
-          <div style={{ display:'flex',gap:'var(--space-3)',justifyContent:'flex-end' }}>
-            <Button variant="secondary" onClick={() => setShowStructureModal(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSaveStructure}>{editingStructure ? 'Update' : 'Create'}</Button>
+          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setShowStructureModal(false)} style={{ flex: '1 1 0%', minWidth: 100, justifyContent: 'center' }}>Cancel</Button>
+            <Button variant="primary" onClick={handleSaveStructure} style={{ flex: '1 1 0%', minWidth: 100, justifyContent: 'center' }}>{editingStructure ? 'Update' : 'Create'}</Button>
           </div>
         </div>
       </Modal>
@@ -796,8 +796,8 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
       {/* ═══ RECORD PAYMENT MODAL ═══ */}
       <Modal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} title="Record Payment" size="md">
         <div style={{ display:'flex',flexDirection:'column',gap:'var(--space-4)' }}>
-          <Select label="Class" options={[{ value:'',label:'All Classes' },...classes.map(c => ({ value:c.id,label:c.name }))]}
-            value={paymentForm.classId} onChange={e => setPaymentForm(p => ({...p,classId:e.target.value,studentId:'',category:'',amount:''}))} />
+          <SearchableSelect label="Class" options={[{ value:'',label:'All Classes' },...classes.map(c => ({ value:c.id,label:c.name }))]}
+            value={paymentForm.classId} onChange={val => setPaymentForm(p => ({...p,classId:val,studentId:'',category:'',amount:''}))} />
 
           <SearchableSelect label="Student" placeholder="Search student by name..." options={filteredStudents.map(s => ({ value:s.id,label:`${s.name}${s.admissionNumber?' ('+s.admissionNumber+')':''}` }))}
             value={paymentForm.studentId} onChange={val => {
@@ -935,13 +935,13 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
           })()}
 
           <div className="grid-2">
-            <Select label="Category" options={categoryOptions()}
-              value={paymentForm.category} onChange={e => { setPaymentForm(p => ({...p,category:e.target.value})); autoFillAmount(e.target.value); }} />
+            <SearchableSelect label="Category" options={categoryOptions()}
+              value={paymentForm.category} onChange={val => { setPaymentForm(p => ({...p,category:val})); autoFillAmount(val); }} />
             <Input label="Amount (₹)" type="number" required value={paymentForm.amount} onChange={e => setPaymentForm(p => ({...p,amount:e.target.value}))} />
           </div>
           <div className="grid-2">
-            <Select label="Payment Mode" options={[{value:'cash',label:'Cash'},{value:'upi',label:'UPI'},{value:'cheque',label:'Cheque'},{value:'bank_transfer',label:'Bank Transfer'}]}
-              value={paymentForm.mode} onChange={e => setPaymentForm(p => ({...p,mode:e.target.value}))} />
+            <SearchableSelect label="Payment Mode" options={[{value:'cash',label:'Cash'},{value:'upi',label:'UPI'},{value:'cheque',label:'Cheque'},{value:'bank_transfer',label:'Bank Transfer'}]}
+              value={paymentForm.mode} onChange={val => setPaymentForm(p => ({...p,mode:val}))} />
             <Input label="Reference Number" placeholder="Optional" value={paymentForm.referenceNumber} onChange={e => setPaymentForm(p => ({...p,referenceNumber:e.target.value}))} />
           </div>
           <div style={{ display:'flex',gap:'var(--space-3)',justifyContent:'flex-end' }}>

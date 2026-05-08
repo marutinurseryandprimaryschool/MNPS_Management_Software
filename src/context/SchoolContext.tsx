@@ -9,6 +9,19 @@ import { SchoolPlan, DayOfWeek } from '@/types/enums';
    School Context
    ============================================ */
 
+const DEFAULT_TIMINGS = [
+  { period: 1, start: '09:00', end: '09:40' },
+  { period: 2, start: '09:40', end: '10:20' },
+  { type: 'break', label: 'Morning Break', start: '10:20', end: '10:35' },
+  { period: 3, start: '10:35', end: '11:15' },
+  { period: 4, start: '11:15', end: '11:55' },
+  { period: 5, start: '11:55', end: '12:35' },
+  { type: 'lunch', label: 'Lunch Break', start: '12:35', end: '13:15' },
+  { period: 6, start: '13:15', end: '13:55' },
+  { period: 7, start: '13:55', end: '14:35' },
+  { period: 8, start: '14:35', end: '15:15' },
+];
+
 const DEFAULT_SCHOOL: School = {
   id: 'main',
   name: 'Maruti Nursery & Primary School',
@@ -22,7 +35,7 @@ const DEFAULT_SCHOOL: School = {
     admissionPrefix: 'MNS',
     periodsPerDay: 8,
     schoolDays: [DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY],
-    periodTimings: [],
+    periodTimings: DEFAULT_TIMINGS,
     gradeScale: [],
     maxPeriodsPerTeacherPerDay: 6,
     maxConsecutivePeriods: 3,
@@ -48,7 +61,12 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await SchoolService.get();
       if (data) {
-        setSchool(data as unknown as School);
+        const fetchedSchool = data as unknown as School;
+        if (!fetchedSchool.settings?.periodTimings?.length) {
+          if (!fetchedSchool.settings) fetchedSchool.settings = {} as any;
+          fetchedSchool.settings.periodTimings = DEFAULT_TIMINGS;
+        }
+        setSchool(fetchedSchool);
       }
     } catch (error) {
       console.error('Error fetching school:', error);

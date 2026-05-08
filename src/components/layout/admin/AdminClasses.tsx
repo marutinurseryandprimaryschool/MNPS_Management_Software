@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClassesService } from '@/lib/firestore-service';
 import { useSchool } from '@/context/SchoolContext';
-import Button from '@/components/ui/Button';
+import Button, { FAB } from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
@@ -204,9 +204,11 @@ export default function AdminClasses() {
           <h2 className="text-h1">Classes & Sections</h2>
           <p className="text-body-sm">{classes.length} classes</p>
         </div>
-        <Button variant="primary" onClick={() => { resetForm(); setShowAddModal(true); }} icon={<PlusIcon size={20} color="white" />}>
-          <span className="desktop-only">Add Class</span>
-        </Button>
+        <div className="desktop-only">
+          <Button variant="primary" onClick={() => { resetForm(); setShowAddModal(true); }} icon={<PlusIcon size={20} color="white" />}>
+            Add Class
+          </Button>
+        </div>
       </div>
 
       <div className="grid-3" style={{ gap: 'var(--space-4)' }}>
@@ -305,6 +307,10 @@ export default function AdminClasses() {
       <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditingClass(null); resetForm(); }} title={`Edit ${editingClass?.name || 'Class'}`} size="md">
         {renderFormFields(true)}
       </Modal>
+
+      <div className="mobile-only">
+        <FAB icon={<PlusIcon size={24} color="white" />} onClick={() => { resetForm(); setShowAddModal(true); }} label="Add Class" />
+      </div>
     </div>
   );
 }

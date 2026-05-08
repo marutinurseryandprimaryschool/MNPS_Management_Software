@@ -60,12 +60,22 @@ export default function AdminTimetable() {
   const fetchData = useCallback(async () => {
     try {
       if (!school?.academicYear) return;
-      const [c, t] = await Promise.all([
+      const [c, teacherData, assignmentData] = await Promise.all([
         ClassesService.getAll(school.academicYear),
-        TeachersService.getAll()
+        TeachersService.getAll(),
+        TeachersService.getAllAssignments(school.academicYear)
       ]);
+      
+      const mergedTeachers = (teacherData as any[]).map(t => {
+        const myAssignments = (assignmentData as any[]).find(a => a.teacherId === t.id);
+        return {
+          ...t,
+          assignedClasses: myAssignments?.assignments || []
+        };
+      });
+
       setClasses(c as unknown as Class[]);
-      setTeachers(t as unknown as Teacher[]);
+      setTeachers(mergedTeachers as unknown as Teacher[]);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [school?.academicYear]);
@@ -225,17 +235,17 @@ export default function AdminTimetable() {
             {selectedClassData ? `${selectedClassData.name} — Section ${selectedClassData.sections.find(s => s.id === selectedSection)?.name || ''}` : 'Select a class to manage'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'nowrap', flex: '1 1 auto', justifyContent: 'flex-end' }}>
           {selectedClass && selectedSection && (
             <>
-              <Button variant="secondary" onClick={autoGenerate}>Auto Generate</Button>
+              <Button variant="secondary" onClick={autoGenerate} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 100, justifyContent: 'center' }}>Auto Generate</Button>
               {editing && (
-                <Button variant="primary" onClick={handleSave} disabled={saving}>
+                <Button variant="primary" onClick={handleSave} disabled={saving} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 100, justifyContent: 'center' }}>
                   {saving ? 'Saving...' : 'Save Timetable'}
                 </Button>
               )}
               {!editing && timetable && (
-                <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>
+                <Button variant="secondary" onClick={() => setEditing(true)} style={{ flex: '1 1 0%', maxWidth: 200, minWidth: 100, justifyContent: 'center' }}>Edit</Button>
               )}
             </>
           )}
@@ -247,9 +257,9 @@ export default function AdminTimetable() {
         <p className="text-overline" style={{ marginBottom: 'var(--space-3)', color: 'var(--color-text-tertiary)' }}>
           Select a class
         </p>
-        <div style={{
+        <div className="hide-scrollbar" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
           gap: 'var(--space-3)',
         }}>
           {(() => {
@@ -406,7 +416,7 @@ export default function AdminTimetable() {
 
       {/* ===== Timetable Grid ===== */}
       {selectedClass && selectedSection && (slots.length > 0 || editing) && (
-        <div style={{
+        <div className="hide-scrollbar" style={{
           background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
           boxShadow: 'var(--shadow-sm)', overflow: 'auto', border: '1px solid var(--color-border)',
         }}>

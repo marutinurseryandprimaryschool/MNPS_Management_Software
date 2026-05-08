@@ -21,13 +21,13 @@ export function Badge({
     primary: { bg: 'var(--color-primary-50)', color: 'var(--color-primary-700)', border: 'none' },
     outline: { bg: 'transparent', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' },
   };
-  
+
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: '4px',
       padding: size === 'sm' ? '2px 8px' : '4px 12px',
       borderRadius: 'var(--radius-full)',
-      background: colors[variant].bg, 
+      background: colors[variant].bg,
       color: colors[variant].color,
       border: colors[variant].border,
       font: size === 'sm' ? 'var(--text-overline)' : 'var(--text-caption)',
@@ -62,11 +62,11 @@ export function Avatar({
       />
     );
   }
-  
+
   const initials = getInitials(name);
   const bgColor = color || `hsl(${name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360}, 60%, 85%)`;
   const textColor = `hsl(${name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360}, 60%, 35%)`;
-  
+
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
@@ -139,7 +139,7 @@ export function Tabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div style={{
+    <div className="hide-scrollbar" style={{
       display: 'flex', gap: '0', borderBottom: '2px solid var(--color-border)',
       overflowX: 'auto', WebkitOverflowScrolling: 'touch',
     }}>

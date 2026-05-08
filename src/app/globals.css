@@ -155,9 +155,21 @@ ul, ol {
 }
 
 @media (max-width: 639px) {
-  .grid-3, .grid-4 {
+  .grid-2, .grid-3 {
+    grid-template-columns: 1fr;
+  }
+  .grid-4 {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ── Utilities ── */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* ── Flex Utilities ── */

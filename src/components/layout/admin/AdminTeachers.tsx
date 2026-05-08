@@ -388,27 +388,30 @@ export default function AdminTeachers() {
           <h2 className="text-h1">Teachers</h2>
           <p className="text-body-sm">{filteredTeachers.length} teachers</p>
         </div>
-        <Button variant="primary" onClick={() => { resetForm(); setShowAddModal(true); }} icon={<PlusIcon size={20} color="white" />}>
-          <span className="desktop-only">Add Teacher</span>
-        </Button>
+        <div className="desktop-only">
+          <Button variant="primary" onClick={() => { resetForm(); setShowAddModal(true); }} icon={<PlusIcon size={20} color="white" />}>
+            Add Teacher
+          </Button>
+        </div>
       </div>
 
       <div style={{ marginBottom: 'var(--space-4)', maxWidth: 400 }}>
         <SearchInput value={search} onChange={setSearch} placeholder="Search teachers..." />
       </div>
 
-      <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 1fr 0.5fr', padding: 'var(--space-3) var(--space-4)', background: 'var(--color-surface-variant)', borderBottom: '1px solid var(--color-border)' }}>
-          <span className="text-overline">Teacher</span>
-          <span className="text-overline">Email</span>
-          <span className="text-overline">Employee ID</span>
-          <span className="text-overline">Status</span>
-          <span className="text-overline" style={{ textAlign: 'right' }}>Actions</span>
-        </div>
+      <div className="hide-scrollbar" style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflowX: 'auto', border: '1px solid var(--color-border)' }}>
+        <div style={{ minWidth: 900 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.2fr 1fr 80px', gap: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', background: 'var(--color-surface-variant)', borderBottom: '1px solid var(--color-border)' }}>
+            <span className="text-overline">Teacher</span>
+            <span className="text-overline">Email</span>
+            <span className="text-overline">Employee ID</span>
+            <span className="text-overline">Status</span>
+            <span className="text-overline" style={{ textAlign: 'right' }}>Actions</span>
+          </div>
 
         {filteredTeachers.map(teacher => (
           <div key={teacher.id} style={{
-            display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 1fr 0.5fr',
+            display: 'grid', gridTemplateColumns: '2fr 2fr 1.2fr 1fr 80px', gap: 'var(--space-4)',
             alignItems: 'center',
             padding: 'var(--space-3) var(--space-4)',
             borderBottom: '1px solid var(--color-divider)',
@@ -442,6 +445,7 @@ export default function AdminTeachers() {
         {filteredTeachers.length === 0 && (
           <div className="empty-state"><p>{teachers.length === 0 ? 'No teachers added yet.' : 'No teachers match your search.'}</p></div>
         )}
+        </div>
       </div>
 
       {/* ===== Teacher Profile Modal ===== */}
@@ -449,15 +453,15 @@ export default function AdminTeachers() {
         {selectedTeacher && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', background: 'var(--color-surface-variant)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', background: 'var(--color-surface-variant)', borderRadius: 'var(--radius-lg)' }}>
               <Avatar name={selectedTeacher.name} size={64} />
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: '1 1 0%', minWidth: 200 }}>
                 <h3 className="text-h2" style={{ margin: 0 }}>{selectedTeacher.name}</h3>
-                <p className="text-body-sm" style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{selectedTeacher.employeeId} • {selectedTeacher.email}</p>
+                <p className="text-body-sm" style={{ margin: 0, color: 'var(--color-text-secondary)', wordBreak: 'break-all' }}>{selectedTeacher.employeeId} • {selectedTeacher.email}</p>
               </div>
-              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                <Button variant="secondary" onClick={() => { setSelectedTeacher(null); openEditTeacher(selectedTeacher); }} icon={<EditIcon size={16} />}>Edit</Button>
-                <Button variant="secondary" onClick={() => handleDeleteTeacher(selectedTeacher)} icon={<TrashIcon size={16} />}>Delete</Button>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', flex: '1 1 auto' }}>
+                <Button variant="secondary" onClick={() => { setSelectedTeacher(null); openEditTeacher(selectedTeacher); }} icon={<EditIcon size={16} />} style={{ flex: '1 1 0%', justifyContent: 'center' }}>Edit</Button>
+                <Button variant="secondary" onClick={() => handleDeleteTeacher(selectedTeacher)} icon={<TrashIcon size={16} />} style={{ flex: '1 1 0%', justifyContent: 'center' }}>Delete</Button>
               </div>
             </div>
 
