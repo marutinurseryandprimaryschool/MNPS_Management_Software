@@ -9,7 +9,7 @@ import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { DAYS_OF_WEEK, DAY_SHORT_LABELS, TimetableStatus, DayOfWeek } from '@/types/enums';
 import { CalendarIcon, PlusIcon } from '@/components/ui/Icons';
-import type { Class, Teacher, Timetable, TimetableSlot, Subject } from '@/types/models';
+import type { Class, Teacher, Timetable, TimetableSlot, Subject, PeriodTiming } from '@/types/models';
 
 // ── Color palette for subjects ──
 const SUBJECT_COLORS = [
@@ -60,12 +60,19 @@ export default function AdminTimetable() {
   const fetchData = useCallback(async () => {
     try {
       if (!school?.academicYear) return;
-      const [c, t] = await Promise.all([
+      const [c, t, assignments] = await Promise.all([
         ClassesService.getAll(school.academicYear),
-        TeachersService.getAll()
+        TeachersService.getAll(),
+        TeachersService.getAllAssignments(school.academicYear)
       ]);
+      // Assignments are stored per-year in a separate collection, not on the
+      // teacher doc — merge them in so class/section matching works.
+      const mergedTeachers = (t as any[]).map(teacher => {
+        const myAssignments = assignments.find(a => a.teacherId === teacher.id);
+        return { ...teacher, assignedClasses: myAssignments?.assignments || [] };
+      });
       setClasses(c as unknown as Class[]);
-      setTeachers(t as unknown as Teacher[]);
+      setTeachers(mergedTeachers as unknown as Teacher[]);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [school?.academicYear]);
@@ -90,7 +97,13 @@ export default function AdminTimetable() {
   const selectedClassData = classes.find(c => c.id === selectedClass);
   const classSubjects = selectedClassData?.subjects || [];
   const days = (school.settings?.schoolDays || []) as DayOfWeek[];
-  const timings = school.settings?.periodTimings || [];
+  const rawTimings = school.settings?.periodTimings || [];
+  // No custom period timings are configured (and there's no settings UI for them),
+  // so fall back to plain numbered periods — otherwise the grid renders no rows.
+  const periodsPerDay = school.settings?.periodsPerDay || 8;
+  const timings: PeriodTiming[] = rawTimings.length > 0
+    ? rawTimings
+    : Array.from({ length: periodsPerDay }, (_, i) => ({ period: i + 1, start: '', end: '' }));
   const periods = timings.filter(t => t.period);
 
   // Build subject-color map 
@@ -474,7 +487,9 @@ export default function AdminTimetable() {
                       zIndex: 1,
                     }}>
                       <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>P{timing.period}</div>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{formatTime(timing.start)}–{formatTime(timing.end)}</div>
+                      {timing.start && timing.end && (
+                        <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{formatTime(timing.start)}–{formatTime(timing.end)}</div>
+                      )}
                     </td>
 
                     {days.map(day => {

@@ -67,7 +67,13 @@ export default function ParentTimetable() {
     );
   }
 
-  const periods = schoolSettings?.periodTimings?.filter((t: any) => t.type !== 'break' && t.type !== 'lunch') || [];
+  const rawTimings = (schoolSettings?.periodTimings || []).filter((t: any) => t.type !== 'break' && t.type !== 'lunch');
+  // Fall back to plain numbered periods when no custom timings are configured,
+  // otherwise the grid renders no period columns even when slots exist.
+  const periodsPerDay = schoolSettings?.periodsPerDay || 8;
+  const periods = rawTimings.length > 0
+    ? rawTimings
+    : Array.from({ length: periodsPerDay }, (_, i) => ({ period: i + 1, start: '', end: '' }));
 
   return (
     <div className="page-container">
@@ -86,7 +92,9 @@ export default function ParentTimetable() {
               {periods.map((p: any) => (
                 <th key={p.period} style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>Period {p.period}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{p.start} - {p.end}</div>
+                  {p.start && p.end && (
+                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{p.start} - {p.end}</div>
+                  )}
                 </th>
               ))}
             </tr>

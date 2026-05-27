@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { DAY_SHORT_LABELS, DayOfWeek } from '@/types/enums';
 import { CalendarIcon } from '@/components/ui/Icons';
-import type { Teacher, Timetable, TimetableSlot } from '@/types/models';
+import type { Teacher, Timetable, TimetableSlot, PeriodTiming } from '@/types/models';
 
 // Map JS getDay() to DayOfWeek enum
 const JS_DAY_MAP: Record<number, DayOfWeek> = {
@@ -82,7 +82,13 @@ export default function TeacherTimetable() {
   uniqueSubjects.forEach((id, i) => subjectColorMap.set(id, SUBJECT_COLORS[i % SUBJECT_COLORS.length]));
 
   const days = (school.settings?.schoolDays || []) as DayOfWeek[];
-  const timings = school.settings?.periodTimings || [];
+  const rawTimings = school.settings?.periodTimings || [];
+  // Fall back to plain numbered periods when no custom timings are configured,
+  // otherwise the grid renders no rows even when slots exist.
+  const periodsPerDay = school.settings?.periodsPerDay || 8;
+  const timings: PeriodTiming[] = rawTimings.length > 0
+    ? rawTimings
+    : Array.from({ length: periodsPerDay }, (_, i) => ({ period: i + 1, start: '', end: '' }));
 
   if (loading) {
     return <div className="page-container"><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><span className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>Loading timetable...</span></div></div>;
@@ -170,7 +176,9 @@ export default function TeacherTimetable() {
                       borderRight: '1px solid var(--color-divider)',
                     }}>
                       <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-primary-600)' }}>P{timing.period}</div>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{formatTime(timing.start)}–{formatTime(timing.end)}</div>
+                      {timing.start && timing.end && (
+                        <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{formatTime(timing.start)}–{formatTime(timing.end)}</div>
+                      )}
                     </td>
 
                     {days.map(day => {
