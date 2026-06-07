@@ -7,7 +7,7 @@ import { auth, db } from '@/lib/firebase';
 import { signInWithGoogle } from '@/lib/auth';
 import { onAuthStateChanged, signOut, signInAnonymously } from 'firebase/auth';
 import {
-  doc, getDoc, setDoc, getDocs, collection, query, where, serverTimestamp
+  doc, getDoc, setDoc, getDocs, collection, query, where, serverTimestamp, writeBatch
 } from 'firebase/firestore';
 
 interface AuthState {
@@ -179,17 +179,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               updatedAt: serverTimestamp(),
             };
 
-            // Create the UID-keyed doc (this is what security rules look up)
-            await setDoc(doc(db, 'users', firebaseUser.uid), mergedUser);
-
-            // Clean up the old email-registered doc if it has a different ID
+            // Atomically swap the email-keyed pre-registration doc for a
+            // UID-keyed active doc. A batch ensures we never end up with both
+            // (the old duplicate-row bug in User Management).
             if (existingDoc.id !== firebaseUser.uid) {
+              const batch = writeBatch(db);
+              batch.set(doc(db, 'users', firebaseUser.uid), mergedUser);
+              batch.delete(doc(db, 'users', existingDoc.id));
               try {
-                const { deleteDoc: firestoreDeleteDoc } = await import('firebase/firestore');
-                await firestoreDeleteDoc(doc(db, 'users', existingDoc.id));
-              } catch (cleanupErr) {
-                console.warn('Could not remove old user doc:', cleanupErr);
+                await batch.commit();
+              } catch (batchErr) {
+                // If the batch fails (e.g. rules don't allow the delete on a
+                // stale deployment), fall back to a plain set so the user can
+                // still sign in — duplicate cleanup will happen next time.
+                console.warn('Batched user migration failed, falling back:', batchErr);
+                await setDoc(doc(db, 'users', firebaseUser.uid), mergedUser);
               }
+            } else {
+              await setDoc(doc(db, 'users', firebaseUser.uid), mergedUser);
             }
 
             setState({

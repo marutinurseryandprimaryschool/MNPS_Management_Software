@@ -14,8 +14,11 @@ import { PlusIcon, CreditCardIcon, UsersIcon, EditIcon, TrashIcon } from '@/comp
 import { formatCompactCurrency } from '@/lib/utils';
 import type { FeePayment, Class, Student } from '@/types/models';
 
+// All 12 months in calendar order. Staff manually unchecks holiday months per
+// their school's calendar — no auto-exclusion of summer break.
 const ACADEMIC_MONTHS = [
-  'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
 interface TermFee { name: string; amount: number }
@@ -671,7 +674,7 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
       })()}
 
       {/* ═══ ADD/EDIT FEE STRUCTURE MODAL ═══ */}
-      <Modal isOpen={showStructureModal} onClose={() => setShowStructureModal(false)} title={editingStructure ? 'Edit Fee Structure' : 'Add Fee Structure'} size="lg">
+      <Modal isOpen={showStructureModal} onClose={() => setShowStructureModal(false)} title={editingStructure ? 'Edit Fee Structure' : 'Add Fee Structure'} size="xl">
         <div style={{ display:'flex',flexDirection:'column',gap:'var(--space-4)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)', alignItems: 'start' }}>
             {/* Left Column: Base Fees */}
@@ -748,8 +751,22 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
                   <div style={{ padding: 'var(--space-3)', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--space-4)' }}>
                     <span style={{ fontSize: '0.78rem', color: '#1D4ED8', fontWeight: 500 }}>ℹ️ Individual student route fees are applied automatically based on their assignment.</span>
                   </div>
-                  <label className="text-caption" style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>ACTIVE BUS MONTHS</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                    <label className="text-caption" style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>ACTIVE BUS MONTHS</label>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                      <button
+                        type="button"
+                        onClick={() => setStructureForm(p => ({ ...p, busMonths: [...ACADEMIC_MONTHS] }))}
+                        style={{ padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+                      >Select all</button>
+                      <button
+                        type="button"
+                        onClick={() => setStructureForm(p => ({ ...p, busMonths: [] }))}
+                        style={{ padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+                      >Clear</button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                     {ACADEMIC_MONTHS.map(month => (
                       <label key={month} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'var(--color-surface-variant)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 0.1s' }}
                         onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--color-primary-300)'}

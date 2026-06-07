@@ -208,7 +208,7 @@ export default function Sidebar({
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
       <div className={styles.logo}>
         <div className={styles.logoMark}>
-          <SchoolIcon size={22} color="white" />
+          <img src="/logo.jpeg" alt="Maruti Nursery" className={styles.logoImg} />
         </div>
         {!collapsed && <span className={styles.logoText}>{school.name.split(' ').slice(0, 2).join(' ')}</span>}
       </div>

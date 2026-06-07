@@ -31,6 +31,7 @@ import { Tabs, Avatar, Badge } from '@/components/ui/SharedUI';
 
 interface UserData {
   id: string;
+  uid?: string;
   name: string;
   email: string;
   role: string;
@@ -65,7 +66,7 @@ export default function AdminSettings() {
   }, [school?.academicYear]);
 
   const [userForm, setUserForm] = useState({
-    name: '', email: '', role: UserRole.TEACHER, phone: '', employeeId: '',
+    name: '', email: '', role: UserRole.PRINCIPAL, phone: '', employeeId: '',
   });
 
   const [schoolForm, setSchoolForm] = useState({
@@ -76,11 +77,48 @@ export default function AdminSettings() {
     academicYear: school.academicYear,
   });
 
+  const [academicForm, setAcademicForm] = useState({
+    admissionPrefix: school.settings?.admissionPrefix || 'MNS',
+    periodsPerDay: school.settings?.periodsPerDay || 8,
+    maxPeriodsPerTeacherPerDay: school.settings?.maxPeriodsPerTeacherPerDay || 6,
+    maxConsecutivePeriods: school.settings?.maxConsecutivePeriods || 3,
+  });
+
   useEffect(() => {
-    UsersService.getAll().then(data => {
-      setUsers(data as unknown as UserData[]);
+    UsersService.getAll().then(async data => {
+      const list = data as unknown as UserData[];
+      // Self-heal pre-existing duplicates: when a user logged in before the
+      // batched migration shipped, the email-keyed pending doc was left behind
+      // alongside the new UID-keyed active doc. Admins now have permission to
+      // delete pending docs, so silently remove the stale ones.
+      if (isAdmin) {
+        const byEmailGroups = new Map<string, UserData[]>();
+        for (const u of list) {
+          if (!u.email) continue;
+          const k = u.email.toLowerCase();
+          const arr = byEmailGroups.get(k) || [];
+          arr.push(u);
+          byEmailGroups.set(k, arr);
+        }
+        const toDelete: string[] = [];
+        for (const group of byEmailGroups.values()) {
+          if (group.length < 2) continue;
+          const hasActive = group.some(g => g.status === 'active');
+          if (!hasActive) continue;
+          for (const g of group) {
+            if (g.status === 'pending') toDelete.push(g.id);
+          }
+        }
+        if (toDelete.length > 0) {
+          await Promise.allSettled(toDelete.map(id => UsersService.delete(id)));
+          const refreshed = await UsersService.getAll();
+          setUsers(refreshed as unknown as UserData[]);
+          return;
+        }
+      }
+      setUsers(list);
     }).catch(console.error).finally(() => setLoadingUsers(false));
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     setSchoolForm({
@@ -89,6 +127,12 @@ export default function AdminSettings() {
       phone: school.phone,
       email: school.email,
       academicYear: school.academicYear,
+    });
+    setAcademicForm({
+      admissionPrefix: school.settings?.admissionPrefix || 'MNS',
+      periodsPerDay: school.settings?.periodsPerDay || 8,
+      maxPeriodsPerTeacherPerDay: school.settings?.maxPeriodsPerTeacherPerDay || 6,
+      maxConsecutivePeriods: school.settings?.maxConsecutivePeriods || 3,
     });
   }, [school]);
 
@@ -107,8 +151,9 @@ export default function AdminSettings() {
 
       const userName = userForm.name || userForm.email.split('@')[0];
 
-      // Create a pre-registered user with status 'pending'
-      const userId = await UsersService.create({
+      // Create a pre-registered user with status 'pending'. Teachers are added
+      // via the Teachers section, so this form never creates a teachers doc.
+      await UsersService.create({
         name: userName,
         email: userForm.email,
         role: userForm.role,
@@ -118,27 +163,10 @@ export default function AdminSettings() {
         uid: '',
       });
 
-      // If role is teacher, also create a teachers doc
-      if (userForm.role === UserRole.TEACHER) {
-        await TeachersService.create({
-          name: userName,
-          email: userForm.email,
-          phone: userForm.phone,
-          employeeId: userForm.employeeId || '',
-          userId,
-          photo: '',
-          subjects: [],
-          subjectNames: [],
-          assignedClasses: [],
-          availability: {},
-          status: 'active',
-        });
-      }
-
       const updated = await UsersService.getAll();
       setUsers(updated as unknown as UserData[]);
       setShowAddUserModal(false);
-      setUserForm({ name: '', email: '', role: UserRole.TEACHER, phone: '', employeeId: '' });
+      setUserForm({ name: '', email: '', role: UserRole.PRINCIPAL, phone: '', employeeId: '' });
       showToast('User added! They can now sign in with Google.');
     } catch (error) {
       console.error('Error adding user:', error);
@@ -199,6 +227,28 @@ export default function AdminSettings() {
       showToast('Settings saved!');
     } catch {
       showToast('Failed to save settings');
+    }
+  };
+
+  const handleSaveAcademic = async () => {
+    const periodsPerDay = Number(academicForm.periodsPerDay);
+    if (!Number.isFinite(periodsPerDay) || periodsPerDay < 1 || periodsPerDay > 12) {
+      showToast('Periods Per Day must be between 1 and 12');
+      return;
+    }
+    try {
+      await updateSchool({
+        settings: {
+          ...school.settings,
+          admissionPrefix: academicForm.admissionPrefix,
+          periodsPerDay,
+          maxPeriodsPerTeacherPerDay: Number(academicForm.maxPeriodsPerTeacherPerDay) || 6,
+          maxConsecutivePeriods: Number(academicForm.maxConsecutivePeriods) || 3,
+        },
+      });
+      showToast('Academic settings saved!');
+    } catch {
+      showToast('Failed to save academic settings');
     }
   };
 
@@ -388,12 +438,19 @@ export default function AdminSettings() {
     }
   };
 
-  const roleOptions = [
-    { value: UserRole.TEACHER, label: 'Teacher' },
+  // Roles that can be added directly from this page. Teachers are intentionally
+  // excluded — they must be added via the Teachers section, which also creates
+  // the underlying Teacher record (subjects, assignments, employee ID, etc.).
+  const addUserRoleOptions = [
     { value: UserRole.PRINCIPAL, label: 'Principal' },
     { value: UserRole.CORRESPONDENT, label: 'Correspondent' },
     { value: UserRole.PARENT, label: 'Parent' },
     { value: UserRole.ADMIN, label: 'Admin' },
+  ];
+  // Edit form keeps the Teacher option so existing teacher rows remain editable.
+  const editUserRoleOptions = [
+    { value: UserRole.TEACHER, label: 'Teacher' },
+    ...addUserRoleOptions,
   ];
 
   return (
@@ -439,8 +496,24 @@ export default function AdminSettings() {
                     { role: UserRole.PARENT, title: 'Parents' },
                   ];
 
+                  // Dedupe by email — a user logging in for the first time creates a
+                  // UID-keyed active doc, while the original pre-registration doc may
+                  // linger if cleanup failed. Prefer active > pending, and UID-keyed
+                  // > email-only, so the list always shows the canonical row.
+                  const byEmail = new Map<string, UserData>();
+                  for (const u of users) {
+                    const key = (u.email || u.id).toLowerCase();
+                    const existing = byEmail.get(key);
+                    if (!existing) { byEmail.set(key, u); continue; }
+                    const score = (x: UserData) =>
+                      (x.status === 'active' ? 2 : x.status === 'pending' ? 1 : 0) +
+                      (x.uid ? 0.5 : 0);
+                    if (score(u) > score(existing)) byEmail.set(key, u);
+                  }
+                  const dedupedUsers = Array.from(byEmail.values());
+
                   return sections.map(section => {
-                    const sectionUsers = users.filter(u => u.role === section.role);
+                    const sectionUsers = dedupedUsers.filter(u => u.role === section.role);
                     if (sectionUsers.length === 0) return null;
 
                     return (
@@ -524,12 +597,12 @@ export default function AdminSettings() {
         {activeTab === 'academic' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '600px' }}>
             <h3 className="text-h3">Academic Settings</h3>
-            <Input label="Admission Prefix" defaultValue={school.settings?.admissionPrefix || 'MNS'} />
+            <Input label="Admission Prefix" value={academicForm.admissionPrefix} onChange={e => setAcademicForm(p => ({ ...p, admissionPrefix: e.target.value }))} />
             <div className="grid-2">
-              <Input label="Periods Per Day" type="number" defaultValue={String(school.settings?.periodsPerDay || 8)} />
-              <Input label="Max Periods/Teacher/Day" type="number" defaultValue={String(school.settings?.maxPeriodsPerTeacherPerDay || 6)} />
+              <Input label="Periods Per Day" type="number" min={1} max={12} value={String(academicForm.periodsPerDay)} onChange={e => setAcademicForm(p => ({ ...p, periodsPerDay: e.target.value === '' ? '' as unknown as number : Number(e.target.value) }))} />
+              <Input label="Max Periods/Teacher/Day" type="number" min={1} value={String(academicForm.maxPeriodsPerTeacherPerDay)} onChange={e => setAcademicForm(p => ({ ...p, maxPeriodsPerTeacherPerDay: e.target.value === '' ? '' as unknown as number : Number(e.target.value) }))} />
             </div>
-            <Input label="Max Consecutive Periods" type="number" defaultValue={String(school.settings?.maxConsecutivePeriods || 3)} />
+            <Input label="Max Consecutive Periods" type="number" min={1} value={String(academicForm.maxConsecutivePeriods)} onChange={e => setAcademicForm(p => ({ ...p, maxConsecutivePeriods: e.target.value === '' ? '' as unknown as number : Number(e.target.value) }))} />
             <div className="divider" />
             <h3 className="text-h3">Grade Scale</h3>
             {school.settings?.gradeScale?.map((gs, i) => (
@@ -541,7 +614,7 @@ export default function AdminSettings() {
             {(!school.settings?.gradeScale || school.settings.gradeScale.length === 0) && (
               <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>Grade scale will be configured from the school settings.</p>
             )}
-            <Button variant="primary" onClick={() => showToast('Academic settings saved!')}>Save Changes</Button>
+            <Button variant="primary" onClick={handleSaveAcademic}>Save Changes</Button>
 
             <div className="divider" style={{ margin: 'var(--space-6) 0' }} />
             
@@ -680,12 +753,12 @@ export default function AdminSettings() {
           <Input label="Name (optional)" placeholder="Full name" value={userForm.name} onChange={e => setUserForm(p => ({ ...p, name: e.target.value }))} />
           <Input label="Google Email" placeholder="user@gmail.com" type="email" required value={userForm.email} onChange={e => setUserForm(p => ({ ...p, email: e.target.value }))} />
           <div className="grid-2">
-            <Select label="Role" options={roleOptions} value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value as UserRole }))} />
+            <Select label="Role" options={addUserRoleOptions} value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value as UserRole }))} />
             <Input label="Phone (optional)" placeholder="+91 XXXXX XXXXX" value={userForm.phone} onChange={e => setUserForm(p => ({ ...p, phone: e.target.value }))} />
           </div>
-          {userForm.role === UserRole.TEACHER && (
-            <Input label="Employee ID (optional)" placeholder="EMP001" value={userForm.employeeId} onChange={e => setUserForm(p => ({ ...p, employeeId: e.target.value }))} />
-          )}
+          <p className="text-caption" style={{ color: 'var(--color-text-tertiary)', margin: 0 }}>
+            To add a teacher, use the Teachers section — that flow also captures subjects and class assignments.
+          </p>
           <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', marginTop: 'var(--space-2)' }}>
             <Button variant="secondary" onClick={() => setShowAddUserModal(false)}>Cancel</Button>
             <Button variant="primary" onClick={handleAddUser}>Add User</Button>
@@ -699,7 +772,7 @@ export default function AdminSettings() {
           <Input label="Name" placeholder="Full name" value={userForm.name} onChange={e => setUserForm(p => ({ ...p, name: e.target.value }))} />
           <Input label="Email" value={editingUser?.email || ''} disabled />
           <div className="grid-2">
-            <Select label="Role" options={roleOptions} value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value as UserRole }))} />
+            <Select label="Role" options={editUserRoleOptions} value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value as UserRole }))} />
             <Input label="Phone" placeholder="+91 XXXXX XXXXX" value={userForm.phone} onChange={e => setUserForm(p => ({ ...p, phone: e.target.value }))} />
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', marginTop: 'var(--space-2)' }}>

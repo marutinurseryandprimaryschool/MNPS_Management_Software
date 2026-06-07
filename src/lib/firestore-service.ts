@@ -108,7 +108,15 @@ export const SchoolService = {
     if (!docSnap.exists()) return null;
     return processDoc<DocumentData>(docSnap.data(), 'main');
   },
-  update: (data: Record<string, unknown>) => update('school', 'main', data),
+  // Upsert — Firestore's updateDoc errors when the doc doesn't exist yet
+  // (e.g. fresh project where no admin has logged in to seed it). The school
+  // is a singleton, so merge-write is the right semantic.
+  update: async (data: Record<string, unknown>) => {
+    await setDoc(doc(db, 'school', 'main'), {
+      ...serializeForFirestore(data),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  },
   create: (data: Record<string, unknown>) => create('school', data, 'main'),
 };
 

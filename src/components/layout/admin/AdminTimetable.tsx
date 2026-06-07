@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TimetablesService, ClassesService, TeachersService } from '@/lib/firestore-service';
-import { formatTime } from '@/lib/utils';
+import { formatTime, getUpcomingSaturday, toDateKey } from '@/lib/utils';
 import { useSchool } from '@/context/SchoolContext';
 import { useAuth } from '@/context/AuthContext';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { DAYS_OF_WEEK, DAY_SHORT_LABELS, TimetableStatus, DayOfWeek } from '@/types/enums';
 import { CalendarIcon, PlusIcon } from '@/components/ui/Icons';
-import type { Class, Teacher, Timetable, TimetableSlot, Subject, PeriodTiming } from '@/types/models';
+import type { Class, Teacher, Timetable, TimetableSlot, Subject, PeriodTiming, SaturdayOverride } from '@/types/models';
 
 // ── Color palette for subjects ──
 const SUBJECT_COLORS = [
@@ -54,6 +54,13 @@ export default function AdminTimetable() {
   const [saving, setSaving] = useState(false);
   const todayEnum = JS_DAY_MAP[new Date().getDay()] || null;
 
+  // ── Per-Saturday override state ──
+  const satDate = React.useMemo(() => getUpcomingSaturday(new Date()), []);
+  const satDateKey = React.useMemo(() => toDateKey(satDate), [satDate]);
+  const [satMode, setSatMode] = useState<'recurring' | 'custom' | 'holiday'>('recurring');
+  const [satSlots, setSatSlots] = useState<TimetableSlot[]>([]);
+  const [satSaving, setSatSaving] = useState(false);
+
   // Drag state
   const dragItem = useRef<{ subjectId: string; subjectName: string; teacherId: string; teacherName: string } | null>(null);
 
@@ -87,12 +94,26 @@ export default function AdminTimetable() {
           setTimetable(tt);
           setSlots(tt?.slots || []);
           setEditing(!tt);
+          // Sync Saturday override editor from the saved override (if any)
+          const existing = tt?.saturdayOverrides?.[satDateKey];
+          if (existing?.status === 'holiday') {
+            setSatMode('holiday');
+            setSatSlots([]);
+          } else if (existing?.status === 'custom') {
+            setSatMode('custom');
+            setSatSlots(existing.slots || []);
+          } else {
+            setSatMode('recurring');
+            setSatSlots([]);
+          }
         }).catch(console.error);
     } else {
       setTimetable(null);
       setSlots([]);
+      setSatMode('recurring');
+      setSatSlots([]);
     }
-  }, [selectedClass, selectedSection]);
+  }, [selectedClass, selectedSection, satDateKey]);
 
   const selectedClassData = classes.find(c => c.id === selectedClass);
   const classSubjects = selectedClassData?.subjects || [];
@@ -190,6 +211,49 @@ export default function AdminTimetable() {
     setSlots(newSlots);
     setEditing(true);
     showToast('Timetable auto-generated! Drag subjects to adjust.');
+  };
+
+  // ── Saturday override: drag helpers ──
+  const handleSatDrop = (period: number) => {
+    if (!dragItem.current) return;
+    const { subjectId, subjectName, teacherId, teacherName } = dragItem.current;
+    setSatSlots(prev => {
+      const filtered = prev.filter(s => s.period !== period);
+      return [...filtered, { day: DayOfWeek.SATURDAY, period, subjectId, subjectName, teacherId, teacherName }];
+    });
+    dragItem.current = null;
+  };
+
+  const removeSatSlot = (period: number) => {
+    setSatSlots(prev => prev.filter(s => s.period !== period));
+  };
+
+  // ── Save Saturday override ──
+  const handleSaveSaturdayOverride = async () => {
+    if (!timetable?.id) {
+      showToast('Save the main timetable first');
+      return;
+    }
+    setSatSaving(true);
+    try {
+      const nextOverrides = { ...(timetable.saturdayOverrides || {}) };
+      if (satMode === 'recurring') {
+        delete nextOverrides[satDateKey];
+      } else {
+        nextOverrides[satDateKey] = satMode === 'holiday'
+          ? { status: 'holiday', slots: [] }
+          : { status: 'custom', slots: satSlots };
+      }
+      await TimetablesService.update(timetable.id, { saturdayOverrides: nextOverrides });
+      const updated = await TimetablesService.getByClassSection(selectedClass, selectedSection, school.academicYear);
+      setTimetable(updated as unknown as Timetable);
+      showToast(`Saturday ${satDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} saved!`);
+    } catch (err) {
+      console.error('Error saving Saturday override:', err);
+      showToast('Failed to save Saturday override');
+    } finally {
+      setSatSaving(false);
+    }
   };
 
   // ── Save timetable ──
@@ -359,14 +423,14 @@ export default function AdminTimetable() {
       )}
 
       {/* ===== Subject palette (drag source) — only in edit mode ===== */}
-      {editing && selectedClass && selectedSection && (
+      {(editing || satMode === 'custom') && selectedClass && selectedSection && (
         <div style={{
           marginBottom: 'var(--space-4)', padding: 'var(--space-4)',
           background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--color-border)',
         }}>
           <p className="text-overline" style={{ marginBottom: 'var(--space-3)', color: 'var(--color-text-tertiary)' }}>
-            Drag subjects to the timetable grid below
+            Drag subjects to the timetable grid {satMode === 'custom' ? 'or this Saturday' : 'below'}
           </p>
           <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
             {classSubjects.map((sub, i) => {
@@ -435,10 +499,12 @@ export default function AdminTimetable() {
                 }}>Period</th>
                 {days.map(day => {
                   const isToday = day === todayEnum;
+                  const isSaturday = day === DayOfWeek.SATURDAY;
                   return (
                     <th key={day} style={{
                       padding: 'var(--space-3)', textAlign: 'center', fontWeight: 700,
                       borderBottom: '2px solid var(--color-border)',
+                      borderLeft: isSaturday ? '4px double var(--color-border)' : undefined,
                       fontSize: '0.8rem',
                       background: isToday ? 'rgba(220, 38, 38, 0.08)' : 'var(--color-surface-variant)',
                       color: isToday ? 'var(--color-primary-600)' : 'var(--color-text-primary)',
@@ -451,6 +517,11 @@ export default function AdminTimetable() {
                           background: 'var(--color-primary-500)', color: 'white',
                           fontSize: '0.6rem', fontWeight: 700,
                         }}>TODAY</span>
+                      )}
+                      {isSaturday && (
+                        <div style={{ fontSize: '0.6rem', fontWeight: 500, marginTop: 2, color: 'var(--color-text-tertiary)' }}>
+                          weekly plan
+                        </div>
                       )}
                     </th>
                   );
@@ -496,6 +567,7 @@ export default function AdminTimetable() {
                       const slot = getSlot(day, timing.period!);
                       const color = slot ? (subjectColorMap.get(slot.subjectId) || SUBJECT_COLORS[0]) : null;
                       const isToday = day === todayEnum;
+                      const isSaturday = day === DayOfWeek.SATURDAY;
 
                       return (
                         <td
@@ -506,10 +578,13 @@ export default function AdminTimetable() {
                             padding: 4,
                             borderBottom: '1px solid var(--color-divider)',
                             borderRight: '1px solid var(--color-divider)',
+                            borderLeft: isSaturday ? '4px double var(--color-border)' : undefined,
                             verticalAlign: 'top', height: 64,
                             background: isToday
                               ? 'rgba(220, 38, 38, 0.04)'
-                              : (editing && !slot ? 'repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.02) 5px, rgba(0,0,0,0.02) 10px)' : 'transparent'),
+                              : isSaturday
+                                ? 'rgba(99, 102, 241, 0.04)'
+                                : (editing && !slot ? 'repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.02) 5px, rgba(0,0,0,0.02) 10px)' : 'transparent'),
                           }}
                         >
                           {slot ? (
@@ -574,6 +649,121 @@ export default function AdminTimetable() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ===== This Saturday — per-week override ===== */}
+      {selectedClass && selectedSection && timetable && (
+        <div style={{
+          marginTop: 'var(--space-5)', padding: 'var(--space-4)',
+          background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--color-border)',
+          borderLeft: '4px double var(--color-border)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+            <div>
+              <p className="text-overline" style={{ color: 'var(--color-text-tertiary)', marginBottom: 2 }}>This Saturday</p>
+              <h3 className="text-h3" style={{ margin: 0 }}>
+                {satDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </h3>
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              {(['recurring', 'custom', 'holiday'] as const).map(m => {
+                const isActive = satMode === m;
+                const label = m === 'recurring' ? 'Use weekly plan' : m === 'custom' ? 'Custom plan' : 'Holiday';
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setSatMode(m)}
+                    style={{
+                      padding: '6px 14px', borderRadius: 'var(--radius-md)',
+                      border: `1.5px solid ${isActive ? 'var(--color-primary-500)' : 'var(--color-border)'}`,
+                      background: isActive ? 'var(--color-primary-50)' : 'var(--color-surface)',
+                      color: isActive ? 'var(--color-primary-700)' : 'var(--color-text-primary)',
+                      fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              <Button variant="primary" onClick={handleSaveSaturdayOverride} disabled={satSaving}>
+                {satSaving ? 'Saving...' : 'Save Saturday'}
+              </Button>
+            </div>
+          </div>
+
+          {satMode === 'recurring' && (
+            <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', margin: 0 }}>
+              Using the recurring Saturday plan from the main timetable above. Switch to <strong>Custom plan</strong> to override just this Saturday, or <strong>Holiday</strong> to clear it.
+            </p>
+          )}
+
+          {satMode === 'holiday' && (
+            <div style={{
+              padding: 'var(--space-4)', borderRadius: 'var(--radius-md)',
+              background: '#FEF3C7', border: '1px solid #FDE68A', color: '#B45309',
+              fontWeight: 600, fontSize: '0.9rem', textAlign: 'center',
+            }}>
+              Marked as holiday — no classes will be shown for {satDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}.
+            </div>
+          )}
+
+          {satMode === 'custom' && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${Math.max(periods.length, 1)}, minmax(120px, 1fr))`,
+              gap: 'var(--space-2)',
+            }}>
+              {periods.map(timing => {
+                const slot = satSlots.find(s => s.period === timing.period);
+                const color = slot ? (subjectColorMap.get(slot.subjectId) || SUBJECT_COLORS[0]) : null;
+                return (
+                  <div
+                    key={timing.period}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleSatDrop(timing.period!)}
+                    style={{
+                      minHeight: 72, padding: 6,
+                      borderRadius: 'var(--radius-md)',
+                      border: slot ? `1.5px solid ${color?.border}` : '1.5px dashed var(--color-border)',
+                      background: slot ? color?.bg : 'rgba(0,0,0,0.02)',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-text-tertiary)', marginBottom: 2 }}>
+                      P{timing.period}
+                    </div>
+                    {slot ? (
+                      <>
+                        <div style={{ fontWeight: 600, fontSize: '0.8rem', color: color?.text, lineHeight: 1.2 }}>
+                          {slot.subjectName}
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: color?.text, opacity: 0.75, marginTop: 2 }}>
+                          {slot.teacherName}
+                        </div>
+                        <button
+                          onClick={() => removeSatSlot(timing.period!)}
+                          style={{
+                            position: 'absolute', top: 4, right: 4,
+                            width: 16, height: 16, borderRadius: '50%',
+                            background: 'rgba(0,0,0,0.15)', border: 'none',
+                            color: '#fff', fontSize: '10px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            lineHeight: 1,
+                          }}
+                        >×</button>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', textAlign: 'center', marginTop: 12, opacity: 0.6 }}>
+                        Drop here
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

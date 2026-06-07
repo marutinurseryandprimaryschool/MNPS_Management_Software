@@ -26,6 +26,12 @@ service cloud.firestore {
       allow write: if isAuthenticated() && request.auth.uid == userId;
       allow write: if isAdminLike();
       allow create: if isAuthenticated();
+      // Let a freshly-logged-in user delete their own pre-registration
+      // (email-keyed pending doc) so the active UID-keyed doc replaces it
+      // without leaving a duplicate row in User Management.
+      allow delete: if isAuthenticated()
+        && resource.data.status == 'pending'
+        && resource.data.email == request.auth.token.email;
     }
     
     // School settings (singleton doc)

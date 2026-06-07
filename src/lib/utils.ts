@@ -1,4 +1,6 @@
 import { format, formatDistanceToNow, isToday, isYesterday, parseISO } from 'date-fns';
+import type { Timetable, TimetableSlot } from '@/types/models';
+import { DayOfWeek } from '@/types/enums';
 
 /* ============================================
    CampusOS — Utility Functions
@@ -154,6 +156,45 @@ export function formatRelativeDate(date: Date | string): string {
   if (isToday(d)) return 'Today';
   if (isYesterday(d)) return 'Yesterday';
   return formatDistanceToNow(d, { addSuffix: true });
+}
+
+/**
+ * Returns the upcoming Saturday from `from` (or `from` itself when it is Saturday).
+ */
+export function getUpcomingSaturday(from: Date = new Date()): Date {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const daysUntilSat = (6 - d.getDay() + 7) % 7; // 6 = Saturday
+  d.setDate(d.getDate() + daysUntilSat);
+  return d;
+}
+
+/**
+ * ISO-style YYYY-MM-DD key used to index per-Saturday overrides.
+ */
+export function toDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Resolves which Saturday slots to show for a given date — explicit override
+ * if saved, otherwise the recurring weekly Saturday slots from the timetable.
+ */
+export function getEffectiveSaturdaySlots(
+  timetable: Pick<Timetable, 'slots' | 'saturdayOverrides'> | null | undefined,
+  dateKey: string
+): { slots: TimetableSlot[]; mode: 'recurring' | 'custom' | 'holiday' } {
+  const override = timetable?.saturdayOverrides?.[dateKey];
+  if (override) {
+    return {
+      slots: override.status === 'holiday' ? [] : (override.slots || []),
+      mode: override.status,
+    };
+  }
+  const recurring = (timetable?.slots || []).filter(s => s.day === DayOfWeek.SATURDAY);
+  return { slots: recurring, mode: 'recurring' };
 }
 
 /**

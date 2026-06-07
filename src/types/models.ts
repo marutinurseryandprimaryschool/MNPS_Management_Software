@@ -202,6 +202,14 @@ export interface TimetableSlot {
   roomId?: string;
 }
 
+// ── Saturday Override ──
+// Per-date plan for a specific Saturday. When absent, the recurring weekly
+// Saturday slots from `Timetable.slots` are used as the fallback.
+export interface SaturdayOverride {
+  status: 'custom' | 'holiday';
+  slots: TimetableSlot[]; // empty when status === 'holiday'
+}
+
 // ── Timetable ──
 export interface Timetable extends Timestamps {
   id: string;
@@ -212,6 +220,7 @@ export interface Timetable extends Timestamps {
   status: TimetableStatus;
   effectiveFrom: Date;
   slots: TimetableSlot[];
+  saturdayOverrides?: Record<string, SaturdayOverride>; // key: ISO date YYYY-MM-DD
   createdBy: string;
   // denormalized
   className?: string;

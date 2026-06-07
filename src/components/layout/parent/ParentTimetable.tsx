@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { TimetablesService, StudentsService, SchoolService } from '@/lib/firestore-service';
+import { getUpcomingSaturday, toDateKey, getEffectiveSaturdaySlots } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
-import { DAYS_OF_WEEK, DAY_LABELS } from '@/types/enums';
+import { DAYS_OF_WEEK, DAY_LABELS, DayOfWeek } from '@/types/enums';
 import type { Timetable, Student } from '@/types/models';
 
 export default function ParentTimetable() {
@@ -75,6 +76,11 @@ export default function ParentTimetable() {
     ? rawTimings
     : Array.from({ length: periodsPerDay }, (_, i) => ({ period: i + 1, start: '', end: '' }));
 
+  const satDate = React.useMemo(() => getUpcomingSaturday(new Date()), []);
+  const satDateKey = React.useMemo(() => toDateKey(satDate), [satDate]);
+  const effectiveSat = getEffectiveSaturdaySlots(timetable, satDateKey);
+  const effectiveSatByPeriod = new Map(effectiveSat.slots.map(s => [s.period, s]));
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -100,15 +106,28 @@ export default function ParentTimetable() {
             </tr>
           </thead>
           <tbody>
-            {DAYS_OF_WEEK.map(day => (
+            {DAYS_OF_WEEK.map(day => {
+              const isSaturday = day === DayOfWeek.SATURDAY;
+              const satBorderTop = isSaturday ? '4px double var(--color-border)' : undefined;
+              const satBg = isSaturday ? 'rgba(99, 102, 241, 0.04)' : undefined;
+              return (
               <tr key={day}>
-                <td style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border)', borderRight: '1px solid var(--color-border)', fontWeight: 600, background: 'var(--color-surface-variant)', fontSize: '0.85rem' }}>
+                <td style={{ padding: 'var(--space-3)', borderTop: satBorderTop, borderBottom: '1px solid var(--color-border)', borderRight: '1px solid var(--color-border)', fontWeight: 600, background: isSaturday ? 'rgba(99, 102, 241, 0.06)' : 'var(--color-surface-variant)', fontSize: '0.85rem' }}>
                   {DAY_LABELS[day]}
+                  {isSaturday && (
+                    <div style={{ fontSize: '0.65rem', fontWeight: 400, color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                      {satDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      {effectiveSat.mode === 'holiday' && <span style={{ color: '#B45309', fontWeight: 600 }}> • Holiday</span>}
+                      {effectiveSat.mode === 'custom' && <span style={{ color: 'var(--color-primary-600)', fontWeight: 600 }}> • This week</span>}
+                    </div>
+                  )}
                 </td>
                 {periods.map((p: any) => {
-                  const slot = timetable.slots?.find(s => s.day === day && s.period === p.period);
+                  const slot = isSaturday
+                    ? effectiveSatByPeriod.get(p.period)
+                    : timetable.slots?.find(s => s.day === day && s.period === p.period);
                   return (
-                    <td key={`${day}-${p.period}`} style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border)', textAlign: 'center' }}>
+                    <td key={`${day}-${p.period}`} style={{ padding: 'var(--space-3)', borderTop: satBorderTop, borderBottom: '1px solid var(--color-border)', textAlign: 'center', background: satBg }}>
                       {slot ? (
                         <div>
                           <div style={{ font: 'var(--text-body-sm)', fontWeight: 600, color: 'var(--color-primary-600)' }}>{slot.subjectName}</div>
@@ -121,7 +140,8 @@ export default function ParentTimetable() {
                   );
                 })}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

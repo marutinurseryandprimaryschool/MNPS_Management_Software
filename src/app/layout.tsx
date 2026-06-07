@@ -5,6 +5,22 @@ export const metadata: Metadata = {
   title: 'Maruti Nursery & Primary School — Management System',
   description: 'Maruti Nursery & Primary School - Nurturing young minds for a brighter tomorrow. Complete school management platform for students, teachers, attendance, fees, and communication.',
   keywords: 'Maruti School, nursery school, primary school, education, school management, student management, timetable, attendance, fees',
+  manifest: '/manifest.webmanifest',
+  applicationName: 'Maruti Nursery',
+  appleWebApp: {
+    capable: true,
+    title: 'Maruti Nursery',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    icon: [
+      { url: '/logo.jpeg', type: 'image/jpeg' },
+      { url: '/icon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: [{ url: '/icon-192.png', type: 'image/png', sizes: '192x192' }],
+    shortcut: [{ url: '/icon-192.png', type: 'image/png' }],
+  },
 };
 
 export default function RootLayout({

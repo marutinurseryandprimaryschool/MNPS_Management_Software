@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { TimetablesService, TeachersService } from '@/lib/firestore-service';
-import { formatTime } from '@/lib/utils';
+import { formatTime, getUpcomingSaturday, toDateKey, getEffectiveSaturdaySlots } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { DAY_SHORT_LABELS, DayOfWeek } from '@/types/enums';
@@ -62,10 +62,22 @@ export default function TeacherTimetable() {
     fetchData();
   }, [user, school?.academicYear]);
 
+  const satDate = React.useMemo(() => getUpcomingSaturday(new Date()), []);
+  const satDateKey = React.useMemo(() => toDateKey(satDate), [satDate]);
+
   const mySlots: TimetableSlot[] = [];
   if (teacher) {
     for (const tt of timetables) {
+      // Mon–Fri (and any non-Saturday day) come straight from the recurring plan
       for (const slot of (tt.slots || [])) {
+        if (slot.day === DayOfWeek.SATURDAY) continue;
+        if (slot.teacherId === teacher.id) {
+          mySlots.push(slot);
+        }
+      }
+      // Saturday uses the per-date override when present, else the recurring Sat slots
+      const effectiveSat = getEffectiveSaturdaySlots(tt, satDateKey);
+      for (const slot of effectiveSat.slots) {
         if (slot.teacherId === teacher.id) {
           mySlots.push(slot);
         }
@@ -126,10 +138,12 @@ export default function TeacherTimetable() {
                 }}>Period</th>
                 {days.map(day => {
                   const isToday = day === todayEnum;
+                  const isSaturday = day === DayOfWeek.SATURDAY;
                   return (
                     <th key={day} style={{
                       padding: 'var(--space-3)', textAlign: 'center', fontWeight: 700,
                       borderBottom: '2px solid var(--color-border)',
+                      borderLeft: isSaturday ? '4px double var(--color-border)' : undefined,
                       background: isToday ? 'rgba(220, 38, 38, 0.08)' : 'var(--color-surface-variant)',
                       color: isToday ? 'var(--color-primary-600)' : 'var(--color-text-primary)',
                       fontSize: '0.85rem',
@@ -184,6 +198,7 @@ export default function TeacherTimetable() {
                     {days.map(day => {
                       const slot = mySlots.find(s => s.day === day && s.period === timing.period);
                       const isToday = day === todayEnum;
+                      const isSaturday = day === DayOfWeek.SATURDAY;
                       const color = slot ? subjectColorMap.get(slot.subjectId) : null;
 
                       return (
@@ -191,8 +206,13 @@ export default function TeacherTimetable() {
                           padding: 4,
                           borderBottom: '1px solid var(--color-divider)',
                           borderRight: '1px solid var(--color-divider)',
+                          borderLeft: isSaturday ? '4px double var(--color-border)' : undefined,
                           verticalAlign: 'top', height: 64,
-                          background: isToday ? 'rgba(220, 38, 38, 0.04)' : 'transparent',
+                          background: isToday
+                            ? 'rgba(220, 38, 38, 0.04)'
+                            : isSaturday
+                              ? 'rgba(99, 102, 241, 0.04)'
+                              : 'transparent',
                         }}>
                           {slot ? (
                             <div style={{
