@@ -7,7 +7,14 @@ import { Select } from '@/components/ui/Input';
 import { Avatar, Badge } from '@/components/ui/SharedUI';
 import Modal from '@/components/ui/Modal';
 import { ClipboardCheckIcon } from '@/components/ui/Icons';
+import { AttendanceSession } from '@/types/enums';
 import type { Attendance, Class } from '@/types/models';
+
+const sessionLabel = (s?: string) =>
+  (s === AttendanceSession.AFTERNOON ? 'Afternoon' : 'Morning');
+const sessionBadgeStyle = (s?: string): React.CSSProperties => s === AttendanceSession.AFTERNOON
+  ? { background: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE' }
+  : { background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' };
 
 export default function AdminAttendance() {
   const { school } = useSchool();
@@ -102,9 +109,17 @@ export default function AdminAttendance() {
                 onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}
               >
                 {/* Card header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
-                  <div>
-                    <h3 className="text-h3" style={{ margin: 0 }}>{att.className} — Section {att.sectionName}</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)', gap: 'var(--space-2)' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <h3 className="text-h3" style={{ margin: 0 }}>{att.className} — Section {att.sectionName}</h3>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                        fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        ...sessionBadgeStyle(att.session),
+                      }}>{sessionLabel(att.session)}</span>
+                    </div>
                     <p className="text-caption" style={{ color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>by {att.teacherName}</p>
                   </div>
                   <Badge variant="info">{total} students</Badge>
@@ -145,7 +160,7 @@ export default function AdminAttendance() {
 
       {/* ===== Detail Modal ===== */}
       <Modal isOpen={!!selectedAttendance} onClose={() => setSelectedAttendance(null)}
-        title={selectedAttendance ? `${selectedAttendance.className} — Section ${selectedAttendance.sectionName}` : ''}
+        title={selectedAttendance ? `${selectedAttendance.className} — Section ${selectedAttendance.sectionName} · ${sessionLabel(selectedAttendance.session)}` : ''}
         size="lg"
       >
         {selectedAttendance && (() => {

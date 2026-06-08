@@ -33,6 +33,11 @@ export enum AttendanceStatus {
   LATE = 'late',
 }
 
+export enum AttendanceSession {
+  MORNING = 'morning',
+  AFTERNOON = 'afternoon',
+}
+
 export enum MarksStatus {
   DRAFT = 'draft',
   PUBLISHED = 'published',

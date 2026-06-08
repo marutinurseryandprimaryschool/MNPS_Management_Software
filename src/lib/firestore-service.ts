@@ -268,12 +268,22 @@ export const AttendanceService = {
     if (year) constraints.push(where('academicYear', '==', year));
     return getAll<DocumentData>('attendance', ...constraints);
   },
-  getRecord: async (classId: string, sectionId: string, date: Date | string, year?: string) => {
+  // Fetch the attendance record for a specific (date, section, session).
+  // Filtering by session is done in-code so legacy docs (no `session` field,
+  // treated as morning) still resolve correctly.
+  getRecord: async (
+    classId: string,
+    sectionId: string,
+    date: Date | string,
+    session?: string,
+    year?: string,
+  ) => {
     const d = typeof date === 'string' ? date : date.toISOString().split('T')[0];
     const constraints = [where('classId', '==', classId), where('sectionId', '==', sectionId), where('date', '==', d)];
     if (year) constraints.push(where('academicYear', '==', year));
     const results = await getAll<DocumentData>('attendance', ...constraints);
-    return results[0] || null;
+    const wanted = session || 'morning';
+    return results.find(r => ((r as DocumentData).session || 'morning') === wanted) || null;
   },
   getByTeacher: (teacherId: string, year?: string) => {
     const constraints = [where('teacherId', '==', teacherId)];

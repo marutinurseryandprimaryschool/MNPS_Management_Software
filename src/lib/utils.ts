@@ -1,6 +1,6 @@
 import { format, formatDistanceToNow, isToday, isYesterday, parseISO } from 'date-fns';
-import type { Timetable, TimetableSlot } from '@/types/models';
-import { DayOfWeek } from '@/types/enums';
+import type { Timetable, TimetableSlot, Attendance, AttendanceRecord } from '@/types/models';
+import { DayOfWeek, AttendanceStatus, AttendanceSession } from '@/types/enums';
 
 /* ============================================
    CampusOS — Utility Functions
@@ -195,6 +195,56 @@ export function getEffectiveSaturdaySlots(
   }
   const recurring = (timetable?.slots || []).filter(s => s.day === DayOfWeek.SATURDAY);
   return { slots: recurring, mode: 'recurring' };
+}
+
+/**
+ * Half-day arithmetic for the morning+afternoon attendance model.
+ *
+ * For a given student, walks all attendance docs (each one is a single
+ * session — morning or afternoon) and rolls them up per-date:
+ *  - both sessions present/late → 1 day
+ *  - one session present, the other absent → 0.5 day
+ *  - one session present, the other not yet marked → 0.5 day (only the marked half counts)
+ *  - one session absent, the other not yet marked → 0 days (marked half = 0)
+ *  - both absent → 0 days
+ *  - both unmarked → date is skipped (not yet a school day for this student)
+ *
+ * LATE counts as present (matches existing behavior).
+ *
+ * Returns { daysPresent, daysCounted } where daysCounted is the number of
+ * dates that contributed to the total (useful for "X / Y" displays).
+ */
+export function computeDaysPresent(
+  records: (Pick<Attendance, 'date' | 'session' | 'records'> & { session?: string })[],
+  studentId: string,
+): { daysPresent: number; daysCounted: number } {
+  type Half = AttendanceStatus | undefined;
+  const byDate = new Map<string, { am: Half; pm: Half }>();
+
+  for (const doc of records) {
+    const rec = doc.records?.find((r: AttendanceRecord) => r.studentId === studentId);
+    if (!rec) continue;
+    const session = (doc.session as AttendanceSession) || AttendanceSession.MORNING;
+    const slot = byDate.get(doc.date) || { am: undefined as Half, pm: undefined as Half };
+    if (session === AttendanceSession.AFTERNOON) slot.pm = rec.status;
+    else slot.am = rec.status;
+    byDate.set(doc.date, slot);
+  }
+
+  const isPresent = (s: Half) => s === AttendanceStatus.PRESENT || s === AttendanceStatus.LATE;
+  let daysPresent = 0;
+  let daysCounted = 0;
+
+  for (const { am, pm } of byDate.values()) {
+    if (am === undefined && pm === undefined) continue;
+    daysCounted += 1;
+    let value = 0;
+    if (am !== undefined) value += isPresent(am) ? 0.5 : 0;
+    if (pm !== undefined) value += isPresent(pm) ? 0.5 : 0;
+    daysPresent += value;
+  }
+
+  return { daysPresent, daysCounted };
 }
 
 /**

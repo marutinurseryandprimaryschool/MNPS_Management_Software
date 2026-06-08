@@ -4,6 +4,7 @@ import {
   TeacherStatus,
   TimetableStatus,
   AttendanceStatus,
+  AttendanceSession,
   MarksStatus,
   PaymentMode,
   FeeType,
@@ -240,7 +241,7 @@ export interface Attendance {
   date: string;               // YYYY-MM-DD
   classId: string;
   sectionId: string;
-  period: number;
+  session: AttendanceSession; // morning | afternoon
   subjectId: string;
   teacherId: string;
   academicYear: string;

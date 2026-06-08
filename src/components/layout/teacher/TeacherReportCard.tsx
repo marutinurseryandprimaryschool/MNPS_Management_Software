@@ -444,17 +444,18 @@ export default function TeacherReportCard() {
                   <div>
                     <h5 className="text-h5" style={{ marginBottom: 'var(--space-3)' }}>Attendance & Remarks</h5>
                     <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
-                      <Input 
-                        label="Present" 
-                        type="number" 
-                        value={attendance.present} 
-                        onChange={e => setAttendance(p => ({ ...p, present: parseInt(e.target.value) || 0 }))} 
+                      <Input
+                        label="Present"
+                        type="number"
+                        step="0.5"
+                        value={attendance.present}
+                        onChange={e => setAttendance(p => ({ ...p, present: parseFloat(e.target.value) || 0 }))}
                       />
-                      <Input 
-                        label="Working Days" 
-                        type="number" 
-                        value={attendance.total} 
-                        onChange={e => setAttendance(p => ({ ...p, total: parseInt(e.target.value) || 0 }))} 
+                      <Input
+                        label="Working Days"
+                        type="number"
+                        value={attendance.total}
+                        onChange={e => setAttendance(p => ({ ...p, total: parseInt(e.target.value) || 0 }))}
                       />
                     </div>
                     <Input 
