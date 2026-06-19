@@ -5,6 +5,7 @@ import { MarksService, StudentsService } from '@/lib/firestore-service';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { Badge } from '@/components/ui/SharedUI';
+import { isParentOfStudent } from '@/lib/utils';
 import type { Marks, Student } from '@/types/models';
 
 export default function ParentMarks() {
@@ -19,9 +20,7 @@ export default function ParentMarks() {
       try {
         if (!user || !school?.academicYear) return;
         const allStudents = await StudentsService.getAll(school.academicYear);
-        const myChild = (allStudents as unknown as Student[]).find(s =>
-          s.email?.toLowerCase() === user.email?.toLowerCase()
-        );
+        const myChild = (allStudents as unknown as Student[]).find(s => isParentOfStudent(user, s));
         setChild(myChild || null);
         const marks = await MarksService.getAll(school.academicYear);
         setAllMarks(marks as unknown as Marks[]);

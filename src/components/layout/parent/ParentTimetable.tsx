@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TimetablesService, StudentsService, SchoolService } from '@/lib/firestore-service';
-import { getUpcomingSaturday, toDateKey, getEffectiveSaturdaySlots } from '@/lib/utils';
+import { getUpcomingSaturday, toDateKey, getEffectiveSaturdaySlots, isParentOfStudent } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { DAYS_OF_WEEK, DAY_LABELS, DayOfWeek } from '@/types/enums';
@@ -25,9 +25,7 @@ export default function ParentTimetable() {
         
         setSchoolSettings(schoolData?.settings);
 
-        const myChild = (allStudents as unknown as Student[]).find(s =>
-          s.email?.toLowerCase() === user.email?.toLowerCase()
-        );
+        const myChild = (allStudents as unknown as Student[]).find(s => isParentOfStudent(user, s));
         setChild(myChild || null);
 
         if (myChild) {

@@ -7,6 +7,7 @@ import { useSchool } from '@/context/SchoolContext';
 import { Select } from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { PrinterIcon } from '@/components/ui/Icons';
+import { isParentOfStudent, findChildrenOfParent } from '@/lib/utils';
 import type { Class, Student } from '@/types/models';
 
 interface SharedReportCardProps {
@@ -47,6 +48,8 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
 
   const printableRef = useRef<HTMLDivElement>(null);
 
+  const isMyChild = (s: Student) => isParentOfStudent(user, s);
+
   useEffect(() => {
     async function load() {
       try {
@@ -83,9 +86,7 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
 
         // If parent, find their children and auto-select
         if (view === 'parent' && user) {
-          const myChildren = (st as unknown as Student[]).filter(s =>
-            s.email?.toLowerCase() === user.email?.toLowerCase()
-          );
+          const myChildren = (st as unknown as Student[]).filter(isMyChild);
           if (myChildren.length > 0) {
             setSelectedClassId(myChildren[0].classId);
             setSelectedSectionId(myChildren[0].sectionId);
@@ -310,26 +311,31 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
         </div>
       )}
 
-      {view === 'parent' && students.filter(s => s.email?.toLowerCase() === user?.email?.toLowerCase()).length > 1 && (
-        <div className="card no-print" style={{ padding: 20, marginBottom: 24 }}>
-          <p className="text-caption" style={{ marginBottom: 12 }}>Select Child</p>
-          <div style={{ display: 'flex', gap: 12 }}>
-            {students.filter(s => s.email?.toLowerCase() === user?.email?.toLowerCase()).map(s => (
-              <Button 
-                key={s.id} 
-                variant={selectedStudentId === s.id ? 'primary' : 'secondary'}
-                onClick={() => {
-                  setSelectedClassId(s.classId);
-                  setSelectedSectionId(s.sectionId);
-                  setSelectedStudentId(s.id);
-                }}
-              >
-                {s.name}
-              </Button>
-            ))}
+      {view === 'parent' && (() => {
+        const myChildren = findChildrenOfParent(students, user);
+        // No picker if 0 or 1 child — the single child auto-selects via the load effect.
+        if (myChildren.length <= 1) return null;
+        return (
+          <div className="card no-print" style={{ padding: 20, marginBottom: 24 }}>
+            <p className="text-caption" style={{ marginBottom: 12 }}>Select Child</p>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {myChildren.map(s => (
+                <Button
+                  key={s.id}
+                  variant={selectedStudentId === s.id ? 'primary' : 'secondary'}
+                  onClick={() => {
+                    setSelectedClassId(s.classId);
+                    setSelectedSectionId(s.sectionId);
+                    setSelectedStudentId(s.id);
+                  }}
+                >
+                  {s.name}
+                </Button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {reportData && selectedStudent && activeClassData && (
         <div className="card printable-report" ref={printableRef} style={{ padding: 32, overflowX: 'auto' }}>

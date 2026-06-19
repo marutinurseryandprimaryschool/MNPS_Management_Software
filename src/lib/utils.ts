@@ -1,6 +1,36 @@
 import { format, formatDistanceToNow, isToday, isYesterday, parseISO } from 'date-fns';
-import type { Timetable, TimetableSlot, Attendance, AttendanceRecord } from '@/types/models';
+import type { Timetable, TimetableSlot, Attendance, AttendanceRecord, Student, User } from '@/types/models';
 import { DayOfWeek, AttendanceStatus, AttendanceSession } from '@/types/enums';
+
+/**
+ * Decide whether a student belongs to the given parent user.
+ *
+ * Why this exists: the previous inline check was
+ *   s.email?.toLowerCase() === user.email?.toLowerCase()
+ * which evaluates `undefined === undefined` to true — so when both sides
+ * lacked an email, every student matched every parent and the parent saw
+ * every student in the school. This helper requires a real, non-empty
+ * match on either the parentIds link or the email.
+ */
+export function isParentOfStudent(
+  user: Pick<User, 'id' | 'uid' | 'email'> | null | undefined,
+  student: Pick<Student, 'parentIds' | 'email'>,
+): boolean {
+  if (!user) return false;
+  const uid = user.id || (user as { uid?: string }).uid;
+  if (uid && Array.isArray(student.parentIds) && student.parentIds.includes(uid)) return true;
+  const stEmail = student.email?.toLowerCase().trim();
+  const uEmail = user.email?.toLowerCase().trim();
+  return !!stEmail && !!uEmail && stEmail === uEmail;
+}
+
+/** Convenience: filter a student list down to the parent's own children. */
+export function findChildrenOfParent<T extends Pick<Student, 'parentIds' | 'email'>>(
+  students: T[],
+  user: Pick<User, 'id' | 'uid' | 'email'> | null | undefined,
+): T[] {
+  return students.filter(s => isParentOfStudent(user, s));
+}
 
 /* ============================================
    CampusOS — Utility Functions

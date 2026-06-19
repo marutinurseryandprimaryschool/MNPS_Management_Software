@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FeePaymentsService, StudentsService, FeeStructuresService, BusRoutesService } from '@/lib/firestore-service';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
+import { isParentOfStudent } from '@/lib/utils';
 import type { FeePayment, Student, FeeStructure } from '@/types/models';
 
 const ACADEMIC_MONTHS = [
@@ -26,9 +27,7 @@ export default function ParentFees() {
           FeeStructuresService.getAll(school.academicYear)
         ]);
 
-        const myChild = (allStudents as unknown as Student[]).find(s =>
-          s.email?.toLowerCase() === user.email?.toLowerCase()
-        );
+        const myChild = (allStudents as unknown as Student[]).find(s => isParentOfStudent(user, s));
         setChild(myChild || null);
 
         if (myChild) {
