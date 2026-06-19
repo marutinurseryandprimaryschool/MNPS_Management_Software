@@ -6,7 +6,7 @@ import { UserRole } from '@/types/enums';
 import {
   DashboardIcon, GraduationCapIcon, CalendarIcon,
   CreditCardIcon, ClipboardCheckIcon,
-  GridIcon, FileTextIcon, BookOpenIcon
+  GridIcon, FileTextIcon, BookOpenIcon, BarChartIcon
 } from '@/components/ui/Icons';
 import styles from './BottomNav.module.css';
 
@@ -35,8 +35,8 @@ const TEACHER_TABS: TabItem[] = [
 const PARENT_TABS: TabItem[] = [
   { id: 'dashboard', icon: <DashboardIcon size={22} />, label: 'Home' },
   { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attend.' },
-  { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
-  { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assign.' },
+  { id: 'major-exams', icon: <BarChartIcon size={22} />, label: 'Major' },
+  { id: 'weekly-tests', icon: <BarChartIcon size={22} />, label: 'Weekly' },
   { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
 ];
 

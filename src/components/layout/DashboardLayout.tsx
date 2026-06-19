@@ -9,7 +9,7 @@ import Header from '@/components/layout/Header';
 import {
   UsersIcon, SchoolIcon, ClipboardCheckIcon,
   BarChartIcon, SettingsIcon, FileTextIcon,
-  BookOpenIcon, CreditCardIcon
+  BookOpenIcon, CreditCardIcon, CalendarIcon
 } from '@/components/ui/Icons';
 import styles from './DashboardLayout.module.css';
 
@@ -39,12 +39,14 @@ import TeacherReportCard from './teacher/TeacherReportCard';
 import TeacherFormative from './teacher/TeacherFormative';
 import TeacherClassOverview from './teacher/TeacherClassOverview';
 import TeacherWeeklyMarks from './teacher/TeacherWeeklyMarks';
+import TeacherClassTests from './teacher/TeacherClassTests';
 import TeacherExamMarks from './teacher/TeacherExamMarks';
 
 import ParentDashboard from './parent/ParentDashboard';
 import ParentAttendance from './parent/ParentAttendance';
 import ParentTimetable from './parent/ParentTimetable';
 import ParentMarks from './parent/ParentMarks';
+import ParentClassTests from './parent/ParentClassTests';
 import ParentAssignments from './parent/ParentAssignments';
 import ParentFees from './parent/ParentFees';
 
@@ -64,6 +66,9 @@ const PAGE_TITLES: Record<string, string> = {
   assignments: 'Assignments',
   'weekly-marks': 'Weekly Test Marks',
   'exam-marks': 'Exam Marks Entry',
+  'major-exams': 'Major Exams',
+  'weekly-tests': 'Weekly Tests',
+  'class-tests': 'Class Tests',
   'exam-results': 'Class Exam Results',
   'exams': 'Academic Calendar',
   'report-card': 'Student Report Card',
@@ -125,6 +130,7 @@ export default function DashboardLayout() {
         case 'timetable': return <TeacherTimetable />;
         case 'attendance': return <TeacherAttendance />;
         case 'weekly-marks': return <TeacherWeeklyMarks />;
+        case 'class-tests': return <TeacherClassTests />;
         case 'exam-marks': return <TeacherExamMarks />;
         case 'co-scholastic': return <TeacherCoScholastic />;
         case 'report-card': return <SharedReportCard view="teacher" />;
@@ -144,7 +150,9 @@ export default function DashboardLayout() {
       case 'dashboard': return <ParentDashboard onNavigate={handleNavigate} />;
       case 'attendance': return <ParentAttendance />;
       case 'timetable': return <ParentTimetable />;
-
+      case 'major-exams': return <ParentMarks defaultTab="major" />;
+      case 'weekly-tests': return <ParentMarks defaultTab="weekly" />;
+      case 'class-tests': return <ParentClassTests />;
       case 'assignments': return <ParentAssignments />;
       case 'fees': return <ParentFees />;
       case 'report-card': return <SharedReportCard view="parent" />;
@@ -197,10 +205,13 @@ function MoreMenu({
       ]
     : (role === UserRole.TEACHER || role === UserRole.STAFF)
     ? [
+        { id: 'class-tests', icon: <FileTextIcon size={22} />, label: 'Class Tests' },
         { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assignments' },
       ]
     : [
-
+        { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
+        { id: 'class-tests', icon: <FileTextIcon size={22} />, label: 'Class Tests' },
+        { id: 'report-card', icon: <FileTextIcon size={22} />, label: 'Report Card' },
         { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assignments' },
         { id: 'fees', icon: <CreditCardIcon size={22} />, label: 'Fees' },
       ];

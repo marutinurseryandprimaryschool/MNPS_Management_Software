@@ -149,6 +149,12 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    // Class Tests — per-test marks entered by teachers
+    match /classTests/{testId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
     // Assessment Sessions
     match /assessmentSessions/{sessionId} {
       allow read: if isAuthenticated();

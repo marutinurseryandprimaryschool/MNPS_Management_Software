@@ -445,6 +445,27 @@ export const WeeklyTestsService = {
     );
   },
 };
+// ── Class Tests ──
+// One doc per (test name, class/section/subject) — multiple tests per subject
+// across the year. Records hold each student's mark for that single test.
+export const ClassTestsService = {
+  getAll: (year?: string) =>
+    year ? getAll<DocumentData>('classTests', where('academicYear', '==', year)) : getAll<DocumentData>('classTests'),
+  getById: (id: string) => getById<DocumentData>('classTests', id),
+  create: (data: Record<string, unknown>) => create('classTests', data),
+  update: (id: string, data: Record<string, unknown>) => update('classTests', id, data),
+  delete: (id: string) => remove('classTests', id),
+  getByClassSectionSubject: (classId: string, sectionId: string, subjectId: string, year?: string) => {
+    const constraints = [
+      where('classId', '==', classId),
+      where('sectionId', '==', sectionId),
+      where('subjectId', '==', subjectId),
+    ];
+    if (year) constraints.push(where('academicYear', '==', year));
+    return getAll<DocumentData>('classTests', ...constraints);
+  },
+};
+
 // -- Co-Scholastic & Remarks --
 export const CoScholasticService = {
   getAll: () => getAll<DocumentData>('coScholasticRecords'),

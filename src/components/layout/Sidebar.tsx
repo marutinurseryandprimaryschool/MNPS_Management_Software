@@ -108,6 +108,7 @@ const TEACHER_SECTIONS: NavSection[] = [
     title: 'MARKS',
     items: [
       { id: 'weekly-marks', icon: <FileTextIcon size={20} />, label: 'Weekly Marks', href: '/teacher/weekly-marks' },
+      { id: 'class-tests', icon: <FileTextIcon size={20} />, label: 'Class Test Marks', href: '/teacher/class-tests' },
       { id: 'exam-marks', icon: <ClipboardCheckIcon size={20} />, label: 'Exam Marks Entry', href: '/teacher/exam-marks' },
       { id: 'co-scholastic', icon: <FileTextIcon size={20} />, label: 'Co-Scholastic & Remarks', href: '/teacher/co-scholastic' },
       { id: 'report-card', icon: <FileTextIcon size={20} />, label: 'Report Card', href: '/teacher/report-card' },
@@ -134,6 +135,9 @@ const PARENT_SECTIONS: NavSection[] = [
     items: [
       { id: 'attendance', icon: <ClipboardCheckIcon size={20} />, label: 'Attendance', href: '/parent/attendance' },
       { id: 'timetable', icon: <CalendarIcon size={20} />, label: 'Timetable', href: '/parent/timetable' },
+      { id: 'major-exams', icon: <BarChartIcon size={20} />, label: 'Major Exams', href: '/parent/major-exams' },
+      { id: 'weekly-tests', icon: <BarChartIcon size={20} />, label: 'Weekly Tests', href: '/parent/weekly-tests' },
+      { id: 'class-tests', icon: <FileTextIcon size={20} />, label: 'Class Tests', href: '/parent/class-tests' },
       { id: 'report-card', icon: <FileTextIcon size={20} />, label: 'Report Card', href: '/parent/report-card' },
       { id: 'assignments', icon: <BookOpenIcon size={20} />, label: 'Assignments', href: '/parent/assignments' },
     ],

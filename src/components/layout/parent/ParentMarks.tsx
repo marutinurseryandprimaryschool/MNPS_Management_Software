@@ -6,15 +6,18 @@ import {
   StudentsService,
   ClassesService,
   WeeklyTestsService,
-  CoScholasticService,
 } from '@/lib/firestore-service';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
-import { Tabs, Avatar, Badge } from '@/components/ui/SharedUI';
+import { Avatar, Badge } from '@/components/ui/SharedUI';
 import Button from '@/components/ui/Button';
-import { isParentOfStudent, findChildrenOfParent } from '@/lib/utils';
+import { findChildrenOfParent } from '@/lib/utils';
 import { EXAM_TERMS_ORDER, EXAM_TERM_LABELS } from '@/types/enums';
 import type { Class, Student } from '@/types/models';
+
+interface ParentMarksProps {
+  defaultTab?: 'major' | 'weekly';
+}
 
 const MONTHS: { value: string; label: string }[] = [
   { value: 'june', label: 'June' }, { value: 'july', label: 'July' },
@@ -40,7 +43,7 @@ function gradeFromPercent(p: number): string {
   return 'D';
 }
 
-export default function ParentMarks() {
+export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps = {}) {
   const { user } = useAuth();
   const { school } = useSchool();
   const [loading, setLoading] = useState(true);
@@ -49,21 +52,21 @@ export default function ParentMarks() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [allMarks, setAllMarks] = useState<any[]>([]);
   const [allWeekly, setAllWeekly] = useState<any[]>([]);
-  const [allCo, setAllCo] = useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'exams' | 'weekly' | 'co'>('exams');
+  // Each sidebar item renders its own page — no tab UI. defaultTab decides
+  // which view we render.
+  const mode: 'exams' | 'weekly' = defaultTab === 'weekly' ? 'weekly' : 'exams';
   const [weeklyMonth, setWeeklyMonth] = useState('june');
 
   useEffect(() => {
     async function load() {
       try {
         if (!user || !school?.academicYear) return;
-        const [allStudents, cl, m, w, co] = await Promise.all([
+        const [allStudents, cl, m, w] = await Promise.all([
           StudentsService.getAll(school.academicYear),
           ClassesService.getAll(school.academicYear),
           MarksService.getAll(school.academicYear),
           WeeklyTestsService.getAll(),
-          CoScholasticService.getAll(),
         ]);
         const myKids = findChildrenOfParent(allStudents as unknown as Student[], user);
         setChildren(myKids);
@@ -71,7 +74,6 @@ export default function ParentMarks() {
         setClasses(cl as unknown as Class[]);
         setAllMarks(m as any[]);
         setAllWeekly((w as any[]).filter(x => x.academicYear === school.academicYear));
-        setAllCo((co as any[]).filter(x => x.academicYear === school.academicYear));
       } catch (e) {
         console.error(e);
       } finally {
@@ -119,7 +121,9 @@ export default function ParentMarks() {
 
   // ── Weekly tests for selected month, grouped by subject ──
   const weeklyForMonth = useMemo(() => {
-    if (!child) return [] as { subjectId: string; subjectName: string; weeks: { W1?: number; W2?: number; W3?: number; W4?: number }; avg: number | null }[];
+    if (!child) return [] as { subjectId: string; subjectName: string; weeks: { W1?: number; W2?: number; W3?: number; W4?: number }; total: number | null; outOf: number }[];
+    // Each week is scored out of 10.
+    const PER_WEEK_MAX = 10;
     return subjects.map(sub => {
       const doc = allWeekly.find(w =>
         w.studentId === child.id && w.subjectId === sub.id && w.month === weeklyMonth
@@ -128,23 +132,14 @@ export default function ParentMarks() {
       const vals = ['W1', 'W2', 'W3', 'W4']
         .map(k => weeks[k as keyof typeof weeks])
         .filter((v): v is number => typeof v === 'number');
-      const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-      return { subjectId: sub.id, subjectName: sub.name, weeks, avg };
+      const total = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
+      // Only the weeks that actually have a mark count toward the denominator —
+      // so a student who only sat W1 sees "7 / 10", not "7 / 40".
+      const outOf = vals.length * PER_WEEK_MAX;
+      return { subjectId: sub.id, subjectName: sub.name, weeks, total, outOf };
     });
   }, [child, subjects, allWeekly, weeklyMonth]);
 
-  // ── Co-scholastic per term ──
-  const coByTerm = useMemo(() => {
-    const out: Record<string, any> = {};
-    EXAM_TERMS_ORDER.forEach(t => { out[t] = null; });
-    if (!child) return out;
-    allCo.forEach((doc: any) => {
-      if (doc.classId !== child.classId || doc.sectionId !== child.sectionId) return;
-      const rec = (doc.records || []).find((r: any) => r.studentId === child.id);
-      if (rec) out[doc.examId] = rec;
-    });
-    return out;
-  }, [child, allCo]);
 
   if (loading) {
     return <div className="page-container"><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><span className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>Loading...</span></div></div>;
@@ -161,20 +156,18 @@ export default function ParentMarks() {
     );
   }
 
-  // Count badge for tab labels
-  const examsCount = examMatrix
-    ? Object.values(examMatrix.examTotals).filter(t => t.count > 0).length
-    : 0;
-  const weeklyCount = allWeekly.filter(w => w.studentId === child?.id).length;
-  const coCount = Object.values(coByTerm).filter(Boolean).length;
+  const pageTitle = mode === 'weekly' ? 'Weekly Tests' : 'Major Exams';
+  const pageSubtitle = mode === 'weekly'
+    ? `Monthly W1–W4 scores for ${child?.name || 'your child'}`
+    : `Term-wise exam marks for ${child?.name || 'your child'}`;
 
   return (
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h2 className="text-h1">Marks &amp; Grades</h2>
+          <h2 className="text-h1">{pageTitle}</h2>
           <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-            Everything teachers have entered for {child?.name || 'your child'}
+            {pageSubtitle}
           </p>
         </div>
       </div>
@@ -214,20 +207,8 @@ export default function ParentMarks() {
         </div>
       )}
 
-      <div style={{ marginBottom: 'var(--space-4)' }}>
-        <Tabs
-          tabs={[
-            { id: 'exams', label: 'Major Exams', count: examsCount },
-            { id: 'weekly', label: 'Weekly Tests', count: weeklyCount },
-            { id: 'co', label: 'Co-Scholastic & Remarks', count: coCount },
-          ]}
-          activeTab={activeTab}
-          onChange={(id) => setActiveTab(id as typeof activeTab)}
-        />
-      </div>
-
-      {/* ─── Major Exams tab ─── */}
-      {activeTab === 'exams' && examMatrix && (
+      {/* ─── Major Exams view ─── */}
+      {mode === 'exams' && examMatrix && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {EXAM_TERMS_ORDER.map(term => {
             const totals = examMatrix.examTotals[term];
@@ -317,8 +298,8 @@ export default function ParentMarks() {
         </div>
       )}
 
-      {/* ─── Weekly Tests tab ─── */}
-      {activeTab === 'weekly' && (
+      {/* ─── Weekly Tests view ─── */}
+      {mode === 'weekly' && (
         <div>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
             {MONTHS.map(m => (
@@ -339,7 +320,7 @@ export default function ParentMarks() {
             ))}
           </div>
 
-          {weeklyForMonth.every(w => !w.avg && Object.values(w.weeks).every(v => v === undefined)) ? (
+          {weeklyForMonth.every(w => w.total === null && Object.values(w.weeks).every(v => v === undefined)) ? (
             <div style={{ textAlign: 'center', padding: 'var(--space-8)', background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
               <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>
                 No weekly tests recorded for {MONTHS.find(m => m.value === weeklyMonth)?.label} yet.
@@ -350,8 +331,9 @@ export default function ParentMarks() {
               {weeklyForMonth.map(row => {
                 const hasAny = Object.values(row.weeks).some(v => v !== undefined);
                 if (!hasAny) return null;
-                const avgGrade = row.avg !== null ? gradeFromPercent(row.avg) : '';
-                const ac = gradeColor(avgGrade);
+                const totalPct = row.total !== null && row.outOf > 0 ? (row.total / row.outOf) * 100 : null;
+                const totalGrade = totalPct !== null ? gradeFromPercent(totalPct) : '';
+                const tc = gradeColor(totalGrade);
                 return (
                   <div key={row.subjectId} style={{
                     background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
@@ -360,12 +342,12 @@ export default function ParentMarks() {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
                       <h4 className="text-h4" style={{ margin: 0 }}>{row.subjectName}</h4>
-                      {row.avg !== null && (
+                      {row.total !== null && (
                         <span style={{
                           padding: '2px 10px', borderRadius: 'var(--radius-full)',
-                          background: ac.bg, color: ac.text,
+                          background: tc.bg, color: tc.text,
                           fontWeight: 700, fontSize: '0.75rem',
-                        }}>avg {row.avg.toFixed(1)}</span>
+                        }}>Total {row.total} / {row.outOf}</span>
                       )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)' }}>
@@ -394,84 +376,6 @@ export default function ParentMarks() {
         </div>
       )}
 
-      {/* ─── Co-Scholastic tab ─── */}
-      {activeTab === 'co' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {EXAM_TERMS_ORDER.map(term => {
-            const rec = coByTerm[term];
-            return (
-              <div key={term} style={{
-                background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-                border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)',
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: 'var(--space-3) var(--space-4)',
-                  background: 'var(--color-surface-variant)',
-                  borderBottom: '1px solid var(--color-border)',
-                }}>
-                  <h3 className="text-h3" style={{ margin: 0 }}>{EXAM_TERM_LABELS[term]}</h3>
-                  {rec ? (
-                    <span className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
-                      Working days: <strong style={{ color: 'var(--color-text-primary)' }}>{rec.workingDays || '—'}</strong>
-                    </span>
-                  ) : (
-                    <Badge variant="default">Not yet published</Badge>
-                  )}
-                </div>
-
-                {rec && (
-                  <div style={{ padding: 'var(--space-4)' }}>
-                    <div style={{
-                      display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                      gap: 'var(--space-3)', marginBottom: rec.remarks ? 'var(--space-4)' : 0,
-                    }}>
-                      {[
-                        { label: 'Neatness', value: rec.neatness },
-                        { label: 'Life Skills', value: rec.lifeSkills },
-                        { label: 'Attitudes & Values', value: rec.attitudes },
-                        { label: 'Yoga, Health & Wellness', value: rec.yoga },
-                        { label: 'Co-Curricular', value: rec.coCurricular },
-                      ].map(it => {
-                        const gc = gradeColor(it.value);
-                        return (
-                          <div key={it.label} style={{
-                            padding: 'var(--space-3)',
-                            borderRadius: 'var(--radius-md)',
-                            border: '1px solid var(--color-border)',
-                            background: 'var(--color-surface)',
-                          }}>
-                            <div className="text-caption" style={{ color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600 }}>{it.label}</div>
-                            <span style={{
-                              display: 'inline-block', padding: '2px 12px',
-                              borderRadius: 'var(--radius-full)',
-                              background: gc.bg, color: gc.text,
-                              fontWeight: 700, fontSize: '0.85rem',
-                            }}>{it.value || '—'}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {rec.remarks && (
-                      <div style={{
-                        padding: 'var(--space-3) var(--space-4)',
-                        borderRadius: 'var(--radius-md)',
-                        background: '#FFFBEB',
-                        border: '1px solid #FDE68A',
-                      }}>
-                        <div className="text-caption" style={{ color: '#B45309', fontWeight: 700, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Teacher's Remarks</div>
-                        <p className="text-body-sm" style={{ margin: 0, color: '#92400E', lineHeight: 1.5 }}>{rec.remarks}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

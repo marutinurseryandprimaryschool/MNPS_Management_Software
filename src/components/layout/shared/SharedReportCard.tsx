@@ -203,7 +203,19 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
   return (
     <div className="page-container">
       <style dangerouslySetInnerHTML={{__html: `
+        @page {
+          size: A4 landscape;
+          /* margin:0 suppresses the browser-injected URL, timestamp and page
+             numbers that were showing as "6/20/26 — Maruti Nursery — 1/2".
+             Our own padding below gives the content breathing room. */
+          margin: 0;
+        }
         @media print {
+          html, body {
+            width: 297mm;
+            margin: 0;
+            padding: 0;
+          }
           body * {
             visibility: hidden;
           }
@@ -215,7 +227,25 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
             left: 0;
             top: 0;
             width: 100%;
-            padding: 20px;
+            padding: 8mm 10mm;
+            box-shadow: none !important;
+            border: none !important;
+          }
+          /* Keep the whole report on a single sheet. */
+          .printable-report .report-table {
+            font-size: 9px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          .printable-report .report-table th,
+          .printable-report .report-table td {
+            padding: 2px 4px;
+          }
+          /* Signature rows had height:50px which alone pushed everything
+             to a 2nd sheet — collapse them aggressively for print. */
+          .printable-report .signature-row td {
+            height: 26px !important;
+            padding-bottom: 2px !important;
           }
           .no-print {
             display: none !important;
@@ -488,15 +518,15 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
               </tr>
               
               {/* Signatures */}
-              <tr>
+              <tr className="signature-row">
                 <td className="text-left text-bold" style={{ height: 50, verticalAlign: 'bottom', paddingBottom: 8 }}>SIGNATURE OF CLASS TEACHER</td>
                 {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} style={{ verticalAlign: 'bottom', paddingBottom: 8 }}></td>)}
               </tr>
-              <tr>
+              <tr className="signature-row">
                 <td className="text-left text-bold" style={{ height: 50, verticalAlign: 'bottom', paddingBottom: 8 }}>SIGNATURE OF THE PRINCIPAL</td>
                 {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} style={{ verticalAlign: 'bottom', paddingBottom: 8 }}></td>)}
               </tr>
-              <tr>
+              <tr className="signature-row">
                 <td className="text-left text-bold" style={{ height: 50, verticalAlign: 'bottom', paddingBottom: 8 }}>SIGNATURE OF THE PARENT</td>
                 {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} style={{ verticalAlign: 'bottom', paddingBottom: 8 }}></td>)}
               </tr>

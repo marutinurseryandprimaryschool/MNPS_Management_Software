@@ -79,6 +79,9 @@ export interface User extends Timestamps {
   phone: string;
   photo: string;
   status: 'active' | 'inactive' | 'archived';
+  // Set on parent users when the phone+DOB login matches a student record.
+  // This is the most reliable parent ↔ child link in the current system.
+  studentId?: string;
 }
 
 // ── Subject ──
@@ -517,6 +520,34 @@ export interface AssessmentSession {
   academicYear: string;
   createdBy: string;
   createdAt: any;
+}
+
+// ── Class Test ──
+// A single test created by a teacher for one class/section/subject.
+// Multiple tests can exist per subject (e.g. "Spelling Test 1", "Chapter 3 Test").
+export interface ClassTestRecord {
+  studentId: string;
+  studentName: string;
+  marksObtained: number | null; // null when not yet entered or absent
+  remarks?: string;
+}
+
+export interface ClassTest extends Timestamps {
+  id: string;
+  classId: string;
+  sectionId: string;
+  subjectId: string;
+  subjectName: string;
+  teacherId: string;
+  teacherName: string;
+  testName: string;
+  testDate: string;          // YYYY-MM-DD
+  maxMarks: number;
+  academicYear: string;
+  records: ClassTestRecord[];
+  // denormalized
+  className?: string;
+  sectionName?: string;
 }
 
 export interface WeeklyTest {

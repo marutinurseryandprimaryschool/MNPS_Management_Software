@@ -5,29 +5,42 @@ import { DayOfWeek, AttendanceStatus, AttendanceSession } from '@/types/enums';
 /**
  * Decide whether a student belongs to the given parent user.
  *
- * Why this exists: the previous inline check was
+ * The previous inline check was
  *   s.email?.toLowerCase() === user.email?.toLowerCase()
  * which evaluates `undefined === undefined` to true — so when both sides
- * lacked an email, every student matched every parent and the parent saw
- * every student in the school. This helper requires a real, non-empty
- * match on either the parentIds link or the email.
+ * lacked an email, every student matched every parent.
+ *
+ * The actual parent-↔-child link in this app is set by the phone+DOB
+ * login flow (see loginAsParent in AuthContext): the parent user record
+ * gets a `studentId` field pointing directly at the matched student.
+ * That's the most reliable signal; we use it first, then fall back to
+ * phone, parentIds, and email — each requiring real, non-empty values.
  */
 export function isParentOfStudent(
-  user: Pick<User, 'id' | 'uid' | 'email'> | null | undefined,
-  student: Pick<Student, 'parentIds' | 'email'>,
+  user: (Pick<User, 'id' | 'uid' | 'email' | 'phone'> & { studentId?: string }) | null | undefined,
+  student: Pick<Student, 'id' | 'parentIds' | 'email' | 'phone'>,
 ): boolean {
   if (!user) return false;
+  // 1. Direct studentId link (set by the parent phone+DOB login).
+  if (user.studentId && user.studentId === student.id) return true;
+  // 2. parentIds explicitly contains the parent's uid.
   const uid = user.id || (user as { uid?: string }).uid;
   if (uid && Array.isArray(student.parentIds) && student.parentIds.includes(uid)) return true;
+  // 3. Phone match — both must be non-empty and digit-equal.
+  const digits = (s?: string) => (s || '').replace(/\D/g, '');
+  const stPhone = digits(student.phone);
+  const uPhone = digits(user.phone);
+  if (stPhone && uPhone && stPhone === uPhone) return true;
+  // 4. Email match — both must be non-empty.
   const stEmail = student.email?.toLowerCase().trim();
   const uEmail = user.email?.toLowerCase().trim();
   return !!stEmail && !!uEmail && stEmail === uEmail;
 }
 
 /** Convenience: filter a student list down to the parent's own children. */
-export function findChildrenOfParent<T extends Pick<Student, 'parentIds' | 'email'>>(
+export function findChildrenOfParent<T extends Pick<Student, 'id' | 'parentIds' | 'email' | 'phone'>>(
   students: T[],
-  user: Pick<User, 'id' | 'uid' | 'email'> | null | undefined,
+  user: (Pick<User, 'id' | 'uid' | 'email' | 'phone'> & { studentId?: string }) | null | undefined,
 ): T[] {
   return students.filter(s => isParentOfStudent(user, s));
 }
