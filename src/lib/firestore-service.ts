@@ -445,6 +445,16 @@ export const WeeklyTestsService = {
     );
   },
 };
+// ── Expenses ──
+export const ExpensesService = {
+  getAll: (year?: string) =>
+    year ? getAll<DocumentData>('expenses', where('academicYear', '==', year)) : getAll<DocumentData>('expenses'),
+  getById: (id: string) => getById<DocumentData>('expenses', id),
+  create: (data: Record<string, unknown>) => create('expenses', data),
+  update: (id: string, data: Record<string, unknown>) => update('expenses', id, data),
+  delete: (id: string) => remove('expenses', id),
+};
+
 // ── Class Tests ──
 // One doc per (test name, class/section/subject) — multiple tests per subject
 // across the year. Records hold each student's mark for that single test.

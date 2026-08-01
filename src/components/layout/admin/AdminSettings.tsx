@@ -21,6 +21,7 @@ import {
 import { db } from '@/lib/firebase';
 import { serverTimestamp } from 'firebase/firestore';
 import { UserRole } from '@/types/enums';
+import type { Scholarship } from '@/types/models';
 import Input from '@/components/ui/Input';
 import { Select } from '@/components/ui/Input';
 import { SunIcon, PlusIcon, UserIcon, EditIcon, TrashIcon } from '@/components/ui/Icons';
@@ -83,6 +84,64 @@ export default function AdminSettings() {
     maxPeriodsPerTeacherPerDay: school.settings?.maxPeriodsPerTeacherPerDay || 6,
     maxConsecutivePeriods: school.settings?.maxConsecutivePeriods || 3,
   });
+
+  // ── Scholarships (multiple named programs, each with per-class amounts) ──
+  const [scholarships, setScholarships] = useState<Scholarship[]>(school.settings?.scholarships || []);
+  const [scholarshipsSaving, setScholarshipsSaving] = useState(false);
+
+  useEffect(() => {
+    setScholarships(school.settings?.scholarships || []);
+  }, [school.settings?.scholarships]);
+
+  const genScholarshipId = () => `sch_${Math.random().toString(36).slice(2, 10)}`;
+
+  const addScholarship = () => {
+    setScholarships(prev => [
+      ...prev,
+      { id: genScholarshipId(), name: '', active: true, amountsByClass: {} },
+    ]);
+  };
+
+  const updateScholarship = (id: string, patch: Partial<Scholarship>) => {
+    setScholarships(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+  };
+
+  const setScholarshipClassAmount = (id: string, classId: string, amountStr: string) => {
+    const num = amountStr === '' ? undefined : Number(amountStr);
+    setScholarships(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      const next = { ...s.amountsByClass };
+      if (num === undefined || Number.isNaN(num)) delete next[classId];
+      else next[classId] = num;
+      return { ...s, amountsByClass: next };
+    }));
+  };
+
+  const deleteScholarship = (id: string) => {
+    if (!confirm('Remove this scholarship? Students already assigned to it will fall back to the class default fee.')) return;
+    setScholarships(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleSaveScholarships = async () => {
+    // Validate — names required, at least one class amount per scholarship.
+    for (const s of scholarships) {
+      if (!s.name.trim()) { showToast('Every scholarship needs a name'); return; }
+    }
+    setScholarshipsSaving(true);
+    try {
+      await updateSchool({
+        settings: {
+          ...school.settings,
+          scholarships: scholarships.map(s => ({ ...s, name: s.name.trim() })),
+        },
+      });
+      showToast('Scholarships saved!');
+    } catch {
+      showToast('Failed to save scholarships');
+    } finally {
+      setScholarshipsSaving(false);
+    }
+  };
 
   useEffect(() => {
     UsersService.getAll().then(async data => {
@@ -615,6 +674,97 @@ export default function AdminSettings() {
               <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>Grade scale will be configured from the school settings.</p>
             )}
             <Button variant="primary" onClick={handleSaveAcademic}>Save Changes</Button>
+
+            <div className="divider" style={{ margin: 'var(--space-6) 0' }} />
+
+            {/* ── Scholarships editor ── */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
+                <h3 className="text-h3" style={{ margin: 0 }}>Scholarships</h3>
+                <Button variant="secondary" onClick={addScholarship} icon={<PlusIcon size={16} />}>
+                  Add Scholarship
+                </Button>
+              </div>
+              <p className="text-caption" style={{ color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)' }}>
+                Define scholarship programs (e.g. RTE) with the total yearly fee per class.
+                Once saved, assign a scholarship to a student in <strong>Students → Edit → Academic</strong>.
+              </p>
+
+              {scholarships.length === 0 ? (
+                <div style={{ padding: 'var(--space-6)', textAlign: 'center', background: 'var(--color-surface-variant)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--color-border)' }}>
+                  <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', margin: 0 }}>
+                    No scholarships yet. Click <strong>Add Scholarship</strong> to create one.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                  {scholarships.map(s => (
+                    <div key={s.id} style={{
+                      padding: 'var(--space-4)', border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-md)', background: 'var(--color-surface)',
+                    }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 'var(--space-3)', alignItems: 'end', marginBottom: 'var(--space-3)' }}>
+                        <Input
+                          label="Scholarship name"
+                          placeholder="e.g. RTE"
+                          value={s.name}
+                          onChange={e => updateScholarship(s.id, { name: e.target.value })}
+                        />
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 10 }}>
+                          <input
+                            type="checkbox"
+                            checked={s.active}
+                            onChange={e => updateScholarship(s.id, { active: e.target.checked })}
+                          />
+                          <span className="text-body-sm">Active</span>
+                        </label>
+                        <button
+                          onClick={() => deleteScholarship(s.id)}
+                          title="Remove this scholarship"
+                          style={{ padding: 8, background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', marginBottom: 6 }}
+                        >
+                          <TrashIcon size={14} />
+                        </button>
+                      </div>
+
+                      <div className="text-caption" style={{ fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Fee per class (₹ / year)
+                      </div>
+                      {classes.length === 0 ? (
+                        <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>No classes configured yet.</p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--space-2)' }}>
+                          {classes.map((c: any) => (
+                            <div key={c.id}>
+                              <label className="text-caption" style={{ display: 'block', marginBottom: 2, color: 'var(--color-text-secondary)' }}>{c.name}</label>
+                              <input
+                                type="number"
+                                min={0}
+                                placeholder="—"
+                                value={s.amountsByClass?.[c.id] ?? ''}
+                                onChange={e => setScholarshipClassAmount(s.id, c.id, e.target.value)}
+                                style={{
+                                  width: '100%', padding: '8px 10px',
+                                  borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)',
+                                  background: 'var(--color-surface-variant)',
+                                  fontSize: '0.9rem', outline: 'none',
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ marginTop: 'var(--space-3)' }}>
+                <Button variant="primary" onClick={handleSaveScholarships} disabled={scholarshipsSaving}>
+                  {scholarshipsSaving ? 'Saving…' : 'Save Scholarships'}
+                </Button>
+              </div>
+            </div>
 
             <div className="divider" style={{ margin: 'var(--space-6) 0' }} />
             

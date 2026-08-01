@@ -23,6 +23,7 @@ import AdminAttendance from './admin/AdminAttendance';
 import AdminExams from './admin/AdminExams';
 import AdminExamResults from './admin/AdminExamResults';
 import SharedReportCard from './shared/SharedReportCard';
+import SharedExpense from './shared/SharedExpense';
 import TeacherCoScholastic from './teacher/TeacherCoScholastic';
 import AdminFees from './admin/AdminFees';
 import AdminReports from './admin/AdminReports';
@@ -69,6 +70,7 @@ const PAGE_TITLES: Record<string, string> = {
   'major-exams': 'Major Exams',
   'weekly-tests': 'Weekly Tests',
   'class-tests': 'Class Tests',
+  'expenses': 'Expenses',
   'exam-results': 'Class Exam Results',
   'exams': 'Academic Calendar',
   'report-card': 'Student Report Card',
@@ -116,6 +118,7 @@ export default function DashboardLayout() {
         case 'fee-overview': return <AdminFees subPage="overview" />;
         case 'fee-structures': return <AdminFees subPage="structures" />;
         case 'fee-payments': return <AdminFees subPage="payments" />;
+        case 'expenses': return <SharedExpense />;
         case 'reports': return <AdminReports />;
         case 'settings': return <AdminSettings />;
         case 'bus-students': return <AdminBus subPage="students" />;
@@ -136,6 +139,7 @@ export default function DashboardLayout() {
         case 'report-card': return <SharedReportCard view="teacher" />;
         case 'assignments': return <TeacherAssignments />;
         case 'collect-fees': return <TeacherFees />;
+        case 'expenses': return <SharedExpense />;
         case 'my-class': return <TeacherClassOverview view="dashboard" />;
         case 'class-students': return <TeacherClassOverview view="students" />;
         case 'class-attendance': return <TeacherClassOverview view="attendance" />;

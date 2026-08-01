@@ -60,6 +60,7 @@ const EMPTY_FORM: Record<string, string> = {
   dateOfJoining: '', admissionNumber: '', religion: '', mediumOfInstruction: '',
   community: '', disabilityGroupName: '', groupCode: '', motherTongue: '',
   transportType: 'out', routeId: '',
+  scholarshipId: '',
 };
 
 // Color palette for class cards
@@ -192,6 +193,7 @@ export default function AdminStudents() {
       groupCode: s.groupCode || '', motherTongue: s.motherTongue || '',
       transportType: (s as any).transportType || 'out',
       routeId: (s as any).routeId || '',
+      scholarshipId: (s as any).scholarshipId || '',
     });
     setFormSection('basic');
     setShowAddModal(true);
@@ -673,24 +675,40 @@ export default function AdminStudents() {
                   <Input label="Group Code" value={formData.groupCode} onChange={e => setField('groupCode', e.target.value)} />
                 </div>
                 <div className="grid-2">
-                  <Select 
-                    label="Transportation" 
-                    options={[{ value: 'out', label: 'Out Student' }, { value: 'bus', label: 'School Bus' }]} 
-                    value={formData.transportType} 
-                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('transportType', e.target.value)} 
+                  <Select
+                    label="Transportation"
+                    options={[{ value: 'out', label: 'Out Student' }, { value: 'bus', label: 'School Bus' }]}
+                    value={formData.transportType}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('transportType', e.target.value)}
                   />
                   {formData.transportType === 'bus' && (
-                    <Select 
-                      label="Assigned Route" 
+                    <Select
+                      label="Assigned Route"
                       options={[
                         { value: '', label: 'Select Route' },
                         ...routes.map(r => ({ value: r.id, label: `${r.routeName} (₹${r.fee})` }))
-                      ]} 
-                      value={formData.routeId} 
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('routeId', e.target.value)} 
+                      ]}
+                      value={formData.routeId}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('routeId', e.target.value)}
                     />
                   )}
                 </div>
+                {/* Scholarship — overrides the class fee structure for this student */}
+                {(() => {
+                  const activeScholarships = (school.settings?.scholarships || []).filter(s => s.active);
+                  if (activeScholarships.length === 0) return null;
+                  return (
+                    <Select
+                      label="Scholarship"
+                      options={[
+                        { value: '', label: 'None' },
+                        ...activeScholarships.map(s => ({ value: s.id, label: s.name })),
+                      ]}
+                      value={formData.scholarshipId}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('scholarshipId', e.target.value)}
+                    />
+                  );
+                })()}
               </div>
             )}
             {formSection === 'contact' && (

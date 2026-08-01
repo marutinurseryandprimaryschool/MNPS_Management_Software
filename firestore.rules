@@ -155,6 +155,12 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    // Expenses — any authenticated staff (admin or teacher) can record
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
     // Assessment Sessions
     match /assessmentSessions/{sessionId} {
       allow read: if isAuthenticated();

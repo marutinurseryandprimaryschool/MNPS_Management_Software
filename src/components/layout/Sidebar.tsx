@@ -57,6 +57,7 @@ const ADMIN_SECTIONS: NavSection[] = [
       { id: 'fee-overview', icon: <CreditCardIcon size={20} />, label: 'Fee Overview', href: '/admin/fee-overview' },
       { id: 'fee-structures', icon: <SettingsIcon size={20} />, label: 'Fee Structures', href: '/admin/fee-structures' },
       { id: 'fee-payments', icon: <FileTextIcon size={20} />, label: 'Payments', href: '/admin/fee-payments' },
+      { id: 'expenses', icon: <FileTextIcon size={20} />, label: 'Expenses', href: '/admin/expenses' },
     ],
   },
   {
@@ -118,6 +119,7 @@ const TEACHER_SECTIONS: NavSection[] = [
     title: 'Other',
     items: [
       { id: 'collect-fees', icon: <CreditCardIcon size={20} />, label: 'Collect Fees', href: '/teacher/collect-fees' },
+      { id: 'expenses', icon: <FileTextIcon size={20} />, label: 'Expenses', href: '/teacher/expenses' },
     ],
   },
 ];

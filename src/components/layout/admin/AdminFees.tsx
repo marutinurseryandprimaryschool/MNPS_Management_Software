@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { useToast } from '@/components/ui/Toast';
 import { Badge, Tabs, Avatar } from '@/components/ui/SharedUI';
-import { PlusIcon, CreditCardIcon, UsersIcon, EditIcon, TrashIcon } from '@/components/ui/Icons';
+import { PlusIcon, CreditCardIcon, EditIcon, TrashIcon } from '@/components/ui/Icons';
 import { formatCompactCurrency } from '@/lib/utils';
 import type { FeePayment, Class, Student } from '@/types/models';
 
@@ -45,6 +45,27 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
   const [showStructureModal, setShowStructureModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingStructure, setEditingStructure] = useState<FeeStructureData | null>(null);
+
+  // ── Per-student fee adjustment (scholarship etc.) ──
+  const [feeEditStudent, setFeeEditStudent] = useState<Student | null>(null);
+  const [feeEditForm, setFeeEditForm] = useState<{ amount: string; reason: string }>({ amount: '', reason: '' });
+  const [feeEditSaving, setFeeEditSaving] = useState(false);
+
+  // Returns the class-fee portion for a specific student. Priority:
+  //   1. Manual feeAdjustment.amount (per-student override).
+  //   2. Scholarship program amount for the student's class (e.g. RTE).
+  //   3. Fee structure default (fs.totalAmount).
+  const effectiveClassFee = (fs: FeeStructureData, st: Student): number => {
+    if (st.feeAdjustment && typeof st.feeAdjustment.amount === 'number') {
+      return st.feeAdjustment.amount;
+    }
+    if (st.scholarshipId) {
+      const scholarship = (school.settings?.scholarships || []).find(x => x.id === st.scholarshipId && x.active);
+      const amt = scholarship?.amountsByClass?.[st.classId];
+      if (typeof amt === 'number') return amt;
+    }
+    return fs.totalAmount;
+  };
   const [viewingClassId, setViewingClassId] = useState<string | null>(null);
   const [viewingSectionId, setViewingSectionId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
@@ -240,10 +261,63 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
     } catch (e) { console.error(e); showToast('Failed'); }
   };
 
+  const handleSaveFeeAdjustment = async () => {
+    if (!feeEditStudent) return;
+    const fs = feeStructures.find(s => s.classId === feeEditStudent.classId);
+    const structureAmount = fs?.totalAmount ?? 0;
+    const parsed = Number(feeEditForm.amount);
+    if (!Number.isFinite(parsed) || parsed < 0) { showToast('Enter a valid amount'); return; }
+    setFeeEditSaving(true);
+    try {
+      // If the entered amount matches the class structure and no reason is
+      // given, treat it as "no override" — clear the adjustment cleanly.
+      const shouldClear = parsed === structureAmount && !feeEditForm.reason.trim();
+      const updates: Record<string, unknown> = shouldClear
+        ? { feeAdjustment: null }
+        : { feeAdjustment: { amount: parsed, reason: feeEditForm.reason.trim() || null } };
+      await StudentsService.update(feeEditStudent.id, updates);
+      await refreshData();
+      showToast(shouldClear ? 'Fee adjustment removed' : 'Fee updated');
+      setFeeEditStudent(null);
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to update fee');
+    } finally {
+      setFeeEditSaving(false);
+    }
+  };
+
+  const handleResetFeeAdjustment = async () => {
+    if (!feeEditStudent) return;
+    setFeeEditSaving(true);
+    try {
+      await StudentsService.update(feeEditStudent.id, { feeAdjustment: null });
+      await refreshData();
+      showToast('Fee reset to class default');
+      setFeeEditStudent(null);
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to reset fee');
+    } finally {
+      setFeeEditSaving(false);
+    }
+  };
+
   const totalCollected = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const todayStr = new Date().toISOString().split('T')[0];
   const todayPayments = payments.filter(p => p.paidAt && new Date(p.paidAt).toISOString().split('T')[0] === todayStr);
   const todayTotal = todayPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+  // ── Month filter for the "This Month" collection card ──
+  // Stored as `YYYY-MM`. Defaults to the current month; user can pick any past month.
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const [monthFilter, setMonthFilter] = useState<string>(currentMonthKey);
+  const monthPayments = payments.filter(p =>
+    p.paidAt && new Date(p.paidAt).toISOString().slice(0, 7) === monthFilter
+  );
+  const monthTotal = monthPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const isCurrentMonth = monthFilter === currentMonthKey;
+  const monthLabel = new Date(monthFilter + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
   const filteredStudents = paymentForm.classId
     ? students.filter(s => s.classId === paymentForm.classId)
@@ -281,9 +355,28 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
             <div style={{ fontSize:'0.8rem',opacity:0.75,marginTop:4 }}>{payments.length} total payments</div>
           </div>
           <div style={{ background:'linear-gradient(135deg,#7C3AED,#8B5CF6)',borderRadius:'var(--radius-lg)',padding:'var(--space-5)',color:'white' }}>
-            <div style={{ display:'flex',alignItems:'center',gap:'var(--space-2)',marginBottom:'var(--space-2)',opacity:0.85 }}><UsersIcon size={18} /><span style={{ fontSize:'0.85rem',fontWeight:500 }}>Fee Structures</span></div>
-            <div style={{ fontSize:'1.75rem',fontWeight:700 }}>{feeStructures.length}</div>
-            <div style={{ fontSize:'0.8rem',opacity:0.75,marginTop:4 }}>classes configured</div>
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:'var(--space-2)',marginBottom:'var(--space-2)',opacity:0.9 }}>
+              <div style={{ display:'flex',alignItems:'center',gap:'var(--space-2)' }}>
+                <CreditCardIcon size={18} />
+                <span style={{ fontSize:'0.85rem',fontWeight:500 }}>{isCurrentMonth ? 'This Month' : monthLabel}</span>
+              </div>
+              <input
+                type="month"
+                value={monthFilter}
+                max={currentMonthKey}
+                onChange={e => setMonthFilter(e.target.value || currentMonthKey)}
+                title="Pick a month"
+                style={{
+                  background:'rgba(255,255,255,0.18)', color:'white', border:'1px solid rgba(255,255,255,0.3)',
+                  borderRadius:'var(--radius-sm)', padding:'2px 6px', fontSize:'0.72rem', outline:'none',
+                  colorScheme:'dark', cursor:'pointer',
+                }}
+              />
+            </div>
+            <div style={{ fontSize:'1.75rem',fontWeight:700 }}>₹{monthTotal.toLocaleString()}</div>
+            <div style={{ fontSize:'0.8rem',opacity:0.75,marginTop:4 }}>
+              {monthPayments.length} payment{monthPayments.length!==1?'s':''}{isCurrentMonth ? '' : ` in ${monthLabel}`}
+            </div>
           </div>
         </div>
       )}
@@ -295,8 +388,10 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
         feeStructures.forEach(fs => {
           const classStudents = students.filter(s => s.classId === fs.classId);
           const n = classStudents.length;
-          // Base class fee (Terms + Extracurricular + Additional)
-          const baseExpected = fs.totalAmount * n;
+          // Base class fee (Terms + Extracurricular + Additional), respecting
+          // any per-student overrides (scholarships etc.) instead of a flat
+          // `structure * count`.
+          const baseExpected = classStudents.reduce((sum, s) => sum + effectiveClassFee(fs, s), 0);
           
           // Calculate total bus fees for this class based on each student's assigned route
           const activeMonths = fs.busMonths || ACADEMIC_MONTHS;
@@ -393,7 +488,9 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
                       }
                       return sum;
                     }, 0) : 0;
-                    const classExpected = (fs.totalAmount * n) + busExpected;
+                    // Sum per-student — respects scholarship overrides.
+                    const sectionBase = sectionStudents.reduce((sum, s) => sum + effectiveClassFee(fs, s), 0);
+                    const classExpected = sectionBase + busExpected;
                     const classCollected = payments.filter(p => p.classId === fs.classId && (sectionId ? p.sectionId === sectionId : true)).reduce((s, p) => s + (Number(p.amount) || 0), 0);
                     const classPending = classExpected - classCollected;
                     const pct = classExpected > 0 ? Math.min(100, (classCollected / classExpected) * 100) : 0;
@@ -508,9 +605,19 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
                 const busFee = (fs.includeBusFee && (st as any).transportType === 'bus')
                   ? (() => { const route = busRoutes.find(r => r.id === (st as any).routeId); return (route?.fee || 0) * activeMonths.length; })()
                   : 0;
-                const studentTotal = fs.totalAmount + busFee;
+                const classFee = effectiveClassFee(fs, st);
+                const studentTotal = classFee + busFee;
                 const pending = studentTotal - paid;
                 const fullyPaid = pending <= 0 && studentTotal > 0;
+                const isAdjusted = !!(st.feeAdjustment && typeof st.feeAdjustment.amount === 'number');
+                const scholarship = !isAdjusted && st.scholarshipId
+                  ? (school.settings?.scholarships || []).find(x => x.id === st.scholarshipId && x.active)
+                  : null;
+                const scholarshipApplied = !!(scholarship && typeof scholarship.amountsByClass?.[st.classId] === 'number');
+                const badgeLabel = isAdjusted
+                  ? (st.feeAdjustment?.reason || 'Adjusted')
+                  : (scholarshipApplied ? (scholarship!.name || 'Scholarship') : '');
+                const showBadge = isAdjusted || scholarshipApplied;
 
                 return (
                   <div key={st.id} onClick={() => {
@@ -528,8 +635,26 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
                       <Avatar name={st.name} size={40} />
                       <div>
-                        <div style={{ font: 'var(--text-body)', fontWeight: 600 }}>{st.name}</div>
-                        <div className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>Adm: {st.admissionNumber || 'N/A'} • Sec: {st.sectionName}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ font: 'var(--text-body)', fontWeight: 600 }}>{st.name}</span>
+                          {showBadge && (
+                            <span
+                              title={isAdjusted ? (st.feeAdjustment?.reason || 'Custom fee amount') : `${scholarship?.name} scholarship`}
+                              style={{
+                                padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                                background: isAdjusted ? '#FEF3C7' : '#DBEAFE',
+                                color: isAdjusted ? '#B45309' : '#1D4ED8',
+                                fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                              }}
+                            >
+                              {badgeLabel}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
+                          Adm: {st.admissionNumber || 'N/A'} • Sec: {st.sectionName}
+                          {showBadge && ` • Fee ₹${classFee.toLocaleString()} (was ₹${fs.totalAmount.toLocaleString()})`}
+                        </div>
                       </div>
                     </div>
 
@@ -544,6 +669,26 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
                           {fullyPaid ? '✓ PAID' : `₹${pending.toLocaleString()}`}
                         </div>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFeeEditStudent(st);
+                          setFeeEditForm({
+                            amount: String(classFee),
+                            reason: st.feeAdjustment?.reason || '',
+                          });
+                        }}
+                        title="Adjust this student's fee (scholarship, etc.)"
+                        style={{
+                          padding: 8, background: 'none',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 'var(--radius-md)',
+                          color: 'var(--color-primary-500)',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center',
+                        }}
+                      >
+                        <EditIcon size={16} />
+                      </button>
                       <div style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-500)', color: 'white', fontSize: '0.85rem', fontWeight: 600 }}>
                         Pay
                       </div>
@@ -966,6 +1111,91 @@ export default function AdminFees({ subPage }: { subPage?: 'overview' | 'structu
             <Button variant="primary" onClick={handleRecordPayment}>Record Payment</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* ═══ ADJUST FEE MODAL ═══ */}
+      <Modal
+        isOpen={!!feeEditStudent}
+        onClose={() => setFeeEditStudent(null)}
+        title={feeEditStudent ? `Adjust Fee — ${feeEditStudent.name}` : ''}
+        size="md"
+      >
+        {feeEditStudent && (() => {
+          const fs = feeStructures.find(s => s.classId === feeEditStudent.classId);
+          const structureAmount = fs?.totalAmount ?? 0;
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div style={{
+                padding: 'var(--space-3) var(--space-4)',
+                background: '#F0F9FF', border: '1px solid #BAE6FD',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.85rem', color: '#0369A1', lineHeight: 1.5,
+              }}>
+                Use this for scholarship students or any student whose class fee
+                differs from the standard structure. Bus fees stay unchanged
+                (they follow the assigned route).
+              </div>
+
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)',
+              }}>
+                <div style={{
+                  padding: 'var(--space-3)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--color-surface-variant)',
+                }}>
+                  <div className="text-caption" style={{ color: 'var(--color-text-tertiary)', marginBottom: 2 }}>Class default</div>
+                  <div style={{ fontWeight: 700 }}>₹{structureAmount.toLocaleString()}</div>
+                </div>
+                <div style={{
+                  padding: 'var(--space-3)',
+                  border: '1px solid var(--color-primary-300)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--color-primary-50)',
+                }}>
+                  <div className="text-caption" style={{ color: 'var(--color-primary-700)', marginBottom: 2 }}>This student pays</div>
+                  <div style={{ fontWeight: 700, color: 'var(--color-primary-700)' }}>
+                    ₹{(Number(feeEditForm.amount) || 0).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              <Input
+                label="Custom class fee (₹)"
+                type="number"
+                min={0}
+                value={feeEditForm.amount}
+                onChange={e => setFeeEditForm(p => ({ ...p, amount: e.target.value }))}
+              />
+
+              <Input
+                label="Reason (optional)"
+                placeholder="e.g. Scholarship, Sibling discount"
+                value={feeEditForm.reason}
+                onChange={e => setFeeEditForm(p => ({ ...p, reason: e.target.value }))}
+              />
+
+              <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <Button
+                  variant="secondary"
+                  onClick={handleResetFeeAdjustment}
+                  disabled={feeEditSaving || !feeEditStudent.feeAdjustment}
+                >
+                  Reset to default
+                </Button>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                  <Button variant="secondary" onClick={() => setFeeEditStudent(null)} disabled={feeEditSaving}>
+                    Cancel
+                  </Button>
+                  <Button variant="primary" onClick={handleSaveFeeAdjustment} disabled={feeEditSaving}>
+                    {feeEditSaving ? 'Saving…' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

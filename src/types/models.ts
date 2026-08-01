@@ -45,6 +45,14 @@ export interface GradeScale {
   max: number;
 }
 
+// ── Scholarship (defined in Settings, referenced by Students) ──
+export interface Scholarship {
+  id: string;
+  name: string;                          // e.g. "RTE"
+  active: boolean;                       // uncheck to hide from student dropdown
+  amountsByClass: Record<string, number>; // classId → fixed total fee for the year
+}
+
 // ── School Settings ──
 export interface SchoolSettings {
   admissionPrefix: string;
@@ -54,6 +62,7 @@ export interface SchoolSettings {
   gradeScale: GradeScale[];
   maxPeriodsPerTeacherPerDay: number;
   maxConsecutivePeriods: number;
+  scholarships?: Scholarship[];
 }
 
 // ── School ──
@@ -159,6 +168,17 @@ export interface Student extends Timestamps {
   routeId?: string;
   routeName?: string;
   academicYear: string;
+  // Optional per-student fee override — e.g. scholarship recipients.
+  // When set, `amount` replaces the class fee structure's totalAmount for
+  // this student. Bus fees are still added on top (they're route-based).
+  feeAdjustment?: {
+    amount: number;
+    reason?: string;
+  };
+  // Optional school-wide scholarship (e.g. RTE) — resolved via
+  // school.settings.scholarships → amountsByClass[student.classId].
+  // feeAdjustment (if set) takes precedence over this.
+  scholarshipId?: string;
   // denormalized
   className?: string;
   sectionName?: string;
@@ -520,6 +540,19 @@ export interface AssessmentSession {
   academicYear: string;
   createdBy: string;
   createdAt: any;
+}
+
+// ── Expense (school-side outflows, addable by any staff) ──
+export interface Expense extends Timestamps {
+  id: string;
+  amount: number;
+  category: string;      // free text e.g. "Stationery", "Repairs", "Utilities"
+  description: string;
+  date: string;          // YYYY-MM-DD
+  addedById: string;
+  addedByName: string;
+  addedByRole: string;   // 'admin' | 'teacher' | 'principal' | 'correspondent'
+  academicYear: string;
 }
 
 // ── Class Test ──
