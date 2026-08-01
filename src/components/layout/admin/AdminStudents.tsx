@@ -674,30 +674,9 @@ export default function AdminStudents() {
                   <Input label="Disability Group" value={formData.disabilityGroupName} onChange={e => setField('disabilityGroupName', e.target.value)} />
                   <Input label="Group Code" value={formData.groupCode} onChange={e => setField('groupCode', e.target.value)} />
                 </div>
-                <div className="grid-2">
-                  <Select
-                    label="Transportation"
-                    options={[{ value: 'out', label: 'Out Student' }, { value: 'bus', label: 'School Bus' }]}
-                    value={formData.transportType}
-                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('transportType', e.target.value)}
-                  />
-                  {formData.transportType === 'bus' && (
-                    <Select
-                      label="Assigned Route"
-                      options={[
-                        { value: '', label: 'Select Route' },
-                        ...routes.map(r => ({ value: r.id, label: `${r.routeName} (₹${r.fee})` }))
-                      ]}
-                      value={formData.routeId}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('routeId', e.target.value)}
-                    />
-                  )}
-                </div>
-                {/* Scholarship — overrides the class fee structure for this student */}
                 {(() => {
                   const activeScholarships = (school.settings?.scholarships || []).filter(s => s.active);
-                  if (activeScholarships.length === 0) return null;
-                  return (
+                  const scholarshipField = activeScholarships.length > 0 ? (
                     <Select
                       label="Scholarship"
                       options={[
@@ -707,6 +686,39 @@ export default function AdminStudents() {
                       value={formData.scholarshipId}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('scholarshipId', e.target.value)}
                     />
+                  ) : <div />;
+                  return (
+                    <>
+                      <div className="grid-2">
+                        <Select
+                          label="Transportation"
+                          options={[{ value: 'out', label: 'Out Student' }, { value: 'bus', label: 'School Bus' }]}
+                          value={formData.transportType}
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('transportType', e.target.value)}
+                        />
+                        {/* Fill the empty right-hand slot with either Assigned Route
+                            (when bus) or Scholarship (otherwise). Keeps the layout balanced. */}
+                        {formData.transportType === 'bus' ? (
+                          <Select
+                            label="Assigned Route"
+                            options={[
+                              { value: '', label: 'Select Route' },
+                              ...routes.map(r => ({ value: r.id, label: `${r.routeName} (₹${r.fee})` }))
+                            ]}
+                            value={formData.routeId}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('routeId', e.target.value)}
+                          />
+                        ) : scholarshipField}
+                      </div>
+                      {/* When bus is selected, Route filled the slot next to Transportation —
+                          so put Scholarship on its own row below. */}
+                      {formData.transportType === 'bus' && activeScholarships.length > 0 && (
+                        <div className="grid-2">
+                          {scholarshipField}
+                          <div />
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
               </div>
