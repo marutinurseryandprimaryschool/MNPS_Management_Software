@@ -131,7 +131,8 @@ const TEACHER_SECTIONS: NavSection[] = [
     title: 'Other',
     items: [
       // Expense entry removed for teachers/staff in R1 (doc D9): principal-only.
-      { id: 'collect-fees', icon: <CreditCardIcon size={20} />, label: 'Collect Fees', href: '/teacher/collect-fees' },
+      // Read-only register (doc scope item 6) — teachers no longer collect fees.
+      { id: 'collect-fees', icon: <CreditCardIcon size={20} />, label: 'Fee Register', href: '/teacher/collect-fees' },
     ],
   },
 ];
@@ -186,6 +187,28 @@ function getSectionsForRole(role: UserRole | null): NavSection[] {
   return filterSectionsByCapability(ADMIN_SECTIONS, role);
 }
 
+/* Principal focus mode: a small toggle that trims the sidebar to the money
+   pages only. Preference persists per browser. */
+const PRINCIPAL_FOCUS_IDS = new Set([
+  'dashboard', 'fee-overview', 'fee-structures', 'fee-payments', 'accounts', 'defaulters',
+]);
+const FOCUS_MODE_STORAGE_KEY = 'mnps_principal_view_mode';
+
+function readFocusModePreference(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    return (window.localStorage.getItem(FOCUS_MODE_STORAGE_KEY) ?? 'focus') === 'focus';
+  } catch {
+    return true;
+  }
+}
+
+function focusSections(sections: NavSection[]): NavSection[] {
+  return sections
+    .map(s => ({ ...s, items: s.items.filter(i => PRINCIPAL_FOCUS_IDS.has(i.id)) }))
+    .filter(s => s.items.length > 0);
+}
+
 function getNavForRole(role: UserRole | null): NavItem[] {
   if (isTeacherLike(role)) return TEACHER_NAV;
   if (role === UserRole.PARENT) return PARENT_NAV;
@@ -204,6 +227,7 @@ export default function Sidebar({
   const { role } = useAuth();
   const { school } = useSchool();
   const [collapsed, setCollapsed] = useState(false);
+  const [focusMode, setFocusMode] = useState<boolean>(readFocusModePreference);
 
   const handleCollapse = () => {
     const newCollapsed = !collapsed;
@@ -211,7 +235,20 @@ export default function Sidebar({
     onCollapsedChange?.(newCollapsed);
   };
 
-  const sections = getSectionsForRole(role);
+  // The focus toggle is only offered to the Principal (viewAccounts holder).
+  const canFocus = hasCapability(role, 'viewAccounts');
+  const handleFocusToggle = () => {
+    const next = !focusMode;
+    setFocusMode(next);
+    try {
+      window.localStorage.setItem(FOCUS_MODE_STORAGE_KEY, next ? 'focus' : 'full');
+    } catch {
+      // Preference just won't persist — toggle still works this session.
+    }
+  };
+
+  const allSections = getSectionsForRole(role);
+  const sections = canFocus && focusMode ? focusSections(allSections) : allSections;
 
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
@@ -221,6 +258,34 @@ export default function Sidebar({
         </div>
         {!collapsed && <span className={styles.logoText}>{school.name.split(' ').slice(0, 2).join(' ')}</span>}
       </div>
+
+      {canFocus && !collapsed && (
+        <label
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            margin: '4px 14px 6px', padding: '7px 10px', cursor: 'pointer',
+            background: 'var(--color-surface-variant)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+          }}
+          title={focusMode ? 'Showing money pages only — switch off to see everything' : 'Showing everything — switch on for money pages only'}
+        >
+          <span style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.03em', color: 'var(--color-text-secondary)' }}>
+            PRINCIPAL VIEW
+          </span>
+          <span
+            onClick={handleFocusToggle}
+            style={{
+              width: 34, height: 18, borderRadius: 9, flexShrink: 0, position: 'relative',
+              background: focusMode ? '#10B981' : '#D1D5DB', transition: 'background 0.2s', cursor: 'pointer',
+            }}
+          >
+            <span style={{
+              position: 'absolute', top: 2, left: focusMode ? 18 : 2, width: 14, height: 14,
+              borderRadius: '50%', background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', transition: 'left 0.2s',
+            }} />
+          </span>
+        </label>
+      )}
 
       <nav className={styles.nav}>
         {sections.map((section, sIdx) => (

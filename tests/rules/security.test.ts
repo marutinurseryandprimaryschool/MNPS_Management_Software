@@ -56,6 +56,8 @@ const seedDocs = (docs: Record<string, Record<string, unknown>>) =>
 
 const asAdmin = () =>
   testEnv.authenticatedContext(ADMIN_UID, { email: ADMIN_EMAIL, email_verified: true }).firestore();
+const asCorrespondent = () =>
+  testEnv.authenticatedContext(CORRESPONDENT_UID, { email: CORRESPONDENT_EMAIL, email_verified: true }).firestore();
 const asPrincipal = () =>
   testEnv.authenticatedContext(PRINCIPAL_UID, { email: PRINCIPAL_EMAIL, email_verified: true }).firestore();
 const asTeacher = () =>
@@ -224,6 +226,10 @@ describe('feePayments', () => {
     await assertFails(asAdmin().doc('feePayments/pay-a1').set(payment));
   });
 
+  it('DENIES correspondent creating a feePayment', async () => {
+    await assertFails(asCorrespondent().doc('feePayments/pay-c1').set(payment));
+  });
+
   it('ALLOWS principal creating a feePayment', async () => {
     await assertSucceeds(asPrincipal().doc('feePayments/pay-1').set(payment));
   });
@@ -274,6 +280,16 @@ describe('feePayments history (write-once audit trail)', () => {
   it('DENIES teacher reading a history entry', async () => {
     await seedDocs({ 'feePayments/pay-1/history/h1': historyEntry });
     await assertFails(asTeacher().doc('feePayments/pay-1/history/h1').get());
+  });
+
+  it('ALLOWS principal reading a history entry (guards the explicit read rule)', async () => {
+    await seedDocs({ 'feePayments/pay-1/history/h1': historyEntry });
+    await assertSucceeds(asPrincipal().doc('feePayments/pay-1/history/h1').get());
+  });
+
+  it('DENIES anonymous parent reading a history entry', async () => {
+    await seedDocs({ 'feePayments/pay-1/history/h1': historyEntry });
+    await assertFails(asAnonParent().doc('feePayments/pay-1/history/h1').get());
   });
 });
 

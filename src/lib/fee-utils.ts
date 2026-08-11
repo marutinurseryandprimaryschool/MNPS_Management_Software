@@ -90,6 +90,12 @@ export function coerceDate(value: unknown): Date | null {
     return null;
   }
   if (typeof value === 'string' || typeof value === 'number') {
+    // Plain 'yyyy-MM-dd' must be LOCAL midnight, not UTC — otherwise term due
+    // dates shift by a day in negative-offset timezones.
+    if (typeof value === 'string') {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+      if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
   }
@@ -387,9 +393,11 @@ export function buildStudentSchedule(args: BuildScheduleArgs): StudentSchedule {
           : [...ACADEMIC_MONTHS],
       );
       const n = months.length;
-      const slice = Math.round(ecaAnnual / n);
-      // Remainder lands on the first month (academic order). If proration
-      // drops that month, the remainder is simply not owed.
+      // floor (not round): round can overshoot on tiny annuals, making the
+      // first slice negative and the months sum to MORE than the annual.
+      const slice = Math.floor(ecaAnnual / n);
+      // Remainder (always 0..n-1) lands on the first month (academic order).
+      // If proration drops that month, the remainder is simply not owed.
       const firstSlice = slice + (ecaAnnual - slice * n);
       pushMonthBuckets('eca', months, (_m, i) => (i === 0 ? firstSlice : slice), ecaCategory);
     }
@@ -434,8 +442,10 @@ export function buildStudentSchedule(args: BuildScheduleArgs): StudentSchedule {
       (structure.additionalFees || []).reduce((s, a) => s + (Number(a.amount) || 0), 0);
     if (basis > 0) {
       const rawFactor = override / basis;
-      scaleWarning = rawFactor > 1;
-      scaleFactor = Math.min(1, rawFactor);
+      // Clamp to [0, 1]: >1 means a data-entry error (override above the real
+      // fee); <0 means a negative override — both flagged, never applied raw.
+      scaleWarning = rawFactor > 1 || rawFactor < 0;
+      scaleFactor = Math.max(0, Math.min(1, rawFactor));
       if (scaleFactor < 1) {
         const scalable = buckets.filter(b => b.kind === 'term' || b.kind === 'eca' || b.kind === 'additional');
         const includedSum = scalable.reduce((s, b) => s + b.amount, 0);
@@ -534,11 +544,34 @@ export function allocatePayments(
     return ta - tb;
   });
 
-  const paidByCategory: Record<string, number> = {};
-  const bucketCategories = new Set(schedule.buckets.map(b => b.category));
+  // Per-BUCKET credit (not per-category): free-text additional fees or dirty
+  // data can produce two buckets sharing one category name; crediting by
+  // category would double-count a single payment into both. Same-category
+  // payments fill duplicate buckets FIFO instead.
+  const paidByBucket = new Map<FeeBucket, number>();
+  const bucketsByCategory = new Map<string, FeeBucket[]>();
+  for (const b of schedule.buckets) {
+    const group = bucketsByCategory.get(b.category);
+    if (group) group.push(b);
+    else bucketsByCategory.set(b.category, [b]);
+  }
   const ecaBuckets = schedule.buckets.filter(b => b.kind === 'eca');
   let unallocated = 0;
   let totalPaid = 0;
+
+  const fillGroupFIFO = (group: FeeBucket[], amount: number): number => {
+    let remaining = amount;
+    for (const bucket of group) {
+      if (remaining <= 0) break;
+      const already = paidByBucket.get(bucket) || 0;
+      const capacity = bucket.amount - already;
+      if (capacity <= 0) continue;
+      const take = Math.min(remaining, capacity);
+      paidByBucket.set(bucket, already + take);
+      remaining -= take;
+    }
+    return remaining;
+  };
 
   for (const p of sorted) {
     const amount = Number(p.amount) || 0;
@@ -546,23 +579,22 @@ export function allocatePayments(
     totalPaid += amount;
     const category = p.category || '';
 
-    if (bucketCategories.has(category)) {
-      paidByCategory[category] = (paidByCategory[category] || 0) + amount;
+    const group = bucketsByCategory.get(category);
+    if (group) {
+      // Overpay beyond the group's capacity stays credited to the last
+      // bucket (legacy behavior: paid may exceed amount; nothing is lost).
+      const leftover = fillGroupFIFO(group, amount);
+      if (leftover > 0) {
+        const last = group[group.length - 1];
+        paidByBucket.set(last, (paidByBucket.get(last) || 0) + leftover);
+      }
       continue;
     }
 
     if (category === LEGACY_ECA_CATEGORY) {
-      let remaining = amount;
-      for (const bucket of ecaBuckets) {
-        if (remaining <= 0) break;
-        const already = paidByCategory[bucket.category] || 0;
-        const capacity = bucket.amount - already;
-        if (capacity <= 0) continue;
-        const take = Math.min(remaining, capacity);
-        paidByCategory[bucket.category] = already + take;
-        remaining -= take;
-      }
-      unallocated += remaining; // overflow past all ECA months
+      // Legacy lumps FIFO across ECA months; overflow past all ECA buckets
+      // → Unallocated.
+      unallocated += fillGroupFIFO(ecaBuckets, amount);
       continue;
     }
 
@@ -570,7 +602,7 @@ export function allocatePayments(
   }
 
   const buckets: AllocatedBucket[] = schedule.buckets.map(b => {
-    const paid = paidByCategory[b.category] || 0;
+    const paid = paidByBucket.get(b) || 0;
     const pending = Math.max(0, b.amount - paid);
     return { ...b, paid, pending, pendingDue: b.isDue ? pending : 0 };
   });

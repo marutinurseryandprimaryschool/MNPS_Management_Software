@@ -60,6 +60,18 @@ const formFromStructure = (fs: FeeStructure): StructureFormState => ({
 const sortMonths = (months: string[]): string[] =>
   [...months].sort((a, b) => academicMonthOrder(a) - academicMonthOrder(b));
 
+/* Reserved category names: the payment allocator matches buckets by category
+   string, so an additional fee named like a built-in bucket (or a month-tagged
+   prefix) would swallow payments meant for that bucket. */
+const RESERVED_FEE_NAMES = new Set([
+  'previous balance', 'extracurricular', 'other',
+  ...TERM_NAMES.map(n => n.toLowerCase()),
+]);
+const isReservedFeeName = (name: string): boolean => {
+  const n = name.trim().toLowerCase();
+  return RESERVED_FEE_NAMES.has(n) || n.startsWith('eca - ') || n.startsWith('bus fee - ');
+};
+
 interface StructureModalProps {
   isOpen: boolean;
   editing: FeeStructure | null;
@@ -118,6 +130,16 @@ function StructureModalInner({
     const additional = form.additionalFees
       .filter(a => a.name.trim())
       .map(a => ({ name: a.name.trim(), amount: parseFloat(a.amount) || 0 }));
+    const reserved = additional.find(a => isReservedFeeName(a.name));
+    if (reserved) {
+      showToast(`"${reserved.name}" is a reserved fee name — please pick a different name`, 'warning');
+      return;
+    }
+    const lowerNames = additional.map(a => a.name.toLowerCase());
+    if (lowerNames.some((n, i) => lowerNames.indexOf(n) !== i)) {
+      showToast('Two additional fees share the same name — names must be unique', 'warning');
+      return;
+    }
     const termDueDates: Record<string, string> = {};
     TERM_NAMES.forEach((name, i) => {
       if (form.termDueDates[i]) termDueDates[name] = form.termDueDates[i];

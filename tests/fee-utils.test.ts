@@ -163,13 +163,22 @@ describe('ECA slice rounding', () => {
     expect(eca.reduce((s, b) => s + b.amount, 0)).toBe(1000);
   });
 
-  it('handles a negative remainder (round overshoots)', () => {
+  it('never overshoots: floor-based slices keep the remainder non-negative', () => {
     const schedule = buildStudentSchedule(
       args({ structure: { ...baseStructure, extracurricular: 200, ecaMonths: ['June', 'July', 'August'] } }),
     );
     const eca = ecaBuckets(schedule);
-    expect(eca.map(b => b.amount)).toEqual([66, 67, 67]); // round(66.67)=67, remainder −1 → June
+    expect(eca.map(b => b.amount)).toEqual([68, 66, 66]); // floor(66.67)=66, remainder +2 → June
     expect(eca.reduce((s, b) => s + b.amount, 0)).toBe(200);
+  });
+
+  it('tiny annuals charge exactly the annual, never more', () => {
+    const schedule = buildStudentSchedule(
+      args({ structure: { ...baseStructure, extracurricular: 5, ecaMonths: [...ACADEMIC_MONTHS] } }),
+    );
+    const eca = ecaBuckets(schedule);
+    // floor(5/10)=0 → zero-amount months dropped, June carries the whole ₹5.
+    expect(eca.reduce((s, b) => s + b.amount, 0)).toBe(5);
   });
 });
 

@@ -173,19 +173,22 @@ export default function TeacherFees() {
       if (!classTeacherOf) return; // explicit empty state below
 
       // Scoped loads: ONLY this class-section (no school-wide fetches).
-      const [s, p, fs, br] = await Promise.all([
+      const [s, fs, br] = await Promise.all([
         classTeacherOf.sectionId
           ? StudentsService.getByClassSection(classTeacherOf.classId, classTeacherOf.sectionId, school.academicYear)
           : StudentsService.getByClass(classTeacherOf.classId, school.academicYear),
-        FeePaymentsService.getByClass(classTeacherOf.classId, school.academicYear),
         FeeStructuresService.getByClass(classTeacherOf.classId, school.academicYear),
         BusRoutesService.getAll(),
       ]);
       const sectionStudents = s as unknown as Student[];
-      const studentIds = new Set(sectionStudents.map(st => st.id));
       setStudents([...sectionStudents].sort((a, b) => a.name.localeCompare(b.name)));
-      // Class payments filtered down to this section's students.
-      setPayments((p as unknown as FeePayment[]).filter(pay => studentIds.has(pay.studentId)));
+      // Payments are queried PER STUDENT (not by classId): legacy payments can
+      // carry an empty classId and a class query would miss them, showing a
+      // paid student as pending.
+      const perStudent = await Promise.all(
+        sectionStudents.map(st => FeePaymentsService.getByStudent(st.id, school.academicYear)),
+      );
+      setPayments(perStudent.flat() as unknown as FeePayment[]);
       setStructure(fs as unknown as FeeStructure | null);
       setBusRoutes(br as unknown as BusRoute[]);
     } catch (e) {

@@ -79,7 +79,7 @@ const PAGE_TITLES: Record<string, string> = {
   'exams': 'Academic Calendar',
   'report-card': 'Student Report Card',
   'co-scholastic': 'Co-Scholastic & Remarks',
-  'collect-fees': 'Collect Fees',
+  'collect-fees': 'Fee Register',
   'bus-students': 'Bus Commuters List',
   'bus-routes': 'Transportation Routes',
   'my-class': 'My Class Overview',
