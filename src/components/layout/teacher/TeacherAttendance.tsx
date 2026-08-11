@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing untyped Firestore data handling in this legacy screen; typed migration tracked separately. */
 
 import React, { useState, useEffect } from 'react';
 import { AttendanceService, TeachersService, ClassesService, StudentsService } from '@/lib/firestore-service';

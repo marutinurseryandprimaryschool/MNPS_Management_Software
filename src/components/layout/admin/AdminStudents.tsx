@@ -14,7 +14,6 @@ import {
   EditIcon, TrashIcon, UsersIcon, EyeIcon,
 } from '@/components/ui/Icons';
 import type { Class, Section, Student, BusRoute } from '@/types/models';
-import * as XLSX from 'xlsx';
 
 // ── Column mapping for Excel import ──
 const COLUMN_MAP: Record<string, string> = {
@@ -62,6 +61,110 @@ const EMPTY_FORM: Record<string, string> = {
   transportType: 'out', routeId: '',
   scholarshipId: '',
 };
+
+// ── Spreadsheet parsing (exceljs + hand-rolled CSV replace the vulnerable
+//    xlsx npm build; see docs/designs/principal-role-fees-accounts.md,
+//    Addendum issue 6). exceljs is loaded on demand to keep the page lean. ──
+
+/** Cell value → display string ('' when empty); date cells become 'yyyy-MM-dd'. */
+const cellValueToString = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  // exceljs parses xlsx date serials as UTC-based Dates, so the ISO date part
+  // is the correct calendar day.
+  if (value instanceof Date) return value.toISOString().split('T')[0];
+  if (typeof value === 'object') {
+    const v = value as { richText?: Array<{ text?: string }>; result?: unknown; text?: unknown };
+    if (Array.isArray(v.richText)) return v.richText.map(r => r.text || '').join('');
+    if (v.result !== undefined) return cellValueToString(v.result); // formula cell
+    if (typeof v.text === 'string') return v.text;                  // hyperlink cell
+    return '';
+  }
+  return String(value);
+};
+
+/** First worksheet → array of {header: cellText} rows (headers from row 1). */
+const parseExcelRows = async (file: File): Promise<Record<string, string>[]> => {
+  const { Workbook } = await import('exceljs');
+  const workbook = new Workbook();
+  await workbook.xlsx.load(await file.arrayBuffer());
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
+
+  const headersByCol: Record<number, string> = {};
+  sheet.getRow(1).eachCell({ includeEmpty: false }, (cell, col) => {
+    const header = cellValueToString(cell.value).trim();
+    if (header) headersByCol[col] = header;
+  });
+
+  const rows: Record<string, string>[] = [];
+  for (let r = 2; r <= sheet.rowCount; r++) {
+    const sheetRow = sheet.getRow(r);
+    const row: Record<string, string> = {};
+    let hasValue = false;
+    for (const [col, header] of Object.entries(headersByCol)) {
+      const text = cellValueToString(sheetRow.getCell(Number(col)).value);
+      row[header] = text;
+      if (text.trim() !== '') hasValue = true;
+    }
+    if (hasValue) rows.push(row);
+  }
+  return rows;
+};
+
+/** Minimal RFC-4180 CSV parser (quoted fields, escaped quotes, CR/LF/CRLF). */
+const parseCsvCells = (text: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += ch;
+    } else if (ch === '"') inQuotes = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      rows.push(row); row = [];
+    } else field += ch;
+  }
+  if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+};
+
+/** CSV text → array of {header: cell} rows (headers from the first record). */
+const parseCsvRows = (text: string): Record<string, string>[] => {
+  const records = parseCsvCells(text);
+  if (records.length < 2) return [];
+  const headers = records[0].map(h => h.trim());
+  return records.slice(1)
+    .filter(cells => cells.some(c => c.trim() !== ''))
+    .map(cells => {
+      const row: Record<string, string> = {};
+      headers.forEach((header, i) => { if (header) row[header] = cells[i] ?? ''; });
+      return row;
+    });
+};
+
+/** Date-of-joining input with a subtle nudge when empty — the fee engine
+    prorates mid-year admissions from this date and silently falls back to
+    the academic-year start when it is missing. */
+function DateOfJoiningField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <div title={value ? undefined : 'Set date of joining for correct mid-year fee proration'}>
+      <Input label="Date of Joining" type="date" value={value} onChange={e => onChange(e.target.value)} />
+      {!value && (
+        <p className="text-caption" style={{ color: 'var(--color-warning)', marginTop: 4, marginBottom: 0 }}>
+          Set date of joining for correct mid-year fee proration
+        </p>
+      )}
+    </div>
+  );
+}
 
 // Color palette for class cards
 const CLASS_COLORS = [
@@ -191,9 +294,9 @@ export default function AdminStudents() {
       religion: s.religion || '', mediumOfInstruction: s.mediumOfInstruction || '',
       community: s.community || '', disabilityGroupName: s.disabilityGroupName || '',
       groupCode: s.groupCode || '', motherTongue: s.motherTongue || '',
-      transportType: (s as any).transportType || 'out',
-      routeId: (s as any).routeId || '',
-      scholarshipId: (s as any).scholarshipId || '',
+      transportType: s.transportType || 'out',
+      routeId: s.routeId || '',
+      scholarshipId: s.scholarshipId || '',
     });
     setFormSection('basic');
     setShowAddModal(true);
@@ -248,55 +351,53 @@ export default function AdminStudents() {
     }
   };
 
-  // ── Excel handling ──
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Excel / CSV handling ──
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = evt.target?.result;
-        const wb = XLSX.read(data, { type: 'binary' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const raw: Record<string, string>[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        if (raw.length === 0) { showToast('No data found in file'); return; }
+    try {
+      const raw = /\.csv$/i.test(file.name)
+        ? parseCsvRows(await file.text())
+        : await parseExcelRows(file);
+      if (raw.length === 0) { showToast('No data found in file'); return; }
 
-        // Map columns
-        const mapped = raw.map(row => {
-          const out: Record<string, string> = {};
-          for (const [header, value] of Object.entries(row)) {
-            const key = COLUMN_MAP[header.toLowerCase().trim()] || COLUMN_MAP[header.toLowerCase().replace(/[^a-z]/g, '')] || '';
-            if (key) out[key] = String(value).trim();
-          }
-          // Ensure name exists
-          if (!out.name) {
-            const firstVal = Object.values(row).find(v => typeof v === 'string' && v.trim().length > 2);
-            if (firstVal) out.name = String(firstVal).trim();
-          }
-          return out;
-        }).filter(r => r.name);
+      // Map columns
+      const mapped = raw.map(row => {
+        const out: Record<string, string> = {};
+        for (const [header, value] of Object.entries(row)) {
+          const key = COLUMN_MAP[header.toLowerCase().trim()] || COLUMN_MAP[header.toLowerCase().replace(/[^a-z]/g, '')] || '';
+          if (key) out[key] = String(value).trim();
+        }
+        // Ensure name exists
+        if (!out.name) {
+          const firstVal = Object.values(row).find(v => typeof v === 'string' && v.trim().length > 2);
+          if (firstVal) out.name = String(firstVal).trim();
+        }
+        return out;
+      }).filter(r => r.name);
 
-        // Parse section from _rawClass (e.g., '1-A') or _rawSection (e.g., 'A')
-        const withSection = mapped.map(row => {
-          let sec = (row._rawSection || '').trim().toUpperCase();
-          const rawCls = (row._rawClass || '').trim();
-          // If class contains dash like '1-A', extract section from it
-          if (!sec && rawCls.includes('-')) {
-            const parts = rawCls.split('-');
-            sec = parts.slice(1).join('-').trim().toUpperCase();
-          }
-          return { ...row, _parsedSection: sec };
-        });
+      // Parse section from _rawClass (e.g., '1-A') or _rawSection (e.g., 'A')
+      const withSection = mapped.map(row => {
+        let sec = (row._rawSection || '').trim().toUpperCase();
+        const rawCls = (row._rawClass || '').trim();
+        // If class contains dash like '1-A', extract section from it
+        if (!sec && rawCls.includes('-')) {
+          const parts = rawCls.split('-');
+          sec = parts.slice(1).join('-').trim().toUpperCase();
+        }
+        return { ...row, _parsedSection: sec };
+      });
 
-        setUploadedRows(withSection);
-        if (mapped.length === 0) showToast('No valid student rows found');
-      } catch {
-        showToast('Failed to read file. Please check the format.');
-      }
-    };
-    reader.readAsBinaryString(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+      setUploadedRows(withSection);
+      if (mapped.length === 0) showToast('No valid student rows found');
+    } catch (error) {
+      // Legacy binary .xls files land here too — exceljs reads .xlsx/.csv only.
+      console.error('Failed to read spreadsheet:', error);
+      showToast('Failed to read file. Please upload a .xlsx or .csv file.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleBulkUpload = async () => {
@@ -625,7 +726,7 @@ export default function AdminStudents() {
                 </div>
                 <div className="grid-2">
                   <Input label="Blood Group" value={formData.bloodGroup} onChange={e => setField('bloodGroup', e.target.value)} placeholder="e.g. O+" />
-                  <Input label="Date of Joining" type="date" value={formData.dateOfJoining} onChange={e => setField('dateOfJoining', e.target.value)} />
+                  <DateOfJoiningField value={formData.dateOfJoining} onChange={v => setField('dateOfJoining', v)} />
                 </div>
                 {/* Class info - read only */}
                 <div style={{ padding: 'var(--space-3)', background: 'var(--color-surface-variant)', borderRadius: 'var(--radius-md)', font: 'var(--text-body-sm)', color: 'var(--color-text-secondary)' }}>
@@ -942,7 +1043,7 @@ export default function AdminStudents() {
                 </div>
                 <div className="grid-2">
                   <Input label="Blood Group" value={formData.bloodGroup} onChange={e => setField('bloodGroup', e.target.value)} />
-                  <Input label="Date of Joining" type="date" value={formData.dateOfJoining} onChange={e => setField('dateOfJoining', e.target.value)} />
+                  <DateOfJoiningField value={formData.dateOfJoining} onChange={v => setField('dateOfJoining', v)} />
                 </div>
                 <Textarea label="Address" value={formData.address} onChange={e => setField('address', e.target.value)} rows={2} />
                 <Input label="Pin Code" value={formData.pinCode} onChange={e => setField('pinCode', e.target.value)} />

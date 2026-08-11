@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { Badge } from '@/components/ui/SharedUI';
 import { StudentsService, TeachersService, ClassesService, AttendanceService, FeePaymentsService, NotificationsService } from '@/lib/firestore-service';
+import { excludeDeleted } from '@/lib/fee-utils';
 import { getGreeting, formatCompactCurrency } from '@/lib/utils';
 import {
   GraduationCapIcon, UsersIcon, BarChartIcon, CreditCardIcon,
@@ -54,7 +55,8 @@ export default function AdminDashboard({ onNavigate }: { onNavigate: (id: string
           NotificationsService.getAll(),
         ]);
 
-        const totalFee = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        // Fee engine convention: every aggregate excludes soft-deleted payments.
+        const totalFee = excludeDeleted(payments).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
         setStats({
           totalStudents: students.length,

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { StudentsService, TeachersService, FeePaymentsService } from '@/lib/firestore-service';
+import { excludeDeleted } from '@/lib/fee-utils';
 import { useSchool } from '@/context/SchoolContext';
 import { formatCompactCurrency } from '@/lib/utils';
 import { BarChartIcon, CreditCardIcon, GraduationCapIcon, UsersIcon } from '@/components/ui/Icons';
@@ -18,7 +19,8 @@ export default function AdminReports() {
       TeachersService.getAll(),
       FeePaymentsService.getAll(school.academicYear),
     ]).then(([students, teachers, payments]) => {
-      const totalFee = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      // Fee engine convention: every aggregate excludes soft-deleted payments.
+      const totalFee = excludeDeleted(payments).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       setStats({ totalStudents: students.length, totalTeachers: teachers.length, totalFee });
     }).catch(console.error).finally(() => setLoading(false));
   }, [school?.academicYear]);

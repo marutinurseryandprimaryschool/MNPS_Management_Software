@@ -2,122 +2,166 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // Helper: Check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     // Helper: Check if user is admin
     function isAdmin() {
-      return isAuthenticated() && 
+      return isAuthenticated() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
-    
+
     // Helper: Check if user is admin-like (admin, principal, correspondent)
     function isAdminLike() {
-      return isAuthenticated() && 
+      return isAuthenticated() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'principal', 'correspondent'];
     }
-    
-    // Users collection
+
+    // Helper: Check if user is the principal (sole money writer)
+    function isPrincipal() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'principal';
+    }
+
+    // Helper: Check if user can manage other users (principal excluded)
+    function isUserManager() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'correspondent'];
+    }
+
+    // Users collection — redesigned: no self-service privilege escalation
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAdminLike();
-      allow create: if isAuthenticated();
-      // Let a freshly-logged-in user delete their own pre-registration
-      // (email-keyed pending doc) so the active UID-keyed doc replaces it
-      // without leaving a duplicate row in User Management.
+
+      // Parent self-signup (incl. anonymous sessions): own-uid doc, role locked to 'parent'
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.role == 'parent';
+
+      // Staff first-login migration: own-uid doc with a privileged role, only when
+      // migratedFrom references a pre-registration doc that is pending, matches the
+      // verified sign-in email, and carries the SAME role (no role upgrades in transit).
+      // Batch get() sees pre-batch state, so the atomic swap (set + delete) works.
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true
+        && 'migratedFrom' in request.resource.data
+        && request.resource.data.migratedFrom is string
+        && get(/databases/$(database)/documents/users/$(request.resource.data.migratedFrom)).data.status == 'pending'
+        && get(/databases/$(database)/documents/users/$(request.resource.data.migratedFrom)).data.email == request.auth.token.email
+        && get(/databases/$(database)/documents/users/$(request.resource.data.migratedFrom)).data.role == request.resource.data.role;
+
+      // Self-update: role and studentId are immutable (pinned at create)
+      allow update: if isAuthenticated()
+        && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'studentId']);
+
+      // User management (other users' docs): admin + correspondent only
+      allow create, update, delete: if isUserManager();
+
+      // Let a freshly-logged-in user delete their own pending pre-registration doc
+      // so the active UID-keyed doc replaces it (migration batch's delete half).
       allow delete: if isAuthenticated()
         && resource.data.status == 'pending'
         && resource.data.email == request.auth.token.email;
     }
-    
+
     // School settings (singleton doc)
     match /school/{docId} {
       allow read: if true;
       allow write: if isAdminLike();
       allow create: if isAuthenticated();
     }
-    
+
     // Students
     match /students/{studentId} {
       allow read: if isAuthenticated();
       allow write: if isAdminLike();
     }
-    
+
     // Teachers
     match /teachers/{teacherId} {
       allow read: if isAuthenticated();
       allow write: if isAdminLike();
     }
-    
+
     // Classes
     match /classes/{classId} {
       allow read: if isAuthenticated();
       allow write: if isAdminLike();
     }
-    
+
     // Timetables
     match /timetables/{timetableId} {
       allow read: if isAuthenticated();
       allow write: if isAdminLike();
     }
-    
+
     // Attendance
     match /attendance/{attendanceId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
-    
+
     // Marks
     match /marks/{marksId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
-    
+
     // Teacher Assignments
     match /teacherAssignments/{assignmentId} {
       allow read: if isAuthenticated();
       allow write: if isAdminLike();
     }
-    
+
     // Assignments
     match /assignments/{assignmentId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
-    
+
     // Materials
     match /materials/{materialId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
-    
+
     // Fee Structures
     match /feeStructures/{feeId} {
       allow read: if isAuthenticated();
       allow write: if isAdminLike();
     }
-    
-    // Fee Payments
+
+    // Fee Payments — Principal is the sole writer; reads stay open for
+    // parent/teacher views (client-side scoping, documented trust boundary).
+    // No hard delete: soft delete is an update setting deleted:true.
     match /feePayments/{paymentId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow create, update: if isPrincipal();
+      allow delete: if false;
+
+      // Write-once audit trail, paired with payment mutations in one writeBatch
+      match /history/{entryId} {
+        allow read, create: if isPrincipal();
+        allow update, delete: if false;
+      }
     }
-    
+
     // Chats
     match /chats/{chatId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
-      
+
       match /messages/{messageId} {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated();
       }
     }
-    
+
     // Notifications
     match /notifications/{notificationId} {
       allow read: if isAuthenticated();
@@ -155,10 +199,17 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
-    // Expenses — any authenticated staff (admin or teacher) can record
+    // Expenses — Principal-only module; no hard delete (soft delete via update)
     match /expenses/{expenseId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isPrincipal();
+      allow create, update: if isPrincipal();
+      allow delete: if false;
+
+      // Write-once audit trail, paired with expense mutations in one writeBatch
+      match /history/{entryId} {
+        allow read, create: if isPrincipal();
+        allow update, delete: if false;
+      }
     }
 
     // Assessment Sessions
@@ -171,6 +222,11 @@ service cloud.firestore {
     match /academicCalendars/{year} {
       allow read: if isAuthenticated();
       allow write: if isAdminLike();
+    }
+
+    // Accounts — opening balances / reconciliation docs; strictly Principal
+    match /accounts/{docId} {
+      allow read, write: if isPrincipal();
     }
   }
 }

@@ -4,14 +4,14 @@ import { getUpcomingSaturday, toDateKey, getEffectiveSaturdaySlots, isParentOfSt
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { DAYS_OF_WEEK, DAY_LABELS, DayOfWeek } from '@/types/enums';
-import type { Timetable, Student } from '@/types/models';
+import type { Timetable, Student, SchoolSettings } from '@/types/models';
 
 export default function ParentTimetable() {
   const { user } = useAuth();
   const { school: currentSchool } = useSchool();
   const [timetable, setTimetable] = useState<Timetable | null>(null);
   const [child, setChild] = useState<Student | null>(null);
-  const [schoolSettings, setSchoolSettings] = useState<any>(null);
+  const [schoolSettings, setSchoolSettings] = useState<SchoolSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export default function ParentTimetable() {
     );
   }
 
-  const rawTimings = (schoolSettings?.periodTimings || []).filter((t: any) => t.type !== 'break' && t.type !== 'lunch');
+  const rawTimings = (schoolSettings?.periodTimings || []).filter(t => t.type !== 'break' && t.type !== 'lunch');
   // Fall back to plain numbered periods when no custom timings are configured,
   // otherwise the grid renders no period columns even when slots exist.
   const periodsPerDay = schoolSettings?.periodsPerDay || 8;
@@ -74,8 +74,10 @@ export default function ParentTimetable() {
     ? rawTimings
     : Array.from({ length: periodsPerDay }, (_, i) => ({ period: i + 1, start: '', end: '' }));
 
-  const satDate = React.useMemo(() => getUpcomingSaturday(new Date()), []);
-  const satDateKey = React.useMemo(() => toDateKey(satDate), [satDate]);
+  // Plain consts (not useMemo): these are cheap pure calls, and hooks may not
+  // appear after the early returns above (react-hooks/rules-of-hooks).
+  const satDate = getUpcomingSaturday(new Date());
+  const satDateKey = toDateKey(satDate);
   const effectiveSat = getEffectiveSaturdaySlots(timetable, satDateKey);
   const effectiveSatByPeriod = new Map(effectiveSat.slots.map(s => [s.period, s]));
 
@@ -93,7 +95,7 @@ export default function ParentTimetable() {
           <thead>
             <tr style={{ background: 'var(--color-surface-variant)' }}>
               <th style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border)', borderRight: '1px solid var(--color-border)', width: 100 }}>Day</th>
-              {periods.map((p: any) => (
+              {periods.map(p => (
                 <th key={p.period} style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>Period {p.period}</div>
                   {p.start && p.end && (
@@ -120,9 +122,9 @@ export default function ParentTimetable() {
                     </div>
                   )}
                 </td>
-                {periods.map((p: any) => {
+                {periods.map(p => {
                   const slot = isSaturday
-                    ? effectiveSatByPeriod.get(p.period)
+                    ? (p.period !== undefined ? effectiveSatByPeriod.get(p.period) : undefined)
                     : timetable.slots?.find(s => s.day === day && s.period === p.period);
                   return (
                     <td key={`${day}-${p.period}`} style={{ padding: 'var(--space-3)', borderTop: satBorderTop, borderBottom: '1px solid var(--color-border)', textAlign: 'center', background: satBg }}>

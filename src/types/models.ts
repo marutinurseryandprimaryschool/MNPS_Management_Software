@@ -87,10 +87,15 @@ export interface User extends Timestamps {
   email: string;
   phone: string;
   photo: string;
-  status: 'active' | 'inactive' | 'archived';
+  // 'pending' = staff invite doc awaiting first login (auto-ID doc, consumed
+  // by the AuthContext migration batch on first sign-in).
+  status: 'active' | 'inactive' | 'archived' | 'pending';
   // Set on parent users when the phone+DOB login matches a student record.
   // This is the most reliable parent ↔ child link in the current system.
   studentId?: string;
+  // Set by AuthContext on staff first-login migration: the pending doc id the
+  // UID-keyed doc was migrated from (firestore.rules verifies it via get()).
+  migratedFrom?: string;
 }
 
 // ── Subject ──
@@ -335,7 +340,7 @@ export interface Assignment extends Timestamps {
   teacherName?: string;
 }
 
-// ── Fee Category ──
+// ── Fee Category (legacy shape, kept for old documents) ──
 export interface FeeCategory {
   name: string;
   amount: number;
@@ -347,17 +352,47 @@ export interface FeeInstallment {
   amount: number;
 }
 
+// ── Fee Structure components (runtime shape) ──
+export interface TermFee {
+  name: string;   // e.g. "Term 1"
+  amount: number;
+}
+
+export interface AdditionalFee {
+  name: string;   // e.g. "Books", "Uniform"
+  amount: number;
+}
+
 // ── Fee Structure ──
+// Trued to the actual runtime document shape written by AdminFees.
+// Legacy fields (`type`, `categories`) are optional for old documents.
 export interface FeeStructure {
   id: string;
-  type: FeeType.STRUCTURE;
   classId: string;
   academicYear: string;
-  categories: FeeCategory[];
+  terms: TermFee[];
+  // Annual extracurricular (ECA) amount, split into monthly slices by the
+  // fee engine across `ecaMonths` (default: June–March).
+  extracurricular: number;
+  // Capitalized month labels (e.g. "June") over which ECA is sliced.
+  ecaMonths?: string[];
+  // Term-name → due date key ('yyyy-MM-dd'). A term with no due date is
+  // NOT yet due (defaulters invisible until the date is set).
+  termDueDates?: Record<string, string>;
+  additionalFees: AdditionalFee[];
+  // Legacy flat bus fee — new pricing comes from the student's bus route.
+  busFee: number;
+  // Capitalized month labels for which bus fee is charged. May include any
+  // calendar month (e.g. April/May).
+  busMonths: string[];
+  includeBusFee?: boolean;
   totalAmount: number;
   createdAt: Date;
   // denormalized
   className?: string;
+  // legacy (pre-redesign documents)
+  type?: FeeType.STRUCTURE;
+  categories?: FeeCategory[];
 }
 
 // ── Fee Payment ──
@@ -372,10 +407,17 @@ export interface FeePayment {
   referenceNumber: string;
   receiptNumber: string;
   category: string;
-  receivedBy: string;
+  receivedBy?: string;
   paidAt: Date;
   academicYear: string;
   createdAt: Date;
+  // Local collection-date key ('yyyy-MM-dd'). Stored on every NEW payment;
+  // derived from `paidAt` for historical documents. ALL daily/monthly
+  // aggregation buckets on this key.
+  dateKey?: string;
+  // Soft delete — hard deletes are denied by rules. Every aggregate must
+  // exclude deleted payments.
+  deleted?: boolean;
   // denormalized
   className?: string;
   sectionId?: string;
@@ -386,6 +428,28 @@ export interface FeePayment {
   collectedBy?: string;
   collectedByName?: string;
   collectedByEmail?: string;
+}
+
+// ── Audit-trail history entry (feePayments/{id}/history, expenses/{id}/history) ──
+// Write-once entries paired with each mutation in the same writeBatch.
+export interface HistoryEntry<T> {
+  action: 'created' | 'edited' | 'deleted';
+  // Snapshot of the document BEFORE the mutation (null on create).
+  before: Partial<T> | null;
+  actorId: string;
+  actorName: string;
+  at: Date;
+}
+
+export type PaymentHistoryEntry = HistoryEntry<FeePayment>;
+export type ExpenseHistoryEntry = HistoryEntry<Expense>;
+
+// ── Accounts settings (accounts/settings doc — Principal only) ──
+export interface AccountsSettings {
+  openingCash: number;
+  openingBank: number;
+  // Date key ('yyyy-MM-dd'). Balances sum transactions STRICTLY AFTER this day.
+  openingAsOf: string;
 }
 
 // ── Notification ──
@@ -539,10 +603,11 @@ export interface AssessmentSession {
   subjects: { id: string; name: string }[];
   academicYear: string;
   createdBy: string;
-  createdAt: any;
+  // Firestore Timestamp at rest; normalized to Date by firestore-service reads.
+  createdAt: unknown;
 }
 
-// ── Expense (school-side outflows, addable by any staff) ──
+// ── Expense (school-side outflows — entry is Principal-only) ──
 export interface Expense extends Timestamps {
   id: string;
   amount: number;
@@ -553,6 +618,13 @@ export interface Expense extends Timestamps {
   addedByName: string;
   addedByRole: string;   // 'admin' | 'teacher' | 'principal' | 'correspondent'
   academicYear: string;
+  // Required on new entries; historical expenses without it default to 'cash'.
+  paymentMode?: 'cash' | 'bank';
+  // Local date key ('yyyy-MM-dd') for daily/monthly bucketing; derived from
+  // `date` for historical documents.
+  dateKey?: string;
+  // Soft delete — balance sheet excludes deleted expenses.
+  deleted?: boolean;
 }
 
 // ── Class Test ──
@@ -599,5 +671,6 @@ export interface WeeklyTest {
     W3?: number;
     W4?: number;
   };
-  updatedAt: any;
+  // Firestore Timestamp at rest; normalized to Date by firestore-service reads.
+  updatedAt: unknown;
 }

@@ -27,6 +27,23 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Error policy (docs/designs/principal-role-fees-accounts.md, Addendum issue 1):
+// map FirebaseError codes to user-visible messages; never fail silently.
+function mapFirestoreError(
+  err: unknown,
+  permissionDeniedMessage: string,
+  fallback: string
+): string {
+  const code = (err as { code?: string })?.code;
+  if (code === 'permission-denied') {
+    return `${permissionDeniedMessage} Please refresh the app and try again, or contact the school admin.`;
+  }
+  if (code === 'unavailable') {
+    return 'Connection lost — nothing was saved. Check your internet connection and retry.';
+  }
+  return fallback;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -73,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const usersSnap = await getDocs(query(collection(db, 'users'), limit(1)));
 
           if (usersSnap.empty) {
+            // First-user bootstrap: inert under the new Firestore rules — fresh installs seed the first admin via the Firebase console.
             // First user ever — make them admin
             const newUser: Record<string, unknown> = {
               id: firebaseUser.uid,
@@ -179,21 +197,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               updatedAt: serverTimestamp(),
             };
 
-            // Atomically swap the email-keyed pre-registration doc for a
-            // UID-keyed active doc. A batch ensures we never end up with both
-            // (the old duplicate-row bug in User Management).
+            // Atomically swap the pending pre-registration doc for a UID-keyed
+            // active doc. A batch ensures we never end up with both (the old
+            // duplicate-row bug in User Management). `migratedFrom` lets the
+            // Firestore rules verify the pending invite this doc came from.
             if (existingDoc.id !== firebaseUser.uid) {
               const batch = writeBatch(db);
-              batch.set(doc(db, 'users', firebaseUser.uid), mergedUser);
+              batch.set(doc(db, 'users', firebaseUser.uid), {
+                ...mergedUser,
+                migratedFrom: existingDoc.id,
+              });
               batch.delete(doc(db, 'users', existingDoc.id));
               try {
                 await batch.commit();
               } catch (batchErr) {
-                // If the batch fails (e.g. rules don't allow the delete on a
-                // stale deployment), fall back to a plain set so the user can
-                // still sign in — duplicate cleanup will happen next time.
-                console.warn('Batched user migration failed, falling back:', batchErr);
-                await setDoc(doc(db, 'users', firebaseUser.uid), mergedUser);
+                // Deliberately NO silent setDoc fallback (R1 security decision):
+                // a denied batch means the pending invite could not be verified
+                // by the rules. Surface it and sign the user out.
+                console.error('Staff first-login migration batch failed', {
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  pendingDocId: existingDoc.id,
+                  code: (batchErr as { code?: string })?.code,
+                  error: batchErr,
+                });
+                const batchCode = (batchErr as { code?: string })?.code;
+                await signOut(auth);
+                setState({
+                  user: null,
+                  role: null,
+                  loading: false,
+                  error: batchCode === 'unavailable'
+                    ? 'Connection lost — sign-in was not completed. Check your internet connection and try again.'
+                    : 'Your account invite couldn\'t be verified — contact the school admin.',
+                });
+                return;
               }
             } else {
               await setDoc(doc(db, 'users', firebaseUser.uid), mergedUser);
@@ -289,12 +327,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
 
         } catch (error) {
-          console.error('Error fetching user data:', error);
+          console.error('Error fetching user data:', {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            code: (error as { code?: string })?.code,
+            error,
+          });
           setState({
             user: null,
             role: null,
             loading: false,
-            error: 'An error occurred while signing in. Please try again.',
+            error: mapFirestoreError(
+              error,
+              'Sign-in was blocked by the school\'s security rules.',
+              'An error occurred while signing in. Please try again.'
+            ),
           });
         }
       } else {
@@ -391,9 +438,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     } catch (err: unknown) {
       console.error("Parent login error:", err);
+      // A failed login must never leave a success-looking local session behind.
+      localStorage.removeItem('parent_session');
       const error = err as { message?: string; code?: string };
-      let errorMsg = error.message || 'Parent login failed.';
-      
+      let errorMsg = mapFirestoreError(
+        err,
+        'Parent sign-in was blocked by the school\'s security rules.',
+        error.message || 'Parent login failed.'
+      );
+
       // Handle specifically the Firebase restricted operation error
       if (error.code === 'auth/admin-restricted-operation') {
         errorMsg = 'Anonymous Sign-In is disabled. Please enable "Anonymous" in your Firebase Console (Authentication > Sign-in method) to allow parent logins.';

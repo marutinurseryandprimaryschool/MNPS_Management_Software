@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing untyped Firestore data handling in this legacy screen; typed migration tracked separately. */
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
@@ -225,7 +226,7 @@ export default function TeacherClassOverview({ view = 'dashboard' }: TeacherClas
           <AlertTriangleIcon size={48} color="var(--color-text-tertiary)" style={{ marginBottom: 'var(--space-4)' }} />
           <h2 className="text-h2">No Classes Assigned</h2>
           <p className="text-body" style={{ color: 'var(--color-text-secondary)', marginTop: 'var(--space-2)' }}>
-            You haven't been assigned to any class or subject. 
+            You haven&apos;t been assigned to any class or subject.
             Please contact the administrator to get your assignments.
           </p>
         </div>

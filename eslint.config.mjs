@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Static-export build output (next.config distDir).
+    "dist/**",
+    // One-off CommonJS debug script, not part of the app.
+    "check-weekly.js",
   ]),
 ]);
 

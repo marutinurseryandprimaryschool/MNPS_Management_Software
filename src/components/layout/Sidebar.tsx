@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { UserRole } from '@/types/enums';
+import { hasCapability, isTeacherLike, type Capability } from '@/lib/permissions';
 import {
   DashboardIcon, GraduationCapIcon, UsersIcon, SchoolIcon,
   CalendarIcon, ClipboardCheckIcon, CreditCardIcon,
@@ -17,6 +18,8 @@ interface NavItem {
   icon: React.ReactNode;
   label: string;
   href: string;
+  /** When set, the item is shown only to roles holding this capability. */
+  capability?: Capability;
 }
 
 interface NavSection {
@@ -57,7 +60,16 @@ const ADMIN_SECTIONS: NavSection[] = [
       { id: 'fee-overview', icon: <CreditCardIcon size={20} />, label: 'Fee Overview', href: '/admin/fee-overview' },
       { id: 'fee-structures', icon: <SettingsIcon size={20} />, label: 'Fee Structures', href: '/admin/fee-structures' },
       { id: 'fee-payments', icon: <FileTextIcon size={20} />, label: 'Payments', href: '/admin/fee-payments' },
-      { id: 'expenses', icon: <FileTextIcon size={20} />, label: 'Expenses', href: '/admin/expenses' },
+      // The standalone Expenses page is retired (doc D9) — expense entry now
+      // lives inside the Principal section's Accounts module below.
+    ],
+  },
+  {
+    // Strictly Principal (viewAccounts) — doc D10/D13.
+    title: 'Principal',
+    items: [
+      { id: 'accounts', icon: <BarChartIcon size={20} />, label: 'Accounts', href: '/admin/accounts', capability: 'viewAccounts' },
+      { id: 'defaulters', icon: <FileTextIcon size={20} />, label: 'Defaulter Report', href: '/admin/defaulters', capability: 'viewAccounts' },
     ],
   },
   {
@@ -118,8 +130,8 @@ const TEACHER_SECTIONS: NavSection[] = [
   {
     title: 'Other',
     items: [
+      // Expense entry removed for teachers/staff in R1 (doc D9): principal-only.
       { id: 'collect-fees', icon: <CreditCardIcon size={20} />, label: 'Collect Fees', href: '/teacher/collect-fees' },
-      { id: 'expenses', icon: <FileTextIcon size={20} />, label: 'Expenses', href: '/teacher/expenses' },
     ],
   },
 ];
@@ -157,36 +169,27 @@ const ADMIN_NAV: NavItem[] = ADMIN_SECTIONS.flatMap(s => s.items);
 const TEACHER_NAV: NavItem[] = TEACHER_SECTIONS.flatMap(s => s.items);
 const PARENT_NAV: NavItem[] = PARENT_SECTIONS.flatMap(s => s.items);
 
+// Drop items whose capability the role lacks; drop sections left empty.
+function filterSectionsByCapability(sections: NavSection[], role: UserRole | null): NavSection[] {
+  return sections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => !item.capability || hasCapability(role, item.capability)),
+    }))
+    .filter(section => section.items.length > 0);
+}
+
 function getSectionsForRole(role: UserRole | null): NavSection[] {
-  switch (role) {
-    case UserRole.ADMIN:
-    case UserRole.PRINCIPAL:
-    case UserRole.CORRESPONDENT:
-      return ADMIN_SECTIONS;
-    case UserRole.TEACHER:
-    case UserRole.STAFF:
-      return TEACHER_SECTIONS;
-    case UserRole.PARENT:
-      return PARENT_SECTIONS;
-    default:
-      return ADMIN_SECTIONS;
-  }
+  if (isTeacherLike(role)) return TEACHER_SECTIONS;
+  if (role === UserRole.PARENT) return PARENT_SECTIONS;
+  // Admin-like roles (and the pre-auth null fallback, unchanged behavior).
+  return filterSectionsByCapability(ADMIN_SECTIONS, role);
 }
 
 function getNavForRole(role: UserRole | null): NavItem[] {
-  switch (role) {
-    case UserRole.ADMIN:
-    case UserRole.PRINCIPAL:
-    case UserRole.CORRESPONDENT:
-      return ADMIN_NAV;
-    case UserRole.TEACHER:
-    case UserRole.STAFF:
-      return TEACHER_NAV;
-    case UserRole.PARENT:
-      return PARENT_NAV;
-    default:
-      return ADMIN_NAV;
-  }
+  if (isTeacherLike(role)) return TEACHER_NAV;
+  if (role === UserRole.PARENT) return PARENT_NAV;
+  return getSectionsForRole(role).flatMap(s => s.items);
 }
 
 export default function Sidebar({

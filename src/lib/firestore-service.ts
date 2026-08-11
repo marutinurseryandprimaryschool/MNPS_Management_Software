@@ -324,8 +324,16 @@ export const AssignmentsService = {
 // ── Fee Structures ──
 
 export const FeeStructuresService = {
-  getAll: (year?: string) => 
+  getAll: (year?: string) =>
     year ? getAll<DocumentData>('feeStructures', where('academicYear', '==', year)) : getAll<DocumentData>('feeStructures'),
+  // Scoped fetch for class-level views (teacher fee register) — avoids
+  // loading every structure school-wide.
+  getByClass: async (classId: string, year?: string) => {
+    const constraints = [where('classId', '==', classId)];
+    if (year) constraints.push(where('academicYear', '==', year));
+    const results = await getAll<DocumentData>('feeStructures', ...constraints);
+    return results[0] || null;
+  },
   getById: (id: string) => getById<DocumentData>('feeStructures', id),
   create: (data: Record<string, unknown>) => create('feeStructures', data),
   update: (id: string, data: Record<string, unknown>) => update('feeStructures', id, data),
@@ -342,6 +350,13 @@ export const FeePaymentsService = {
   update: (id: string, data: Record<string, unknown>) => update('feePayments', id, data),
   getByStudent: (studentId: string, year?: string) => {
     const constraints = [where('studentId', '==', studentId)];
+    if (year) constraints.push(where('academicYear', '==', year));
+    return getAll<DocumentData>('feePayments', ...constraints);
+  },
+  // Scoped fetch for class-level views (teacher fee register) — avoids
+  // loading every payment school-wide.
+  getByClass: (classId: string, year?: string) => {
+    const constraints = [where('classId', '==', classId)];
     if (year) constraints.push(where('academicYear', '==', year));
     return getAll<DocumentData>('feePayments', ...constraints);
   },
@@ -557,10 +572,15 @@ export const BusRoutesService = {
 // -- Master Reset Utility --
 export const MasterResetService = {
   wipeAllData: async () => {
+    // NOTE: 'feePayments' is intentionally NOT wiped here. Firestore rules
+    // forbid deleting payment records from the client (delete: if false —
+    // audit trail, docs/designs/principal-role-fees-accounts.md). If payments
+    // ever truly need clearing, do it from the Firebase console, which
+    // bypasses rules.
     const collectionsToWipe = [
-      'students', 'classes', 'attendance', 'marks', 'feePayments', 
-      'feeStructures', 'teacherAssignments', 'timetables', 
-      'assessmentSessions', 'weeklyTests', 'coScholasticRecords', 
+      'students', 'classes', 'attendance', 'marks',
+      'feeStructures', 'teacherAssignments', 'timetables',
+      'assessmentSessions', 'weeklyTests', 'coScholasticRecords',
       'academicCalendars'
     ];
 

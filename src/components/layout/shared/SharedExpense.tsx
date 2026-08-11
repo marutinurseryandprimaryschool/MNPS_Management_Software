@@ -1,7 +1,20 @@
 'use client';
 
+/* ============================================
+   DEPRECATED — no longer routed anywhere.
+   ============================================
+   The standalone Expenses page was retired by the Principal-role redesign
+   (docs/designs/principal-role-fees-accounts.md, D9): expense entry is now
+   Principal-only and lives inside the Accounts module
+   (src/components/layout/principal/PrincipalAccounts.tsx), with writeBatch
+   audit history and soft deletes. This component is kept only for reference
+   and is intentionally NOT reachable from DashboardLayout/Sidebar/BottomNav.
+   Do not re-route it: it writes expenses without the paired history entry,
+   hard-deletes (denied by firestore.rules), and lacks paymentMode/dateKey. */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ExpensesService } from '@/lib/firestore-service';
+import { hasCapability } from '@/lib/permissions';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import Input from '@/components/ui/Input';
@@ -122,7 +135,7 @@ export default function SharedExpense() {
             <Badge variant="primary">{school?.academicYear}</Badge>
           </div>
           <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-            Record and review outflows — anyone on staff can add.
+            Record and review outflows — only the Principal can add expenses.
           </p>
         </div>
         <Button variant="primary" onClick={() => setAddOpen(true)} icon={<PlusIcon size={18} color="white" />}>
@@ -193,7 +206,7 @@ export default function SharedExpense() {
                   <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{e.addedByName} <span style={{ opacity: 0.6 }}>· {e.addedByRole}</span></td>
                   <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>₹{Number(e.amount).toLocaleString()}</td>
                   <td style={{ ...td, textAlign: 'right' }}>
-                    {(e.addedById === user?.id || role === 'admin' || role === 'principal' || role === 'correspondent') && (
+                    {(e.addedById === user?.id || hasCapability(role, 'addExpenses')) && (
                       <button
                         onClick={() => handleDelete(e.id)}
                         style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error)', display: 'flex' }}

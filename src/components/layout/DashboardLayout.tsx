@@ -3,13 +3,15 @@
 import React, { useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '@/types/enums';
+import { hasCapability, isAdminLike, isTeacherLike } from '@/lib/permissions';
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import Header from '@/components/layout/Header';
 import {
   UsersIcon, SchoolIcon, ClipboardCheckIcon,
   BarChartIcon, SettingsIcon, FileTextIcon,
-  BookOpenIcon, CreditCardIcon, CalendarIcon
+  BookOpenIcon, CreditCardIcon, CalendarIcon,
+  GraduationCapIcon
 } from '@/components/ui/Icons';
 import styles from './DashboardLayout.module.css';
 
@@ -23,12 +25,13 @@ import AdminAttendance from './admin/AdminAttendance';
 import AdminExams from './admin/AdminExams';
 import AdminExamResults from './admin/AdminExamResults';
 import SharedReportCard from './shared/SharedReportCard';
-import SharedExpense from './shared/SharedExpense';
 import TeacherCoScholastic from './teacher/TeacherCoScholastic';
 import AdminFees from './admin/AdminFees';
 import AdminReports from './admin/AdminReports';
 import AdminSettings from './admin/AdminSettings';
 import AdminBus from './admin/AdminBus';
+import PrincipalAccounts from './principal/PrincipalAccounts';
+import PrincipalDefaulters from './principal/PrincipalDefaulters';
 
 import TeacherDashboard from './teacher/TeacherDashboard';
 import TeacherTimetable from './teacher/TeacherTimetable';
@@ -70,7 +73,8 @@ const PAGE_TITLES: Record<string, string> = {
   'major-exams': 'Major Exams',
   'weekly-tests': 'Weekly Tests',
   'class-tests': 'Class Tests',
-  'expenses': 'Expenses',
+  'accounts': 'Accounts',
+  'defaulters': 'Defaulter Report',
   'exam-results': 'Class Exam Results',
   'exams': 'Academic Calendar',
   'report-card': 'Student Report Card',
@@ -99,10 +103,8 @@ export default function DashboardLayout() {
     setActivePage(id);
   }, []);
 
-  const isAdminLike = role === UserRole.ADMIN || role === UserRole.PRINCIPAL || role === UserRole.CORRESPONDENT;
-
   const renderPage = () => {
-    if (isAdminLike) {
+    if (isAdminLike(role)) {
       switch (activePage) {
         case 'dashboard': return <AdminDashboard onNavigate={handleNavigate} />;
         case 'students': return <AdminStudents />;
@@ -118,7 +120,15 @@ export default function DashboardLayout() {
         case 'fee-overview': return <AdminFees subPage="overview" />;
         case 'fee-structures': return <AdminFees subPage="structures" />;
         case 'fee-payments': return <AdminFees subPage="payments" />;
-        case 'expenses': return <SharedExpense />;
+        // The standalone Expenses page is retired (doc D9): expense entry now
+        // lives inside the Principal Accounts module. Both principal pages are
+        // strictly viewAccounts-gated (principal only).
+        case 'accounts': return hasCapability(role, 'viewAccounts')
+          ? <PrincipalAccounts />
+          : <AdminDashboard onNavigate={handleNavigate} />;
+        case 'defaulters': return hasCapability(role, 'viewAccounts')
+          ? <PrincipalDefaulters />
+          : <AdminDashboard onNavigate={handleNavigate} />;
         case 'reports': return <AdminReports />;
         case 'settings': return <AdminSettings />;
         case 'bus-students': return <AdminBus subPage="students" />;
@@ -127,7 +137,7 @@ export default function DashboardLayout() {
       }
     }
     
-    if (role === UserRole.TEACHER || role === UserRole.STAFF) {
+    if (isTeacherLike(role)) {
       switch (activePage) {
         case 'dashboard': return <TeacherDashboard onNavigate={handleNavigate} />;
         case 'timetable': return <TeacherTimetable />;
@@ -139,7 +149,8 @@ export default function DashboardLayout() {
         case 'report-card': return <SharedReportCard view="teacher" />;
         case 'assignments': return <TeacherAssignments />;
         case 'collect-fees': return <TeacherFees />;
-        case 'expenses': return <SharedExpense />;
+        // 'expenses' route removed for teacher/staff — expense entry is
+        // principal-only (doc D9); rules deny the write regardless.
         case 'my-class': return <TeacherClassOverview view="dashboard" />;
         case 'class-students': return <TeacherClassOverview view="students" />;
         case 'class-attendance': return <TeacherClassOverview view="attendance" />;
@@ -197,17 +208,23 @@ function MoreMenu({
   onNavigate: (id: string) => void;
   onClose: () => void;
 }) {
-  const isAdminLike = role === UserRole.ADMIN || role === UserRole.PRINCIPAL || role === UserRole.CORRESPONDENT;
-  
-  const allItems: { id: string; icon: React.ReactNode; label: string }[] = isAdminLike
+  const allItems: { id: string; icon: React.ReactNode; label: string }[] = isAdminLike(role)
     ? [
+        // Principal bottom tabs swap Students/Timetable for Accounts/Defaulters,
+        // so those two move into More for viewAccounts holders.
+        ...(hasCapability(role, 'viewAccounts')
+          ? [
+              { id: 'students', icon: <GraduationCapIcon size={22} />, label: 'Students' },
+              { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
+            ]
+          : []),
         { id: 'teachers', icon: <UsersIcon size={22} />, label: 'Teachers' },
         { id: 'classes', icon: <SchoolIcon size={22} />, label: 'Classes' },
         { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attendance' },
         { id: 'reports', icon: <BarChartIcon size={22} />, label: 'Reports' },
         { id: 'settings', icon: <SettingsIcon size={22} />, label: 'Settings' },
       ]
-    : (role === UserRole.TEACHER || role === UserRole.STAFF)
+    : isTeacherLike(role)
     ? [
         { id: 'class-tests', icon: <FileTextIcon size={22} />, label: 'Class Tests' },
         { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assignments' },

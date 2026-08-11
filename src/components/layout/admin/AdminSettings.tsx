@@ -14,14 +14,17 @@ import {
   MarksService, 
   AssessmentService, 
   WeeklyTestsService, 
-  TimetablesService, 
+  TimetablesService,
   ClassesService,
+  BusRoutesService,
   MasterResetService
 } from '@/lib/firestore-service';
+import { computeStudentFeeSummary, type BusRouteInput } from '@/lib/fee-utils';
 import { db } from '@/lib/firebase';
 import { serverTimestamp } from 'firebase/firestore';
 import { UserRole } from '@/types/enums';
-import type { Scholarship } from '@/types/models';
+import { hasCapability } from '@/lib/permissions';
+import type { Class, FeePayment, FeeStructure, Scholarship, Student } from '@/types/models';
 import Input from '@/components/ui/Input';
 import { Select } from '@/components/ui/Input';
 import { SunIcon, PlusIcon, UserIcon, EditIcon, TrashIcon } from '@/components/ui/Icons';
@@ -42,7 +45,7 @@ interface UserData {
 
 export default function AdminSettings() {
   const { school, updateSchool } = useSchool();
-  const { isAdmin } = useAuth();
+  const { isAdmin, role } = useAuth();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
   const [users, setUsers] = useState<UserData[]>([]);
@@ -52,7 +55,7 @@ export default function AdminSettings() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showRolloverModal, setShowRolloverModal] = useState(false);
   const [isRollingOver, setIsRollingOver] = useState(false);
-  const [classes, setClasses] = useState<any[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
 
   const [rolloverForm, setRolloverForm] = useState({
     targetYear: '',
@@ -62,7 +65,9 @@ export default function AdminSettings() {
 
   useEffect(() => {
     if (school?.academicYear) {
-      ClassesService.getAll(school.academicYear).then(setClasses).catch(console.error);
+      ClassesService.getAll(school.academicYear)
+        .then(r => setClasses(r as unknown as Class[]))
+        .catch(console.error);
     }
   }, [school?.academicYear]);
 
@@ -366,13 +371,16 @@ export default function AdminSettings() {
       let feeStructuresCreated = 0;
 
       // 1. Get all data ONLY for current year - avoid fetching past academic data
-      const allStudents = await StudentsService.getAll(school.academicYear) as any[];
-      const allPayments = await FeePaymentsService.getAll(school.academicYear) as any[];
-      const allStructures = await FeeStructuresService.getAll(school.academicYear) as any[];
-      const currentClasses = await ClassesService.getAll(school.academicYear) as any[];
+      const allStudents = await StudentsService.getAll(school.academicYear) as unknown as Student[];
+      const allPayments = await FeePaymentsService.getAll(school.academicYear) as unknown as FeePayment[];
+      const allStructures = await FeeStructuresService.getAll(school.academicYear) as unknown as FeeStructure[];
+      const currentClasses = await ClassesService.getAll(school.academicYear) as unknown as Class[];
+      // Bus routes + scholarships feed the fee engine's carryover computation.
+      const busRoutes = await BusRoutesService.getAll() as unknown as BusRouteInput[];
+      const scholarships = school.settings?.scholarships || [];
 
       // 2. Check if target classes exist - AVOID DUPLICATION
-      const targetClasses = await ClassesService.getAll(rolloverForm.targetYear) as any[];
+      const targetClasses = await ClassesService.getAll(rolloverForm.targetYear) as unknown as Class[];
       const classIdMap: Record<string, string> = {}; // sourceClassId -> targetClassId
 
       if (targetClasses.length === 0) {
@@ -413,7 +421,7 @@ export default function AdminSettings() {
         // Clone Fee Structure for the target class if it doesn't exist (AVOID DUPLICATION)
         const structure = allStructures.find(fs => fs.classId === sourceId);
         if (structure) {
-          const targetStructures = await FeeStructuresService.getAll(rolloverForm.targetYear) as any[];
+          const targetStructures = await FeeStructuresService.getAll(rolloverForm.targetYear) as unknown as FeeStructure[];
           const targetStructure = targetStructures.find(fs => fs.classId === finalTargetId);
           
           if (!targetStructure) {
@@ -431,14 +439,22 @@ export default function AdminSettings() {
 
         // Promote each student
         for (const student of classStudents) {
-          let pendingBalance = 0;
-          if (rolloverForm.carryBalance && structure) {
-            // Calculate pending balance from current year only
+          // Engine-computed carryover (docs/designs/principal-role-fees-accounts.md,
+          // Addendum issue 10): scholarship- and bus-aware TOTAL unpaid for the
+          // year, net of Previous Balance payments. The engine's schedule already
+          // includes the student's existing previousBalance bucket, so the summary
+          // REPLACES the old balance (no double-count) instead of adding on top.
+          let carriedBalance = Number(student.previousBalance) || 0;
+          if (rolloverForm.carryBalance) {
             const studentPayments = allPayments.filter(p => p.studentId === student.id);
-            const totalPaid = studentPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-            
-            const totalExpected = structure.totalAmount || 0;
-            pendingBalance = Math.max(0, totalExpected - totalPaid);
+            const summary = computeStudentFeeSummary({
+              structure: structure || null,
+              student,
+              busRoutes,
+              scholarships,
+              academicYear: school.academicYear,
+            }, studentPayments);
+            carriedBalance = summary.totalPending;
           }
 
           // Resolve the target section by matching the student's current section NAME
@@ -461,11 +477,11 @@ export default function AdminSettings() {
             // Use matched section ID; fall back to old sectionId only if no match
             sectionId: matchedSection?.id || student.sectionId,
             sectionName: matchedSection?.name || student.sectionName || '',
-            previousBalance: (student.previousBalance || 0) + pendingBalance,
+            previousBalance: carriedBalance,
           });
 
           totalPromoted++;
-          if (pendingBalance > 0) totalBalanceCarried += pendingBalance;
+          if (carriedBalance > 0) totalBalanceCarried += carriedBalance;
         }
       }
 
@@ -497,7 +513,7 @@ export default function AdminSettings() {
   };
 
   const handleMasterReset = async () => {
-    const confirmation1 = window.confirm("⚠️ DANGER: This will permanently DELETE all students, classes, attendance, marks, and fees. This cannot be undone. Are you absolutely sure?");
+    const confirmation1 = window.confirm("⚠️ DANGER: This will permanently DELETE all students, classes, attendance, marks, and fee structures. Fee payment records are NOT wiped by this tool — clear the feePayments collection from the Firebase console if needed. This cannot be undone. Are you absolutely sure?");
     if (!confirmation1) return;
     
     const confirmation2 = window.prompt("To confirm deletion, type 'RESET' in all caps:");
@@ -695,6 +711,9 @@ export default function AdminSettings() {
 
             <div className="divider" style={{ margin: 'var(--space-6) 0' }} />
             
+            {/* Bulk-updates feePayments — principal-only under the new money rules
+                (docs/designs/principal-role-fees-accounts.md, Addendum issue 4). */}
+            {hasCapability(role, 'editFeePayments') ? (
             <div style={{ padding: 'var(--space-4)', background: 'var(--color-primary-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-100)' }}>
               <h4 className="text-h4" style={{ color: 'var(--color-primary-700)', marginBottom: 'var(--space-2)' }}>System Migration Tool</h4>
               <p className="text-caption" style={{ color: 'var(--color-primary-600)', marginBottom: 'var(--space-4)' }}>
@@ -758,6 +777,14 @@ export default function AdminSettings() {
                 Initialize {school.academicYear} Data
               </Button>
             </div>
+            ) : (
+            <div style={{ padding: 'var(--space-4)', background: 'var(--color-surface-variant)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+              <h4 className="text-h4" style={{ marginBottom: 'var(--space-2)' }}>System Migration Tool</h4>
+              <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
+                This tool bulk-updates fee payment records, so it is available to the Principal only. Please ask the Principal to run it.
+              </p>
+            </div>
+            )}
 
             <div className="divider" style={{ margin: 'var(--space-6) 0' }} />
             
@@ -789,7 +816,8 @@ export default function AdminSettings() {
             <div style={{ padding: 'var(--space-4)', background: '#FEF2F2', borderRadius: 'var(--radius-md)', border: '1px solid #FECACA' }}>
               <h4 className="text-h4" style={{ color: '#991B1B', marginBottom: 'var(--space-2)' }}>Master System Reset</h4>
               <p className="text-caption" style={{ color: '#B91C1C', marginBottom: 'var(--space-4)' }}>
-                Completely wipe all students, classes, and academic records to start fresh from {school.academicYear}. <strong>User accounts and teacher profiles will not be deleted.</strong>
+                Completely wipe all students, classes, and academic records to start fresh from {school.academicYear}. <strong>User accounts and teacher profiles will not be deleted.</strong>{' '}
+                <strong>Fee payment records are not wiped by this tool</strong> — they must be cleared from the Firebase console (Firestore &rarr; feePayments collection) if you truly need to remove them.
               </p>
               <Button 
                 variant="primary" 
@@ -925,7 +953,7 @@ export default function AdminSettings() {
                 <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>No classes configured yet.</p>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 'var(--space-2)', maxHeight: '40vh', overflowY: 'auto', padding: 2 }}>
-                  {classes.map((c: any) => (
+                  {classes.map(c => (
                     <div key={c.id}>
                       <label className="text-caption" style={{ display: 'block', marginBottom: 2, color: 'var(--color-text-secondary)' }}>{c.name}</label>
                       <input

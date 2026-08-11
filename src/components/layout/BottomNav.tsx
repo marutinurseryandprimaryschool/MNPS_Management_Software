@@ -3,6 +3,7 @@
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '@/types/enums';
+import { hasCapability, isAdminLike, isTeacherLike } from '@/lib/permissions';
 import {
   DashboardIcon, GraduationCapIcon, CalendarIcon,
   CreditCardIcon, ClipboardCheckIcon,
@@ -24,6 +25,16 @@ const ADMIN_TABS: TabItem[] = [
   { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
 ];
 
+// Principal (viewAccounts): Accounts + Defaulters replace Students/Timetable,
+// which move into the More menu (doc D10/D13).
+const PRINCIPAL_TABS: TabItem[] = [
+  { id: 'dashboard', icon: <DashboardIcon size={22} />, label: 'Home' },
+  { id: 'fees', icon: <CreditCardIcon size={22} />, label: 'Fees' },
+  { id: 'accounts', icon: <BarChartIcon size={22} />, label: 'Accounts' },
+  { id: 'defaulters', icon: <FileTextIcon size={22} />, label: 'Dues' },
+  { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
+];
+
 const TEACHER_TABS: TabItem[] = [
   { id: 'dashboard', icon: <DashboardIcon size={22} />, label: 'Home' },
   { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attend.' },
@@ -41,19 +52,12 @@ const PARENT_TABS: TabItem[] = [
 ];
 
 function getTabsForRole(role: UserRole | null): TabItem[] {
-  switch (role) {
-    case UserRole.ADMIN:
-    case UserRole.PRINCIPAL:
-    case UserRole.CORRESPONDENT:
-      return ADMIN_TABS;
-    case UserRole.TEACHER:
-    case UserRole.STAFF:
-      return TEACHER_TABS;
-    case UserRole.PARENT:
-      return PARENT_TABS;
-    default:
-      return ADMIN_TABS;
+  if (isAdminLike(role)) {
+    return hasCapability(role, 'viewAccounts') ? PRINCIPAL_TABS : ADMIN_TABS;
   }
+  if (isTeacherLike(role)) return TEACHER_TABS;
+  if (role === UserRole.PARENT) return PARENT_TABS;
+  return ADMIN_TABS;
 }
 
 export default function BottomNav({

@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing untyped Firestore data handling in this legacy screen; typed migration tracked separately. */
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
@@ -56,7 +57,7 @@ export default function TeacherFormative() {
         AssessmentService.getAll(school.academicYear),
         MarksService.getAll(school.academicYear),
       ]);
-      let tData = await TeachersService.getByUserId(user.uid || user.id, school.academicYear) || await TeachersService.getByEmail(user.email || '', school.academicYear);
+      const tData = await TeachersService.getByUserId(user.uid || user.id, school.academicYear) || await TeachersService.getByEmail(user.email || '', school.academicYear);
       setTeacher(tData);
       setStudents(studentsData as unknown as Student[]);
       setAllMarks(marksData);

@@ -103,7 +103,7 @@ export default function AdminExams() {
 
         <div style={{ marginTop: '32px', padding: '16px', background: 'var(--color-primary-50)', borderRadius: '12px', border: '1px solid var(--color-primary-100)' }}>
           <p className="text-body-sm" style={{ margin: 0, color: 'var(--color-primary-800)', fontWeight: 500 }}>
-            <strong>Note:</strong> These dates are used by teachers in the "Co-Scholastic" section to automatically sync student attendance counts. Ensure the dates are accurate before the report card generation period.
+            <strong>Note:</strong> These dates are used by teachers in the &quot;Co-Scholastic&quot; section to automatically sync student attendance counts. Ensure the dates are accurate before the report card generation period.
           </p>
         </div>
       </div>
