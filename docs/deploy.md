@@ -90,3 +90,27 @@ Run the per-role passes in [qa-checklist.md](qa-checklist.md). Minimum smoke:
   treat as temporary, fix forward fast.
 - Data needs no rollback: schema additions are optional fields; old docs are
   read compatibly.
+
+## Staging deployment (Vercel) — 2026-08-17
+
+The reviewed build is live for sign-off testing at **https://mnps-staging.vercel.app**
+(Vercel project `mnps-staging`, school account `marutinurseryandprimaryschool`).
+The school's existing site is untouched; production Firestore rules are still the
+TRANSITION set (new collections principal-gated, old access preserved), so the
+old app and the staging app both work.
+
+Redeploy staging after changes:
+```bash
+npm run build
+npx vercel deploy --prod --yes dist    # from the repo root
+```
+
+Firebase Auth authorized domains now include `mnps-staging.vercel.app` and
+`mnps-management-software.vercel.app` (required for Google sign-in to work off
+localhost).
+
+**Cutover checklist (when the school signs off):**
+1. Point the school at the chosen Vercel URL (or promote/alias a custom domain).
+2. Deploy the strict rules from the repo: `npx firebase deploy --only firestore:rules`
+   (the repo's `firestore.rules` is the FULL lockdown version, not the transition set).
+3. Tell staff to refresh; stale tabs get permission errors with a refresh hint until reloaded.
