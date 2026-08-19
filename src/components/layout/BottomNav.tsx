@@ -3,10 +3,10 @@
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '@/types/enums';
-import { hasCapability, isAdminLike, isTeacherLike } from '@/lib/permissions';
+import { hasCapability, isAdminLike, isTeacherLike, type Capability } from '@/lib/permissions';
 import {
   DashboardIcon, GraduationCapIcon, CalendarIcon,
-  CreditCardIcon, ClipboardCheckIcon,
+  CreditCardIcon, ClipboardCheckIcon, SchoolIcon,
   GridIcon, FileTextIcon, BookOpenIcon, BarChartIcon
 } from '@/components/ui/Icons';
 import styles from './BottomNav.module.css';
@@ -15,30 +15,34 @@ interface TabItem {
   id: string;
   icon: React.ReactNode;
   label: string;
+  /** When set, the tab is dropped for roles lacking this capability. */
+  capability?: Capability;
 }
 
+// Admin / Correspondent hold no Principal Register capability, and the legacy
+// fee module is retired — so they get no money tab at all.
 const ADMIN_TABS: TabItem[] = [
   { id: 'dashboard', icon: <DashboardIcon size={22} />, label: 'Home' },
   { id: 'students', icon: <GraduationCapIcon size={22} />, label: 'Students' },
   { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
-  { id: 'fees', icon: <CreditCardIcon size={22} />, label: 'Fees' },
+  { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attend.' },
   { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
 ];
 
-// Principal (viewAccounts): Accounts + Defaulters replace Students/Timetable,
-// which move into the More menu (doc D10/D13).
+// Principal: the register pages she actually types into. Teacher-wise and the
+// Activity Log live in the More menu (five tabs is the hard ceiling here).
 const PRINCIPAL_TABS: TabItem[] = [
   { id: 'dashboard', icon: <DashboardIcon size={22} />, label: 'Home' },
-  { id: 'fees', icon: <CreditCardIcon size={22} />, label: 'Fees' },
-  { id: 'accounts', icon: <BarChartIcon size={22} />, label: 'Accounts' },
-  { id: 'defaulters', icon: <FileTextIcon size={22} />, label: 'Dues' },
+  { id: 'principal-note', icon: <FileTextIcon size={22} />, label: 'Note', capability: 'editPrincipalRegister' },
+  { id: 'principal-classes', icon: <SchoolIcon size={22} />, label: 'Classes', capability: 'editPrincipalRegister' },
+  { id: 'principal-accounts', icon: <BarChartIcon size={22} />, label: 'Accounts', capability: 'viewPrincipalAccounts' },
   { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
 ];
 
 const TEACHER_TABS: TabItem[] = [
   { id: 'dashboard', icon: <DashboardIcon size={22} />, label: 'Home' },
   { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attend.' },
-  { id: 'collect-fees', icon: <CreditCardIcon size={22} />, label: 'Fees' },
+  { id: 'principal-teachers', icon: <CreditCardIcon size={22} />, label: 'Fees', capability: 'viewPrincipalRegister' },
   { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assign.' },
   { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
 ];
@@ -51,11 +55,19 @@ const PARENT_TABS: TabItem[] = [
   { id: 'more', icon: <GridIcon size={22} />, label: 'More' },
 ];
 
+/** Drop tabs whose capability the role lacks — a tab must never dead-end. */
+const allowed = (tabs: TabItem[], role: UserRole | null): TabItem[] =>
+  tabs.filter(tab => !tab.capability || hasCapability(role, tab.capability));
+
 function getTabsForRole(role: UserRole | null): TabItem[] {
   if (isAdminLike(role)) {
-    return hasCapability(role, 'viewAccounts') ? PRINCIPAL_TABS : ADMIN_TABS;
+    // Only the Principal holds viewPrincipalAccounts, so only she gets the
+    // register tab bar; admin/correspondent keep the plain admin one.
+    return hasCapability(role, 'viewPrincipalAccounts')
+      ? allowed(PRINCIPAL_TABS, role)
+      : ADMIN_TABS;
   }
-  if (isTeacherLike(role)) return TEACHER_TABS;
+  if (isTeacherLike(role)) return allowed(TEACHER_TABS, role);
   if (role === UserRole.PARENT) return PARENT_TABS;
   return ADMIN_TABS;
 }

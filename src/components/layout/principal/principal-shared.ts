@@ -1,216 +1,147 @@
+'use client';
+
 /* ============================================
-   CampusOS — Principal module shared helpers
+   CampusOS — Principal Register shared helpers
    ============================================
-   Error policy (docs/designs/principal-role-fees-accounts.md, Addendum
-   issue 1), offline guard, and the batched Firestore writes (mutation +
-   history entry in ONE writeBatch) used by the Principal Accounts screens.
+   Display helpers, the responsive breakpoint hook and the error-message
+   mapping shared by every Principal Register screen.
+
+   This module holds NO Firestore plumbing: `src/lib/principal-service.ts` is
+   the only writer, and it already returns user-safe messages via
+   `PrincipalServiceError`. Nothing here touches the legacy
+   feePayments / feeStructures / expenses collections.
 */
 
+import { useMemo, useSyncExternalStore, type CSSProperties } from 'react';
 import { FirebaseError } from 'firebase/app';
-import { db } from '@/lib/firebase';
-import {
-  collection, doc, getDoc, getDocs, serverTimestamp, setDoc, writeBatch,
-} from 'firebase/firestore';
-import type { AccountsSettings, Expense } from '@/types/models';
+import { useAuth } from '@/context/AuthContext';
+import { PrincipalServiceError } from '@/lib/principal-service';
+import { toDateKey } from '@/lib/fee-utils';
+import type {
+  PrincipalActor, PrincipalFeeHead, PrincipalPaymentMode,
+} from '@/types/principal';
 
-/* ── Error policy ─────────────────────────────────────────────────────── */
+/* ── Responsive ───────────────────────────────────────────────────────── */
 
-/** Thrown by `assertOnline` so writes are surfaced as NOT saved (no silent queue). */
-export class OfflineError extends Error {
-  constructor(subject: string) {
-    super(`Connection lost — ${subject} was NOT saved. Check your internet and retry.`);
-    this.name = 'OfflineError';
-  }
-}
+/**
+ * Sharmi uses BOTH a phone and a PC. Below this width the register screens
+ * MUST NOT render a horizontally scrolling spreadsheet — they switch to a
+ * card-per-record layout instead.
+ */
+export const MOBILE_BREAKPOINT = 900;
 
-/** Rejects up-front when the browser is offline (writeBatch would queue silently). */
-export function assertOnline(subject: string): void {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    throw new OfflineError(subject);
-  }
+const NARROW_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
+
+function subscribeToWidth(onChange: () => void): () => void {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+  const media = window.matchMedia(NARROW_QUERY);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
 }
 
 /**
- * Maps a Firestore write failure to the user-visible message required by the
- * error policy. `action` reads as "Only the Principal can {action}";
- * `subject` reads as "{subject} was NOT saved".
+ * True on phone-width viewports. The SINGLE responsive switch for every
+ * Principal Register screen — note, registers and accounts alike. Nothing
+ * else may hard-code a width, or the two layouts drift apart.
+ *
+ * useSyncExternalStore keeps the static export honest: it hydrates with the
+ * desktop snapshot and switches in the same commit, so there is no hydration
+ * mismatch and no first-paint flash.
  */
-export function describeWriteError(e: unknown, action: string, subject: string): string {
-  if (e instanceof OfflineError) return e.message;
-  if (e instanceof FirebaseError) {
-    if (e.code === 'permission-denied') {
-      return `Only the Principal can ${action}. If your role changed recently, refresh the app and sign in again.`;
-    }
-    if (e.code === 'unavailable') {
-      return `Connection lost — ${subject} was NOT saved. Check your internet and retry.`;
-    }
-  }
-  return `Something went wrong — ${subject} was NOT saved. Please retry.`;
+export function useIsMobile(): boolean {
+  return useSyncExternalStore(
+    subscribeToWidth,
+    () => (typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia(NARROW_QUERY).matches
+      : false),
+    () => false,
+  );
 }
 
-/** Read-failure variant (dashboard loads, history views). */
-export function describeReadError(e: unknown, subject: string): string {
-  if (e instanceof FirebaseError) {
-    if (e.code === 'permission-denied') {
-      return `Only the Principal can view ${subject}. If your role changed recently, refresh the app.`;
+/** Alias used by the register screens, which read better as "narrow". */
+export const useIsNarrow = useIsMobile;
+
+/* ── Actor ────────────────────────────────────────────────────────────── */
+
+/**
+ * Who is making the change — stamped on the doc AND on its audit entry.
+ * Memoized so it is safe in a dependency array.
+ */
+export function usePrincipalActor(): PrincipalActor {
+  const { user, role } = useAuth();
+  return useMemo<PrincipalActor>(() => ({
+    uid: user?.uid || user?.id || '',
+    name: user?.name || 'Unknown user',
+    role: role || 'unknown',
+  }), [user?.uid, user?.id, user?.name, role]);
+}
+
+/* ── Error messages ───────────────────────────────────────────────────── */
+
+/**
+ * User-visible text for a failed mutation. `PrincipalServiceError` already
+ * carries a role-specific, user-safe message (permission-denied → "… refresh
+ * the app"; unavailable → "Connection lost — NOT saved, retry"), so it is
+ * passed straight through. Never returns an empty string, never swallows.
+ */
+export function principalWriteError(error: unknown, fallback: string): string {
+  if (error instanceof PrincipalServiceError) return error.message;
+  if (error instanceof FirebaseError) {
+    if (error.code === 'permission-denied') {
+      return `${fallback} If your role changed recently, refresh the app.`;
     }
-    if (e.code === 'unavailable') {
+    if (error.code === 'unavailable') {
+      return 'Connection lost — NOT saved. Check your internet and retry.';
+    }
+  }
+  return 'Something went wrong — the change was NOT saved. Please retry.';
+}
+
+/** Read-failure variant. `subject` reads as "could not load {subject}". */
+export function describeReadError(error: unknown, subject: string): string {
+  if (error instanceof PrincipalServiceError) return error.message;
+  if (error instanceof FirebaseError) {
+    if (error.code === 'permission-denied') {
+      return `You do not have access to ${subject}. If your role changed recently, refresh the app.`;
+    }
+    if (error.code === 'unavailable') {
       return `Connection lost — could not load ${subject}. Check your internet and retry.`;
     }
   }
   return `Could not load ${subject}. Please retry.`;
 }
 
-/* ── Firestore write plumbing ─────────────────────────────────────────── */
-
-export interface Actor {
-  id: string;
-  name: string;
-  role: string;
-}
-
-/** Strips undefined values (Firestore rejects them) without mutating input. */
-function sanitize(data: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value === undefined) continue;
-    out[key] = value;
-  }
-  return out;
-}
-
-export interface NewExpenseInput {
-  amount: number;
-  category: string;
-  description: string;
-  /** Local date key 'yyyy-MM-dd' (doubles as the legacy `date` field). */
-  dateKey: string;
-  paymentMode: 'cash' | 'bank';
-  academicYear: string;
-}
-
 /**
- * Creates an expense + its write-once 'created' history entry in ONE
- * writeBatch (atomic — audit parity with payments, Addendum issue 5).
+ * Message for a write that COMMITTED but whose refetch failed. It must never
+ * read as "not saved" — the user would retry and double-book the money.
  */
-export async function createExpenseWithHistory(input: NewExpenseInput, actor: Actor): Promise<string> {
-  assertOnline('The expense');
-  const batch = writeBatch(db);
-  const expenseRef = doc(collection(db, 'expenses'));
-  batch.set(expenseRef, {
-    amount: input.amount,
-    category: input.category,
-    description: input.description,
-    date: input.dateKey,
-    dateKey: input.dateKey,
-    paymentMode: input.paymentMode,
-    addedById: actor.id,
-    addedByName: actor.name,
-    addedByRole: actor.role,
-    academicYear: input.academicYear,
-    deleted: false,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  const historyRef = doc(collection(db, 'expenses', expenseRef.id, 'history'));
-  batch.set(historyRef, {
-    action: 'created',
-    before: null,
-    actorId: actor.id,
-    actorName: actor.name,
-    at: serverTimestamp(),
-  });
-  await batch.commit();
-  return expenseRef.id;
+export function refreshFailedMessage(committedWhat: string): string {
+  return `${committedWhat} — but the screen could not refresh. Reload the page to see the latest figures.`;
 }
 
-/**
- * Soft-deletes an expense (`deleted: true`) + a 'deleted' history entry with
- * the before-snapshot, atomically. Hard deletes are denied by rules.
- */
-export async function softDeleteExpenseWithHistory(expense: Expense, actor: Actor): Promise<void> {
-  assertOnline('The deletion');
-  const batch = writeBatch(db);
-  const expenseRef = doc(db, 'expenses', expense.id);
-  batch.update(expenseRef, { deleted: true, updatedAt: serverTimestamp() });
-  const historyRef = doc(collection(db, 'expenses', expense.id, 'history'));
-  const before = sanitize({ ...expense } as unknown as Record<string, unknown>);
-  delete before.id; // the snapshot lives under the doc — no need to repeat the id
-  batch.set(historyRef, {
-    action: 'deleted',
-    before,
-    actorId: actor.id,
-    actorName: actor.name,
-    at: serverTimestamp(),
-  });
-  await batch.commit();
-}
+/* ── Labels ───────────────────────────────────────────────────────────── */
 
-export interface ExpenseHistoryRow {
-  id: string;
-  action: string;
-  actorName: string;
-  at: Date | null;
-  before: Record<string, unknown> | null;
-}
-
-/** Loads an expense's audit history (write-once entries), oldest first. */
-export async function fetchExpenseHistory(expenseId: string): Promise<ExpenseHistoryRow[]> {
-  const snap = await getDocs(collection(db, 'expenses', expenseId, 'history'));
-  const rows = snap.docs.map(d => {
-    const data = d.data();
-    const at = data.at && typeof data.at.toDate === 'function' ? data.at.toDate() : null;
-    return {
-      id: d.id,
-      action: String(data.action || ''),
-      actorName: String(data.actorName || ''),
-      at,
-      before: (data.before as Record<string, unknown>) ?? null,
-    };
-  });
-  return rows.sort((a, b) => (a.at?.getTime() ?? 0) - (b.at?.getTime() ?? 0));
-}
-
-/* ── accounts/settings (opening balances) ─────────────────────────────── */
-
-const ACCOUNTS_SETTINGS_REF = () => doc(db, 'accounts', 'settings');
-
-export async function loadAccountsSettings(): Promise<AccountsSettings | null> {
-  const snap = await getDoc(ACCOUNTS_SETTINGS_REF());
-  if (!snap.exists()) return null;
-  const data = snap.data();
-  return {
-    openingCash: Number(data.openingCash) || 0,
-    openingBank: Number(data.openingBank) || 0,
-    openingAsOf: typeof data.openingAsOf === 'string' ? data.openingAsOf : '',
-  };
-}
-
-export async function saveAccountsSettings(settings: AccountsSettings): Promise<void> {
-  assertOnline('Opening balances');
-  await setDoc(ACCOUNTS_SETTINGS_REF(), {
-    openingCash: settings.openingCash,
-    openingBank: settings.openingBank,
-    openingAsOf: settings.openingAsOf,
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
-}
-
-/* ── Display helpers ──────────────────────────────────────────────────── */
-
-export const PAYMENT_MODE_LABELS: Record<string, string> = {
-  cash: 'Cash',
-  upi: 'UPI',
-  cheque: 'Cheque',
-  bank_transfer: 'Bank Transfer',
-};
-
-export const EXPENSE_MODE_LABELS: Record<string, string> = {
+export const PRINCIPAL_MODE_LABELS: Record<PrincipalPaymentMode, string> = {
   cash: 'Cash',
   bank: 'Bank',
 };
 
-export const EXPENSE_CATEGORIES = [
+export const PRINCIPAL_HEAD_LABELS: Record<PrincipalFeeHead, string> = {
+  school: 'School fee',
+  eca: 'ECA fee',
+  van: 'Van fee',
+  other: 'Other',
+};
+
+/** Anything not explicitly 'bank' is cash — same rule as the ledger engine. */
+export const modeLabel = (mode: string | null | undefined): string =>
+  (mode === 'bank' ? PRINCIPAL_MODE_LABELS.bank : PRINCIPAL_MODE_LABELS.cash);
+
+export const headLabel = (head: string | null | undefined): string =>
+  PRINCIPAL_HEAD_LABELS[(head || 'other') as PrincipalFeeHead] ?? 'Other';
+
+/** Seeded into `principalSettings.expenseCategories` on first save. */
+export const DEFAULT_EXPENSE_CATEGORIES: readonly string[] = [
   'Stationery',
   'Utilities',
   'Repairs & Maintenance',
@@ -221,3 +152,104 @@ export const EXPENSE_CATEGORIES = [
   'Food',
   'Other',
 ];
+
+/* ── Formatting ───────────────────────────────────────────────────────── */
+
+export const formatINR = (amount: number | null | undefined): string =>
+  `₹${Math.round(Number(amount) || 0).toLocaleString('en-IN')}`;
+
+/** Negative amounts render with a true minus sign, not a hyphen. */
+export function formatSignedINR(amount: number | null | undefined): string {
+  const value = Math.round(Number(amount) || 0);
+  return `${value < 0 ? '−' : ''}${formatINR(Math.abs(value))}`;
+}
+
+export const todayKey = (): string => toDateKey(new Date());
+
+export const currentMonthKey = (): string => todayKey().slice(0, 7);
+
+/** 'yyyy-MM' → 'August 2026'. Falls back to the raw key if unparseable. */
+export function monthKeyLabel(monthKey: string): string {
+  const [year, month] = (monthKey || '').split('-').map(Number);
+  if (!year || !month) return monthKey || '';
+  return new Date(year, month - 1, 1)
+    .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+/** 'yyyy-MM-dd' → 'Wed, 19 Aug 2026'. Falls back to the raw key. */
+export function dateKeyLabel(dateKey: string): string {
+  const [year, month, day] = (dateKey || '').split('-').map(Number);
+  if (!year || !month || !day) return dateKey || '';
+  return new Date(year, month - 1, day).toLocaleDateString('en-IN', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
+/* ── Shared inline styles (house style: inline objects + CSS vars) ────── */
+
+export const surfaceCardStyle: CSSProperties = {
+  background: 'var(--color-surface)',
+  borderRadius: 'var(--radius-lg)',
+  border: '1px solid var(--color-border)',
+  padding: 'var(--space-4)',
+};
+
+export const panelStyle: CSSProperties = {
+  background: 'var(--color-surface)',
+  borderRadius: 'var(--radius-md)',
+  border: '1px solid var(--color-border)',
+  overflow: 'hidden',
+};
+
+export const panelHeaderStyle: CSSProperties = {
+  padding: 'var(--space-3) var(--space-4)',
+  borderBottom: '1px solid var(--color-border)',
+  background: 'var(--color-surface-variant)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 'var(--space-2)',
+  flexWrap: 'wrap',
+};
+
+export const thStyle: CSSProperties = {
+  textAlign: 'left',
+  padding: '10px 16px',
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  color: 'var(--color-text-tertiary)',
+  borderBottom: '1px solid var(--color-border)',
+  whiteSpace: 'nowrap',
+};
+
+export const tdStyle: CSSProperties = { padding: '10px 16px' };
+
+export const iconButtonStyle: CSSProperties = {
+  padding: 6,
+  background: 'none',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-sm)',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  color: 'var(--color-text-secondary)',
+};
+
+export const pickerStyle: CSSProperties = {
+  padding: '8px 12px',
+  borderRadius: 'var(--radius-md)',
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-surface)',
+  color: 'var(--color-text-primary)',
+  fontSize: '0.9rem',
+  outline: 'none',
+  minWidth: 150,
+};
+
+/* Money colours — income green, expense red, used consistently everywhere. */
+export const INCOME_COLOR = '#059669';
+export const EXPENSE_COLOR = '#DC2626';
+export const INCOME_BAR = '#10B981';
+export const EXPENSE_BAR = '#EF4444';

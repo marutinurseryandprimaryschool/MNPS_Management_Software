@@ -9,7 +9,7 @@ import {
   DashboardIcon, GraduationCapIcon, UsersIcon, SchoolIcon,
   CalendarIcon, ClipboardCheckIcon, CreditCardIcon,
   BarChartIcon, SettingsIcon, FileTextIcon,
-  BookOpenIcon, ChevronLeftIcon
+  BookOpenIcon, ChevronLeftIcon, ClockIcon
 } from '@/components/ui/Icons';
 import styles from './Sidebar.module.css';
 
@@ -54,22 +54,20 @@ const ADMIN_SECTIONS: NavSection[] = [
     ],
   },
 
+  // The legacy fee module (Fee Overview / Fee Structures / Payments / Accounts /
+  // Defaulter Report) is RETIRED from navigation. Its components still exist on
+  // disk but are unrouted — the Principal Register below replaces them and
+  // shares none of their data.
   {
-    title: 'Finance',
+    // Every item is capability-gated, so admin/correspondent (who hold none of
+    // the register capabilities) see this whole section disappear.
+    title: 'PRINCIPAL REGISTER',
     items: [
-      { id: 'fee-overview', icon: <CreditCardIcon size={20} />, label: 'Fee Overview', href: '/admin/fee-overview' },
-      { id: 'fee-structures', icon: <SettingsIcon size={20} />, label: 'Fee Structures', href: '/admin/fee-structures' },
-      { id: 'fee-payments', icon: <FileTextIcon size={20} />, label: 'Payments', href: '/admin/fee-payments' },
-      // The standalone Expenses page is retired (doc D9) — expense entry now
-      // lives inside the Principal section's Accounts module below.
-    ],
-  },
-  {
-    // Strictly Principal (viewAccounts) — doc D10/D13.
-    title: 'Principal',
-    items: [
-      { id: 'accounts', icon: <BarChartIcon size={20} />, label: 'Accounts', href: '/admin/accounts', capability: 'viewAccounts' },
-      { id: 'defaulters', icon: <FileTextIcon size={20} />, label: 'Defaulter Report', href: '/admin/defaulters', capability: 'viewAccounts' },
+      { id: 'principal-note', icon: <FileTextIcon size={20} />, label: 'Fees Note', href: '/admin/principal-note', capability: 'editPrincipalRegister' },
+      { id: 'principal-classes', icon: <SchoolIcon size={20} />, label: 'Class-wise', href: '/admin/principal-classes', capability: 'editPrincipalRegister' },
+      { id: 'principal-teachers', icon: <UsersIcon size={20} />, label: 'Teacher-wise', href: '/admin/principal-teachers', capability: 'viewPrincipalRegister' },
+      { id: 'principal-accounts', icon: <BarChartIcon size={20} />, label: 'Income & Expense', href: '/admin/principal-accounts', capability: 'viewPrincipalAccounts' },
+      { id: 'principal-activity', icon: <ClockIcon size={20} />, label: 'Activity Log', href: '/admin/principal-activity', capability: 'viewPrincipalAccounts' },
     ],
   },
   {
@@ -128,11 +126,11 @@ const TEACHER_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'Other',
+    // The teacher's single window into the Principal Register: the rows Sharmi
+    // assigned to them. The legacy 'collect-fees' page is retired (unrouted).
+    title: 'FEES',
     items: [
-      // Expense entry removed for teachers/staff in R1 (doc D9): principal-only.
-      // Read-only register (doc scope item 6) — teachers no longer collect fees.
-      { id: 'collect-fees', icon: <CreditCardIcon size={20} />, label: 'Fee Register', href: '/teacher/collect-fees' },
+      { id: 'principal-teachers', icon: <CreditCardIcon size={20} />, label: "My Students' Fees", href: '/teacher/principal-teachers', capability: 'viewPrincipalRegister' },
     ],
   },
 ];
@@ -181,8 +179,10 @@ function filterSectionsByCapability(sections: NavSection[], role: UserRole | nul
 }
 
 function getSectionsForRole(role: UserRole | null): NavSection[] {
-  if (isTeacherLike(role)) return TEACHER_SECTIONS;
-  if (role === UserRole.PARENT) return PARENT_SECTIONS;
+  // Capability filtering applies to EVERY shell now — the teacher shell also
+  // carries a gated item ("My Students' Fees").
+  if (isTeacherLike(role)) return filterSectionsByCapability(TEACHER_SECTIONS, role);
+  if (role === UserRole.PARENT) return filterSectionsByCapability(PARENT_SECTIONS, role);
   // Admin-like roles (and the pre-auth null fallback, unchanged behavior).
   return filterSectionsByCapability(ADMIN_SECTIONS, role);
 }
@@ -190,7 +190,9 @@ function getSectionsForRole(role: UserRole | null): NavSection[] {
 /* Principal focus mode: a small toggle that trims the sidebar to the money
    pages only. Preference persists per browser. */
 const PRINCIPAL_FOCUS_IDS = new Set([
-  'dashboard', 'fee-overview', 'fee-structures', 'fee-payments', 'accounts', 'defaulters',
+  'dashboard',
+  'principal-note', 'principal-classes', 'principal-teachers',
+  'principal-accounts', 'principal-activity',
 ]);
 const FOCUS_MODE_STORAGE_KEY = 'mnps_principal_view_mode';
 
@@ -209,9 +211,9 @@ function focusSections(sections: NavSection[]): NavSection[] {
     .filter(s => s.items.length > 0);
 }
 
+/** Flat, capability-filtered nav for a role (every shell goes through the
+    same filter, so a hidden item can never leak into a flat list). */
 function getNavForRole(role: UserRole | null): NavItem[] {
-  if (isTeacherLike(role)) return TEACHER_NAV;
-  if (role === UserRole.PARENT) return PARENT_NAV;
   return getSectionsForRole(role).flatMap(s => s.items);
 }
 
@@ -235,8 +237,9 @@ export default function Sidebar({
     onCollapsedChange?.(newCollapsed);
   };
 
-  // The focus toggle is only offered to the Principal (viewAccounts holder).
-  const canFocus = hasCapability(role, 'viewAccounts');
+  // The focus toggle is only offered to the Principal (the sole holder of
+  // viewPrincipalAccounts) — it trims the sidebar to the register pages.
+  const canFocus = hasCapability(role, 'viewPrincipalAccounts');
   const handleFocusToggle = () => {
     const next = !focusMode;
     setFocusMode(next);

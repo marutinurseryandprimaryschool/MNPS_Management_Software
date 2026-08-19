@@ -3,8 +3,8 @@
  *
  * Runs against the Firestore emulator via `npm run test:rules`
  * (firebase emulators:exec --only firestore "vitest run tests/rules").
- * The emulator needs Java; on machines without it this suite fails fast
- * at initializeTestEnvironment with a connection error.
+ * The emulator needs Java; on machines without it this suite reports as
+ * SKIPPED (with a loud banner) instead of failing the whole test run.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,15 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+
+import { isEmulatorReachable, warnEmulatorMissing } from './emulator';
+
+/* The emulator needs Java. When it is not listening the suite is SKIPPED with a
+   loud banner rather than failing, so `vitest run tests/` still reports the
+   unit-test result honestly. `npm run test:rules` boots it and runs for real. */
+const EMULATOR_UP = await isEmulatorReachable();
+if (!EMULATOR_UP) warnEmulatorMissing('security (R1 lockdown firestore.rules)');
+const describeRules = EMULATOR_UP ? describe : describe.skip;
 
 const PROJECT_ID = 'demo-mnps-rules';
 const RULES_PATH = fileURLToPath(new URL('../../firestore.rules', import.meta.url));
@@ -66,6 +75,7 @@ const asTeacher = () =>
 const asAnonParent = (uid = PARENT_UID) => testEnv.authenticatedContext(uid).firestore();
 
 beforeAll(async () => {
+  if (!EMULATOR_UP) return;
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
     firestore: {
@@ -82,11 +92,12 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  if (!EMULATOR_UP) return;
   await testEnv.clearFirestore();
   await seedBaseUsers();
 });
 
-describe('users: self-create', () => {
+describeRules('users: self-create', () => {
   it('DENIES anonymous self-create with role principal', async () => {
     const db = asAnonParent('anon-attacker');
     await assertFails(db.doc('users/anon-attacker').set({ role: 'principal', status: 'active' }));
@@ -103,7 +114,7 @@ describe('users: self-create', () => {
   });
 });
 
-describe('users: self-update pinned fields', () => {
+describeRules('users: self-update pinned fields', () => {
   it('DENIES self-update that changes role', async () => {
     const db = asAnonParent();
     await assertFails(db.doc(`users/${PARENT_UID}`).update({ role: 'admin' }));
@@ -120,7 +131,7 @@ describe('users: self-update pinned fields', () => {
   });
 });
 
-describe('users: staff first-login migration', () => {
+describeRules('users: staff first-login migration', () => {
   const migrationDoc = (overrides: Record<string, unknown> = {}) => ({
     role: 'teacher',
     status: 'active',
@@ -195,7 +206,7 @@ describe('users: staff first-login migration', () => {
   });
 });
 
-describe('users: management of other users', () => {
+describeRules('users: management of other users', () => {
   it('ALLOWS admin to update another user doc', async () => {
     await assertSucceeds(asAdmin().doc(`users/${TEACHER_UID}`).update({ displayName: 'Renamed' }));
   });
@@ -205,7 +216,7 @@ describe('users: management of other users', () => {
   });
 });
 
-describe('feePayments', () => {
+describeRules('feePayments', () => {
   const payment = {
     studentId: 'stu-1',
     amount: 1000,
@@ -255,7 +266,7 @@ describe('feePayments', () => {
   });
 });
 
-describe('feePayments history (write-once audit trail)', () => {
+describeRules('feePayments history (write-once audit trail)', () => {
   const historyEntry = {
     action: 'edit',
     actor: PRINCIPAL_UID,
@@ -293,7 +304,7 @@ describe('feePayments history (write-once audit trail)', () => {
   });
 });
 
-describe('expenses', () => {
+describeRules('expenses', () => {
   const expense = {
     description: 'Chalk boxes',
     amount: 250,
@@ -327,7 +338,7 @@ describe('expenses', () => {
   });
 });
 
-describe('accounts', () => {
+describeRules('accounts', () => {
   const settings = { openingCash: 5000, openingBank: 20000, openingAsOf: '2026-06-01' };
 
   it('DENIES teacher reading accounts', async () => {

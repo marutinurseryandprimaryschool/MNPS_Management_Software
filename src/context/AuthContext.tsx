@@ -359,10 +359,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginAsParent = useCallback(async (code: string, dob: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
+    // Tracks the throwaway session this attempt opened, so a WRONG code does
+    // not leave a signed-in credential behind. Reading /students needs a
+    // session, so the sign-in genuinely has to happen before the match — but
+    // it is revoked the moment the match fails, and firestore.rules grants an
+    // uid with no users/{uid} doc nothing in the Principal Register anyway.
+    let openedSession = false;
     try {
       // 0. Sign in anonymously if not already authenticated to satisfy security rules
       if (!auth.currentUser) {
         await signInAnonymously(auth);
+        openedSession = true;
       }
 
       // 1. Get all students to find a match
@@ -398,12 +405,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!match) {
+        // Hand the credential back before failing: an unmatched visitor must
+        // not walk away holding a signed-in session.
+        if (openedSession) {
+          openedSession = false;
+          await signOut(auth).catch(signOutError => {
+            console.error('Could not revoke the anonymous session after a failed parent login:', signOutError);
+          });
+        }
         throw new Error('Invalid Login Code or Date of Birth. Please check and try again.');
       }
 
-      // 3. Sign in anonymously to satisfy Firestore rules
-      const cred = await signInAnonymously(auth);
-      const anonUid = cred.user.uid;
+      // 3. The anonymous session opened at step 0 IS the parent session — a
+      //    second signInAnonymously would just return the same uid.
+      const anonUid = auth.currentUser?.uid;
+      if (!anonUid) {
+        throw new Error('Parent sign-in could not be completed. Please try again.');
+      }
 
       // 4. Create/Update user session in Firestore for this anonymous ID
       const parentUser: User = {
@@ -438,8 +456,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     } catch (err: unknown) {
       console.error("Parent login error:", err);
-      // A failed login must never leave a success-looking local session behind.
+      // A failed login must never leave a success-looking local session behind —
+      // neither in localStorage nor as a live Firebase credential.
       localStorage.removeItem('parent_session');
+      if (openedSession) {
+        await signOut(auth).catch(signOutError => {
+          console.error('Could not revoke the anonymous session after a failed parent login:', signOutError);
+        });
+      }
       const error = err as { message?: string; code?: string };
       let errorMsg = mapFirestoreError(
         err,

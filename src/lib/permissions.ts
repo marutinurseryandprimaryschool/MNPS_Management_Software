@@ -20,7 +20,17 @@ export type Capability =
   | 'viewAccounts'       // Principal Accounts module (balance sheet, defaulters)
   | 'addExpenses'
   | 'manageUsers'
-  | 'manageSettings';
+  | 'manageSettings'
+  /* ── Principal Register (standalone module; see src/types/principal.ts) ──
+     These gate Sharmi's fees note / class-wise / teacher-wise registers and
+     the income-vs-expense book. They are SEPARATE from the legacy fee caps
+     above on purpose: the two modules share no data and no permissions. */
+  | 'viewPrincipalRegister'   // see the register (principal + teachers)
+  | 'editPrincipalRegister'   // add/edit/remove register rows (principal)
+  | 'editOwnStudentFees'      // edit fee amounts for OWN assigned students (teacher)
+  | 'recordPrincipalPayments' // record a receipt against a register row
+  | 'viewPrincipalAccounts'   // the daily/monthly income-vs-expense book (principal)
+  | 'manageTeacherAssignment';// assign students to responsible teachers (principal)
 
 const ADMIN_LIKE_CAPS: readonly Capability[] = [
   'manageFeeStructures',
@@ -39,10 +49,27 @@ const ROLE_CAPABILITIES: Record<UserRole, readonly Capability[]> = {
     'editFeePayments',
     'viewAccounts',
     'addExpenses',
+    'viewPrincipalRegister',
+    'editPrincipalRegister',
+    'recordPrincipalPayments',
+    'viewPrincipalAccounts',
+    'manageTeacherAssignment',
   ],
   [UserRole.CORRESPONDENT]: [...ADMIN_LIKE_CAPS, 'manageUsers', 'manageSettings'],
-  [UserRole.TEACHER]: ['viewOwnClassFees'],
-  [UserRole.STAFF]: ['viewOwnClassFees'],
+  // Teachers see and work ONLY the register rows assigned to them; the row
+  // filter is client-side, the real boundary is ownsRegisterRow in firestore.rules.
+  [UserRole.TEACHER]: [
+    'viewOwnClassFees',
+    'viewPrincipalRegister',
+    'editOwnStudentFees',
+    'recordPrincipalPayments',
+  ],
+  [UserRole.STAFF]: [
+    'viewOwnClassFees',
+    'viewPrincipalRegister',
+    'editOwnStudentFees',
+    'recordPrincipalPayments',
+  ],
   [UserRole.PARENT]: [],
 };
 

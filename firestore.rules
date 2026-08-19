@@ -228,5 +228,187 @@ service cloud.firestore {
     match /accounts/{docId} {
       allow read, write: if isPrincipal();
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Principal Register (standalone module — shares NO data with the
+    // legacy feePayments/feeStructures/expenses collections above).
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Helper: the caller's role as RECORDED IN users/{uid}, or '' when they
+    // have no user doc at all.
+    //
+    // The '' case is the one that matters. AuthContext.loginAsParent signs in
+    // anonymously BEFORE it matches the login code against a student (it has
+    // to — reading /students needs a session), and anyone holding the public
+    // web config can call signInAnonymously directly. Such a session satisfies
+    // isAuthenticated() while owning no user doc, so every rule below tests a
+    // ROLE rather than mere authentication.
+    function principalUserRole() {
+      return (isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')
+        : '';
+    }
+
+    // Teacher / staff — the two roles that share the teacher shell and may be
+    // made responsible for a register row.
+    function isTeacherLike() {
+      return principalUserRole() in ['teacher', 'staff'];
+    }
+
+    // Who may read the register at all. Admin and correspondent are OUT: this
+    // module is the Principal's, and they hold no register capability in
+    // src/lib/permissions.ts either.
+    function readsPrincipalModule() {
+      return principalUserRole() in ['principal', 'teacher', 'staff', 'parent'];
+    }
+
+    // Helper: the signed-in user is the teacher responsible for this register row.
+    // teacherUid is optional/nullable on RegisterRow, so read it defensively —
+    // a bare resource.data.teacherUid would error (and deny) on unassigned rows.
+    function ownsRegisterRow(rowData) {
+      return isAuthenticated() && rowData.get('teacherUid', '') == request.auth.uid;
+    }
+
+    // Helper: the signed-in user owns the principalRegister row identified by rowId.
+    // exists() guards the get(): a get() on a missing doc errors out and denies.
+    function ownsRegisterRowId(rowId) {
+      return isAuthenticated()
+        && rowId is string
+        && rowId.size() > 0
+        && exists(/databases/$(database)/documents/principalRegister/$(rowId))
+        && ownsRegisterRow(get(/databases/$(database)/documents/principalRegister/$(rowId)).data);
+    }
+
+    // Helper: a teacher edit may only move the fee fields. Identity fields
+    // (name, className, sectionName, rollNo), the assignment field (teacherUid /
+    // teacherName), academicYear and the soft-delete flag stay principal-only.
+    function touchesOnlyTeacherFeeFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'schoolFee', 'ecaAnnual', 'ecaMonths', 'vanMonthly', 'vanMonths',
+        'isScholarship', 'notes', 'updatedAt'
+      ]);
+    }
+
+    // Helper: the value fields of a NEW payment, pinned.
+    //
+    // Attribution is pinned to the SIGNED-IN uid, not to whatever the client
+    // put in the document — without this a teacher can record cash as the
+    // Principal and every "entered by" column downstream believes it. The
+    // amount/head/mode checks stop a negative or nonsense receipt from
+    // reaching the engine, `deleted == false` stops a payment being born
+    // already hidden, and academicYear is forced to the row's own year so a
+    // receipt cannot be parked in a year the Principal never opens.
+    function pinnedNewPayment() {
+      return request.resource.data.keys().hasAll([
+          'rowId', 'academicYear', 'enteredByUid', 'amount', 'head', 'mode',
+          'dateKey', 'deleted', 'createdAt'
+        ])
+        && request.resource.data.enteredByUid == request.auth.uid
+        && request.resource.data.deleted == false
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.head in ['school', 'eca', 'van', 'other']
+        && request.resource.data.mode in ['cash', 'bank']
+        && request.resource.data.dateKey is string
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.rowId is string
+        && request.resource.data.rowId.size() > 0
+        && exists(/databases/$(database)/documents/principalRegister/$(request.resource.data.rowId))
+        && request.resource.data.academicYear
+             == get(/databases/$(database)/documents/principalRegister/$(request.resource.data.rowId)).data.academicYear;
+    }
+
+    // Principal Register rows — the "fees note" Sharmi types into.
+    //
+    // TRUST BOUNDARY (documented, and narrower than it used to be): reads are
+    // open to every ROLE that has business here — principal, teacher/staff and
+    // parent — and to nobody else. A session with no users/{uid} doc (the
+    // anonymous one the parent login holds before its code is matched, or one
+    // minted straight from the public web config) reads nothing.
+    //
+    // Residual, accepted risk: a signed-in parent still sees the whole
+    // collection, because their view of "my child's row" is matched CLIENT-SIDE
+    // by name+class (ParentFees.findRowForChild) and no studentId links a row
+    // to a family. Closing that needs studentId on RegisterRow plus a
+    // studentId-constrained parent query — a data migration, not a rule edit.
+    //
+    // No hard delete: rows are soft-deleted (deleted: true) via update, so the
+    // audit trail and every payment that references the row stay intact.
+    match /principalRegister/{rowId} {
+      allow read: if readsPrincipalModule();
+      allow create: if isPrincipal();
+      allow update: if isPrincipal()
+        || (isTeacherLike() && ownsRegisterRow(resource.data) && touchesOnlyTeacherFeeFields());
+      allow delete: if false;
+    }
+
+    // Principal payments — the Principal records anything; a teacher may only
+    // CREATE a receipt against a row assigned to them, with their own uid on it.
+    //
+    // Editing and soft-deleting a payment are principal-only, matching
+    // src/lib/permissions.ts (teachers hold recordPrincipalPayments and nothing
+    // else) and principal-service's own denial text. A teacher branch here
+    // would have let the responsible teacher zero out, re-date, re-bank or
+    // soft-delete money the Principal herself recorded.
+    // Reads follow the same role boundary as the register above.
+    // No hard delete: soft delete is an update setting deleted:true.
+    match /principalPayments/{paymentId} {
+      allow read: if readsPrincipalModule();
+      allow create: if (isPrincipal()
+                        || (isTeacherLike()
+                            && ownsRegisterRowId(request.resource.data.get('rowId', ''))))
+        && pinnedNewPayment();
+      allow update: if isPrincipal();
+      allow delete: if false;
+    }
+
+    // Principal expenses — strictly Principal, reads included (expense detail
+    // is not teacher-visible). No hard delete: soft delete via update.
+    match /principalExpenses/{expenseId} {
+      allow read: if isPrincipal();
+      allow create, update: if isPrincipal();
+      allow delete: if false;
+    }
+
+    // Principal audit log — write-once, and the module's whole integrity story.
+    //
+    // A teacher must be able to create an entry (their own edit is logged in
+    // the SAME writeBatch as the change, so an unwritable entry would fail the
+    // mutation atomically) — but ONLY as themselves:
+    //   - actorUid is pinned to the signed-in uid and actorRole to the role
+    //     users/{uid} actually records, so nothing can be attributed to Sharmi
+    //     by someone else;
+    //   - `at` must be the SERVER's clock. A caller-set `at` far in the future
+    //     would push every genuine entry off the end of
+    //     PrincipalAuditService.listRecent (orderBy at desc, limit 100) — a
+    //     permanent eviction, because entries can never be deleted;
+    //   - action/target are closed vocabularies, targetId must be present.
+    // Reads stay principal-only; nothing may ever update or delete an entry.
+    match /principalAudit/{entryId} {
+      allow read: if isPrincipal();
+      allow create: if (isPrincipal() || isTeacherLike())
+        && request.resource.data.keys().hasAll([
+             'actorUid', 'actorRole', 'at', 'action', 'target', 'targetId', 'summary'
+           ])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorRole == principalUserRole()
+        && request.resource.data.at == request.time
+        && request.resource.data.action in ['create', 'update', 'delete']
+        && request.resource.data.target in ['register', 'payment', 'expense', 'settings']
+        && request.resource.data.targetId is string
+        && request.resource.data.targetId.size() > 0
+        && request.resource.data.summary is string;
+      allow update, delete: if false;
+    }
+
+    // Principal settings (opening balances, default month sets, expense
+    // categories). Readable by every role in the module because the register
+    // screens need defaultEcaMonths/defaultVanMonths to render; principal-only
+    // writes.
+    match /principalSettings/{docId} {
+      allow read: if readsPrincipalModule();
+      allow write: if isPrincipal();
+    }
   }
 }

@@ -1,4 +1,5 @@
 'use client';
+// DEPRECATED — unrouted. Replaced by the teacher-wise Principal Register ('principal-teachers'); see src/components/layout/principal/registers/.
 /* ============================================
    Teacher Fee Register — READ-ONLY
    ============================================

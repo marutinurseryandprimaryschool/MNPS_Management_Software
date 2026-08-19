@@ -1,4 +1,5 @@
 'use client';
+// DEPRECATED — unrouted. Replaced by the Principal Register ('principal-note' / 'principal-classes' / 'principal-teachers'); see src/components/layout/principal/.
 /* Fee management screen — capability-per-tab, engine-backed
    (docs/designs/principal-role-fees-accounts.md):
    - Overview: viewAllFees (admin-like) — all numbers from the fee engine.

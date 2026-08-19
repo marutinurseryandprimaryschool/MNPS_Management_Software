@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '@/types/enums';
-import { hasCapability, isAdminLike, isTeacherLike } from '@/lib/permissions';
+import { hasCapability, isAdminLike, isTeacherLike, type Capability } from '@/lib/permissions';
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import Header from '@/components/layout/Header';
@@ -11,7 +11,7 @@ import {
   UsersIcon, SchoolIcon, ClipboardCheckIcon,
   BarChartIcon, SettingsIcon, FileTextIcon,
   BookOpenIcon, CreditCardIcon, CalendarIcon,
-  GraduationCapIcon
+  GraduationCapIcon, ClockIcon
 } from '@/components/ui/Icons';
 import styles from './DashboardLayout.module.css';
 
@@ -26,21 +26,23 @@ import AdminExams from './admin/AdminExams';
 import AdminExamResults from './admin/AdminExamResults';
 import SharedReportCard from './shared/SharedReportCard';
 import TeacherCoScholastic from './teacher/TeacherCoScholastic';
-import AdminFees from './admin/AdminFees';
 import AdminReports from './admin/AdminReports';
 import AdminSettings from './admin/AdminSettings';
 import AdminBus from './admin/AdminBus';
+
+/* ── Principal Register (standalone; shares no data with the legacy fee
+      module, whose screens — AdminFees, TeacherFees, PrincipalDefaulters —
+      are deliberately left on disk but UNROUTED). ── */
+import PrincipalFeesNote from './principal/note/PrincipalFeesNote';
+import ClassWiseSection from './principal/registers/ClassWiseSection';
+import TeacherWiseSection from './principal/registers/TeacherWiseSection';
 import PrincipalAccounts from './principal/PrincipalAccounts';
-import PrincipalDefaulters from './principal/PrincipalDefaulters';
+import PrincipalActivity from './principal/activity/PrincipalActivity';
 
 import TeacherDashboard from './teacher/TeacherDashboard';
 import TeacherTimetable from './teacher/TeacherTimetable';
 import TeacherAttendance from './teacher/TeacherAttendance';
-import TeacherMarks from './teacher/TeacherMarks';
 import TeacherAssignments from './teacher/TeacherAssignments';
-import TeacherFees from './teacher/TeacherFees';
-import TeacherReportCard from './teacher/TeacherReportCard';
-import TeacherFormative from './teacher/TeacherFormative';
 import TeacherClassOverview from './teacher/TeacherClassOverview';
 import TeacherWeeklyMarks from './teacher/TeacherWeeklyMarks';
 import TeacherClassTests from './teacher/TeacherClassTests';
@@ -61,10 +63,14 @@ const PAGE_TITLES: Record<string, string> = {
   classes: 'Classes & Sections',
   timetable: 'Timetable',
   attendance: 'Attendance Management',
-  'fee-overview': 'Fee Overview',
-  'fee-structures': 'Fee Structures',
-  'fee-payments': 'Payments',
-  fees: 'Fee Management',
+  // Parent-only key; the admin/teacher fee pages are retired.
+  fees: 'Fee Details',
+  // Principal Register
+  'principal-note': 'Fees Note',
+  'principal-classes': 'Class-wise Register',
+  'principal-teachers': 'Teacher-wise Register',
+  'principal-accounts': 'Income & Expense',
+  'principal-activity': 'Activity Log',
   reports: 'Reports',
   settings: 'Settings',
   assignments: 'Assignments',
@@ -73,13 +79,10 @@ const PAGE_TITLES: Record<string, string> = {
   'major-exams': 'Major Exams',
   'weekly-tests': 'Weekly Tests',
   'class-tests': 'Class Tests',
-  'accounts': 'Accounts',
-  'defaulters': 'Defaulter Report',
   'exam-results': 'Class Exam Results',
   'exams': 'Academic Calendar',
   'report-card': 'Student Report Card',
   'co-scholastic': 'Co-Scholastic & Remarks',
-  'collect-fees': 'Fee Register',
   'bus-students': 'Bus Commuters List',
   'bus-routes': 'Transportation Routes',
   'my-class': 'My Class Overview',
@@ -87,6 +90,16 @@ const PAGE_TITLES: Record<string, string> = {
   'class-attendance': 'Class Attendance',
   'class-performance': 'Class Performance',
 };
+
+/**
+ * Header title for a page key. The teacher-wise register is the one page two
+ * roles reach from opposite directions, so it is named for whoever is looking:
+ * the Principal sees every teacher's list, a teacher sees only her own.
+ */
+function pageTitle(page: string, role: UserRole | null): string {
+  if (page === 'principal-teachers' && isTeacherLike(role)) return "My Students' Fees";
+  return PAGE_TITLES[page] || 'Maruti School';
+}
 
 export default function DashboardLayout() {
   const { role } = useAuth();
@@ -105,6 +118,10 @@ export default function DashboardLayout() {
 
   const renderPage = () => {
     if (isAdminLike(role)) {
+      const adminHome = <AdminDashboard onNavigate={handleNavigate} />;
+      const guard = (capability: Capability, page: React.ReactNode): React.ReactNode =>
+        hasCapability(role, capability) ? page : adminHome;
+
       switch (activePage) {
         case 'dashboard': return <AdminDashboard onNavigate={handleNavigate} />;
         case 'students': return <AdminStudents />;
@@ -116,19 +133,17 @@ export default function DashboardLayout() {
         case 'exam-results': return <AdminExamResults />;
         case 'report-card': return <SharedReportCard view="admin" />;
 
-        case 'fees': return <AdminFees />;
-        case 'fee-overview': return <AdminFees subPage="overview" />;
-        case 'fee-structures': return <AdminFees subPage="structures" />;
-        case 'fee-payments': return <AdminFees subPage="payments" />;
-        // The standalone Expenses page is retired (doc D9): expense entry now
-        // lives inside the Principal Accounts module. Both principal pages are
-        // strictly viewAccounts-gated (principal only).
-        case 'accounts': return hasCapability(role, 'viewAccounts')
-          ? <PrincipalAccounts />
-          : <AdminDashboard onNavigate={handleNavigate} />;
-        case 'defaulters': return hasCapability(role, 'viewAccounts')
-          ? <PrincipalDefaulters />
-          : <AdminDashboard onNavigate={handleNavigate} />;
+        /* ── Principal Register. Every page is capability-gated: a role that
+              lost the capability mid-session lands on the dashboard rather
+              than on a screen whose writes firestore.rules would reject.
+              The legacy 'fees' / 'fee-overview' / 'fee-structures' /
+              'fee-payments' / 'accounts' / 'defaulters' routes are removed. ── */
+        case 'principal-note': return guard('editPrincipalRegister', <PrincipalFeesNote />);
+        case 'principal-classes': return guard('editPrincipalRegister', <ClassWiseSection />);
+        case 'principal-teachers': return guard('viewPrincipalRegister', <TeacherWiseSection />);
+        case 'principal-accounts': return guard('viewPrincipalAccounts', <PrincipalAccounts />);
+        case 'principal-activity': return guard('viewPrincipalAccounts', <PrincipalActivity />);
+
         case 'reports': return <AdminReports />;
         case 'settings': return <AdminSettings />;
         case 'bus-students': return <AdminBus subPage="students" />;
@@ -138,6 +153,10 @@ export default function DashboardLayout() {
     }
     
     if (isTeacherLike(role)) {
+      const teacherHome = <TeacherDashboard onNavigate={handleNavigate} />;
+      const guard = (capability: Capability, page: React.ReactNode): React.ReactNode =>
+        hasCapability(role, capability) ? page : teacherHome;
+
       switch (activePage) {
         case 'dashboard': return <TeacherDashboard onNavigate={handleNavigate} />;
         case 'timetable': return <TeacherTimetable />;
@@ -148,9 +167,10 @@ export default function DashboardLayout() {
         case 'co-scholastic': return <TeacherCoScholastic />;
         case 'report-card': return <SharedReportCard view="teacher" />;
         case 'assignments': return <TeacherAssignments />;
-        case 'collect-fees': return <TeacherFees />;
-        // 'expenses' route removed for teacher/staff — expense entry is
-        // principal-only (doc D9); rules deny the write regardless.
+        /* The teacher's only money page: the Principal Register rows assigned
+           to them ("My Students' Fees"). The legacy 'collect-fees' route is
+           removed; TeacherFees.tsx stays on disk, unrouted. */
+        case 'principal-teachers': return guard('viewPrincipalRegister', <TeacherWiseSection />);
         case 'my-class': return <TeacherClassOverview view="dashboard" />;
         case 'class-students': return <TeacherClassOverview view="students" />;
         case 'class-attendance': return <TeacherClassOverview view="attendance" />;
@@ -180,7 +200,7 @@ export default function DashboardLayout() {
       <Sidebar activePage={activePage} onNavigate={handleSidebarNavigate} onCollapsedChange={setSidebarCollapsed} />
 
       <div className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ''}`}>
-        <Header title={PAGE_TITLES[activePage] || 'Maruti School'} />
+        <Header title={pageTitle(activePage, role)} />
         
         <main className={styles.content}>
           {renderPage()}
@@ -210,10 +230,13 @@ function MoreMenu({
 }) {
   const allItems: { id: string; icon: React.ReactNode; label: string }[] = isAdminLike(role)
     ? [
-        // Principal bottom tabs swap Students/Timetable for Accounts/Defaulters,
-        // so those two move into More for viewAccounts holders.
-        ...(hasCapability(role, 'viewAccounts')
+        // The Principal's bottom bar is taken up by the register pages, so the
+        // two tabs it displaced — plus the register pages that did not fit —
+        // live here. Everything stays capability-gated.
+        ...(hasCapability(role, 'viewPrincipalAccounts')
           ? [
+              { id: 'principal-teachers', icon: <UsersIcon size={22} />, label: 'Teacher-wise' },
+              { id: 'principal-activity', icon: <ClockIcon size={22} />, label: 'Activity' },
               { id: 'students', icon: <GraduationCapIcon size={22} />, label: 'Students' },
               { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
             ]
