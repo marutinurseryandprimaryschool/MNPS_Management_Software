@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { PrincipalRegisterService } from '@/lib/principal-service';
 import { principalWriteError, refreshFailedMessage } from '../principal-shared';
 import ResponsiveSheet, { SheetActions } from './ResponsiveSheet';
+import { useTeacherOptions } from './use-teacher-options';
 import StudentFormFields, {
   formAmount, studentFormFromRow, validateStudentForm, type StudentFormValues,
 } from './StudentFormFields';
@@ -41,6 +42,7 @@ function buildPatch(
   row: RegisterRow,
   form: StudentFormValues,
   settings: PrincipalSettings | null,
+  teachers: { uid: string; name: string }[],
 ): Partial<NewRegisterRow> {
   const patch: Partial<NewRegisterRow> = {};
   const name = form.name.trim();
@@ -55,6 +57,13 @@ function buildPatch(
   if (rollNo !== (row.rollNo || '')) patch.rollNo = rollNo;
   if (notes !== (row.notes || '')) patch.notes = notes;
   if (form.isScholarship !== Boolean(row.isScholarship)) patch.isScholarship = form.isScholarship;
+
+  // Reassignment travels with the name/class edit — rules allow it because
+  // only the principal can move identity fields.
+  if ((form.teacherUid || '') !== (row.teacherUid || '')) {
+    patch.teacherUid = form.teacherUid || null;
+    patch.teacherName = teachers.find(t => t.uid === form.teacherUid)?.name ?? null;
+  }
 
   const schoolFee = formAmount(form.schoolFee);
   if (schoolFee !== (Number(row.schoolFee) || 0)) patch.schoolFee = schoolFee;
@@ -81,6 +90,7 @@ export default function StudentEditSheet({
 }: StudentEditSheetProps) {
   const { showToast } = useToast();
   const [form, setForm] = useState<StudentFormValues | null>(null);
+  const teachers = useTeacherOptions(Boolean(row) && identityEditable);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -105,7 +115,7 @@ export default function StudentEditSheet({
       return;
     }
 
-    const patch = buildPatch(row, form, settings);
+    const patch = buildPatch(row, form, settings, teachers);
     if (Object.keys(patch).length === 0) {
       showToast('Nothing changed', 'info');
       onClose();
@@ -153,6 +163,7 @@ export default function StudentEditSheet({
             onChange={update}
             classNames={classNames}
             sectionNames={[]}
+            teachers={teachers}
             identityEditable={identityEditable}
             disabled={saving}
           />

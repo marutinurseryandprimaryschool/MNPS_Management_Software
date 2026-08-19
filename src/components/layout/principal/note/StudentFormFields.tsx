@@ -16,9 +16,16 @@ import React from 'react';
 import Input, { Select, Textarea } from '@/components/ui/Input';
 import type { RegisterRow } from '@/types/principal';
 
+export interface TeacherOption {
+  uid: string;
+  name: string;
+}
+
 export interface StudentFormValues {
   name: string;
   className: string;
+  /** Responsible teacher's uid ('' = unassigned). Principal-only field. */
+  teacherUid: string;
   sectionName: string;
   rollNo: string;
   schoolFee: string;
@@ -31,6 +38,7 @@ export interface StudentFormValues {
 export const emptyStudentForm = (): StudentFormValues => ({
   name: '',
   className: '',
+  teacherUid: '',
   sectionName: '',
   rollNo: '',
   schoolFee: '',
@@ -43,6 +51,7 @@ export const emptyStudentForm = (): StudentFormValues => ({
 export const studentFormFromRow = (row: RegisterRow): StudentFormValues => ({
   name: row.name || '',
   className: row.className || '',
+  teacherUid: row.teacherUid || '',
   sectionName: row.sectionName || '',
   rollNo: row.rollNo || '',
   schoolFee: String(Math.round(Number(row.schoolFee) || 0)),
@@ -81,6 +90,8 @@ interface StudentFormFieldsProps {
   /** Class dropdown options; falls back to a free-text field when empty. */
   classNames: string[];
   sectionNames: string[];
+  /** Teachers with a linked login; omitted for the teacher's own edit sheet. */
+  teachers?: TeacherOption[];
   identityEditable: boolean;
   disabled: boolean;
 }
@@ -94,7 +105,7 @@ const fieldRowStyle: React.CSSProperties = {
 };
 
 export default function StudentFormFields({
-  values, onChange, classNames, sectionNames, identityEditable, disabled,
+  values, onChange, classNames, sectionNames, teachers, identityEditable, disabled,
 }: StudentFormFieldsProps) {
   const lockIdentity = disabled || !identityEditable;
 
@@ -129,6 +140,18 @@ export default function StudentFormFields({
             onChange={event => onChange({ className: event.target.value })}
           />
         )}
+        {identityEditable && teachers && teachers.length > 0 && (
+          <Select
+            label="Responsible teacher (optional)"
+            value={values.teacherUid}
+            disabled={lockIdentity}
+            placeholder="Not assigned yet"
+            options={teachers.map(t => ({ value: t.uid, label: t.name }))}
+            onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
+              onChange({ teacherUid: event.target.value })}
+          />
+        )}
+
         {sectionNames.length > 0 && (
           <Select
             label="Section (optional)"

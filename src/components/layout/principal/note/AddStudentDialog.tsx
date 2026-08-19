@@ -23,6 +23,7 @@ import StudentFormFields, {
   emptyStudentForm, formAmount, validateStudentForm, type StudentFormValues,
 } from './StudentFormFields';
 import { monthsForAmount } from './note-helpers';
+import { useTeacherOptions } from './use-teacher-options';
 import type { NewRegisterRow, PrincipalActor, PrincipalSettings } from '@/types/principal';
 
 interface ClassOption {
@@ -63,6 +64,7 @@ export default function AddStudentDialog({
 }: AddStudentDialogProps) {
   const { showToast } = useToast();
   const [form, setForm] = useState<StudentFormValues>(emptyStudentForm);
+  const teachers = useTeacherOptions(isOpen);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -121,8 +123,8 @@ export default function AddStudentDialog({
       className: form.className.trim(),
       sectionName: form.sectionName.trim() || undefined,
       rollNo: form.rollNo.trim() || undefined,
-      teacherUid: null,
-      teacherName: null,
+      teacherUid: form.teacherUid || null,
+      teacherName: teachers.find(t => t.uid === form.teacherUid)?.name ?? null,
       schoolFee: formAmount(form.schoolFee),
       ecaAnnual,
       ecaMonths: monthsForAmount(ecaAnnual, [], settings?.defaultEcaMonths)
@@ -161,7 +163,8 @@ export default function AddStudentDialog({
         onChange={update}
         classNames={classNames}
         sectionNames={sectionNames}
-        identityEditable
+        teachers={teachers}
+          identityEditable
         disabled={saving}
       />
       <SheetActions>

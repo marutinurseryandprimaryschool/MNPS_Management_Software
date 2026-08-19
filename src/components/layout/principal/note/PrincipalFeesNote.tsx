@@ -32,7 +32,7 @@ import NoteCards from './NoteCards';
 import NoteGrid from './NoteGrid';
 import NoteHeader from './NoteHeader';
 import AddStudentDialog from './AddStudentDialog';
-import ImportStudentsDialog from './ImportStudentsDialog';
+import PickStudentDialog from './PickStudentDialog';
 import RecordPaymentDialog, { type PaymentTarget } from './RecordPaymentDialog';
 import StudentEditSheet from './StudentEditSheet';
 import { useCellAutosave, type RowPatch } from './use-cell-autosave';
@@ -72,7 +72,7 @@ export default function PrincipalFeesNote() {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<CellRef | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [pickPaymentOpen, setPickPaymentOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<RegisterRow | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RegisterRow | null>(null);
@@ -257,6 +257,8 @@ export default function PrincipalFeesNote() {
         onClassFilterChange={setClassFilter}
         canAddStudent={isRegisterOwner}
         onAddStudent={() => setAddOpen(true)}
+        canAddPayment={isRegisterOwner && rows.length > 0}
+        onAddPayment={() => setPickPaymentOpen(true)}
       />
 
       <div style={{ marginTop: 'var(--space-4)' }}>
@@ -269,14 +271,9 @@ export default function PrincipalFeesNote() {
                 : 'The Principal has not added any students to the note yet.'
             }
             action={isRegisterOwner ? (
-              <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', justifyContent: 'center' }}>
-                <Button variant="primary" onClick={() => setImportOpen(true)}>
-                  Import students from school records
-                </Button>
-                <Button variant="secondary" icon={<PlusIcon size={16} />} onClick={() => setAddOpen(true)}>
-                  Add Student
-                </Button>
-              </div>
+              <Button variant="primary" icon={<PlusIcon size={16} />} onClick={() => setAddOpen(true)}>
+                Add Student
+              </Button>
             ) : undefined}
           />
         ) : visibleRows.length === 0 ? (
@@ -312,13 +309,14 @@ export default function PrincipalFeesNote() {
         )}
       </div>
 
-      <ImportStudentsDialog
-        isOpen={importOpen}
-        academicYear={academicYear}
-        existingRows={rows}
-        actor={actor}
-        onClose={() => setImportOpen(false)}
-        onImported={reload}
+      <PickStudentDialog
+        isOpen={pickPaymentOpen}
+        rows={rows}
+        onClose={() => setPickPaymentOpen(false)}
+        onPick={row => {
+          setPickPaymentOpen(false);
+          setPaymentTarget({ row, summary: summaryFor(row.id) });
+        }}
       />
 
       <AddStudentDialog

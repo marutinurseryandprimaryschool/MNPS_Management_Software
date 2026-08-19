@@ -31,6 +31,9 @@ interface NoteHeaderProps {
   onClassFilterChange: (value: string) => void;
   canAddStudent: boolean;
   onAddStudent: () => void;
+  /** Payments need at least one student, so this is gated separately. */
+  canAddPayment: boolean;
+  onAddPayment: () => void;
 }
 
 interface StatTile {
@@ -53,6 +56,7 @@ const tileStyle: React.CSSProperties = {
 export default function NoteHeader({
   academicYear, totals, visibleCount, search, onSearchChange,
   classFilter, classNames, onClassFilterChange, canAddStudent, onAddStudent,
+  canAddPayment, onAddPayment,
 }: NoteHeaderProps) {
   const tiles: StatTile[] = [
     { label: 'Charged', value: formatINR(totals.charged) },
@@ -82,11 +86,22 @@ export default function NoteHeader({
             teacher-wise registers automatically.
           </p>
         </div>
-        {canAddStudent && (
-          <Button variant="primary" icon={<PlusIcon size={16} />} onClick={onAddStudent}>
-            Add Student
-          </Button>
-        )}
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          {canAddPayment && (
+            <Button variant="primary" icon={<PlusIcon size={16} />} onClick={onAddPayment}>
+              Add New Payment
+            </Button>
+          )}
+          {canAddStudent && (
+            <Button
+              variant={canAddPayment ? 'secondary' : 'primary'}
+              icon={<PlusIcon size={16} />}
+              onClick={onAddStudent}
+            >
+              Add Student
+            </Button>
+          )}
+        </div>
       </div>
 
       <div style={{
