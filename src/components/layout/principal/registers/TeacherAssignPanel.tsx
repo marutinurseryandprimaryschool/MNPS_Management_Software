@@ -269,10 +269,14 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
 
           {visibleRows.length === 0 ? (
             <EmptyBlock
-              title="No students here"
-              hint={filter === 'unassigned'
-                ? 'Every student already has a responsible teacher.'
-                : 'Nothing matches the current filter.'}
+              title={data.rows.length === 0 ? 'No students in the fees note yet' : 'No students here'}
+              hint={data.rows.length === 0
+                // An empty register is the common first-run state; saying
+                // "everyone already has a teacher" here reads as a bug.
+                ? 'Open the Fees Note and import your students first — then assign them here.'
+                : filter === 'unassigned'
+                  ? 'Every student already has a responsible teacher.'
+                  : 'Nothing matches the current filter.'}
             />
           ) : (
             <>
