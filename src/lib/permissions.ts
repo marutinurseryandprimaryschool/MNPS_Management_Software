@@ -58,17 +58,18 @@ const ROLE_CAPABILITIES: Record<UserRole, readonly Capability[]> = {
   [UserRole.CORRESPONDENT]: [...ADMIN_LIKE_CAPS, 'manageUsers', 'manageSettings'],
   // Teachers see and work ONLY the register rows assigned to them; the row
   // filter is client-side, the real boundary is ownsRegisterRow in firestore.rules.
+  // Payment RECORDING is Principal-only (client decision, 2026-09-01: money
+  // comes to the Principal, teachers only view their students' standing) —
+  // recordPrincipalPayments was removed from both teacher-shell roles.
   [UserRole.TEACHER]: [
     'viewOwnClassFees',
     'viewPrincipalRegister',
     'editOwnStudentFees',
-    'recordPrincipalPayments',
   ],
   [UserRole.STAFF]: [
     'viewOwnClassFees',
     'viewPrincipalRegister',
     'editOwnStudentFees',
-    'recordPrincipalPayments',
   ],
   [UserRole.PARENT]: [],
 };

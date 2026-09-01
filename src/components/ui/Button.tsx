@@ -43,7 +43,7 @@ export default function Button({
           </svg>
         </span>
       )}
-      {icon && !loading && <span className={styles.icon}>{icon}</span>}
+      {icon && !loading && <span className={styles.iconWrapper}>{icon}</span>}
       {children && <span>{children}</span>}
     </button>
   );

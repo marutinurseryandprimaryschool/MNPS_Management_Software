@@ -290,6 +290,18 @@ service cloud.firestore {
       ]);
     }
 
+    // Helper: the business date has been CLOSED by the Principal's day-close
+    // reconciliation. A closed date rejects new or edited money movements on
+    // that date until the Principal reopens it (principalDayClose update) —
+    // reopen → correct → close again is the auditable correction path.
+    // An empty/missing key reads as not-closed, so legacy docs stay editable.
+    function isDayClosed(dateKey) {
+      return dateKey is string
+        && dateKey.size() > 0
+        && exists(/databases/$(database)/documents/principalDayClose/$(dateKey))
+        && get(/databases/$(database)/documents/principalDayClose/$(dateKey)).data.status == 'closed';
+    }
+
     // Helper: the value fields of a NEW payment, pinned.
     //
     // Attribution is pinned to the SIGNED-IN uid, not to whatever the client
@@ -309,7 +321,7 @@ service cloud.firestore {
         && request.resource.data.amount is number
         && request.resource.data.amount > 0
         && request.resource.data.head in ['school', 'eca', 'van', 'other']
-        && request.resource.data.mode in ['cash', 'bank']
+        && request.resource.data.mode in ['cash', 'upi', 'bank', 'other']
         && request.resource.data.dateKey is string
         && request.resource.data.createdAt == request.time
         && request.resource.data.rowId is string
@@ -355,11 +367,18 @@ service cloud.firestore {
     // No hard delete: soft delete is an update setting deleted:true.
     match /principalPayments/{paymentId} {
       allow read: if readsPrincipalModule();
+      // A payment cannot be born on a CLOSED business date (day-close, §18) —
+      // the Principal reopens the day first, corrects, and closes it again.
       allow create: if (isPrincipal()
                         || (isTeacherLike()
                             && ownsRegisterRowId(request.resource.data.get('rowId', ''))))
-        && pinnedNewPayment();
-      allow update: if isPrincipal();
+        && pinnedNewPayment()
+        && !isDayClosed(request.resource.data.dateKey);
+      // Edits (incl. soft-delete) are blocked while the payment's day — old
+      // OR new, so money can't be moved INTO a closed day either — is closed.
+      allow update: if isPrincipal()
+        && !isDayClosed(resource.data.get('dateKey', ''))
+        && !isDayClosed(request.resource.data.get('dateKey', ''));
       allow delete: if false;
     }
 
@@ -367,7 +386,47 @@ service cloud.firestore {
     // is not teacher-visible). No hard delete: soft delete via update.
     match /principalExpenses/{expenseId} {
       allow read: if isPrincipal();
-      allow create, update: if isPrincipal();
+      // Same closed-day protection as payments (§18).
+      allow create: if isPrincipal()
+        && !isDayClosed(request.resource.data.get('dateKey', ''));
+      allow update: if isPrincipal()
+        && !isDayClosed(resource.data.get('dateKey', ''))
+        && !isDayClosed(request.resource.data.get('dateKey', ''));
+      allow delete: if false;
+    }
+
+    // Day-close reconciliation (Phase 3 §16–§18) — one doc per business date,
+    // the doc id IS the date. Strictly Principal: expected/actual cash counts
+    // are exactly the numbers a teacher or parent must not see.
+    // Create = closing a day: every field pinned, the arithmetic re-checked
+    // server-side, attribution forced to the signed-in Principal, status born
+    // 'closed'. Update = reopening (status 'reopened') or re-closing with a
+    // fresh count; the date itself is immutable. Never deletable — a day that
+    // was once closed keeps its trail.
+    match /principalDayClose/{dateKey} {
+      allow read: if isPrincipal();
+      allow create: if isPrincipal()
+        && request.resource.data.keys().hasAll([
+             'dateKey', 'academicYear', 'expectedCash', 'actualCash', 'difference',
+             'assessment', 'status', 'closedByUid', 'closedByName', 'closedAt', 'updatedAt'
+           ])
+        && request.resource.data.dateKey == dateKey
+        && request.resource.data.expectedCash is number
+        && request.resource.data.actualCash is number
+        && request.resource.data.actualCash >= 0
+        && request.resource.data.difference
+             == request.resource.data.actualCash - request.resource.data.expectedCash
+        && request.resource.data.assessment in ['matched', 'short', 'excess']
+        && request.resource.data.status == 'closed'
+        && request.resource.data.closedByUid == request.auth.uid
+        && request.resource.data.closedAt == request.time;
+      allow update: if isPrincipal()
+        && request.resource.data.dateKey == dateKey
+        && request.resource.data.status in ['closed', 'reopened']
+        && request.resource.data.actualCash is number
+        && request.resource.data.actualCash >= 0
+        && request.resource.data.difference
+             == request.resource.data.actualCash - request.resource.data.expectedCash;
       allow delete: if false;
     }
 
@@ -395,7 +454,7 @@ service cloud.firestore {
         && request.resource.data.actorRole == principalUserRole()
         && request.resource.data.at == request.time
         && request.resource.data.action in ['create', 'update', 'delete']
-        && request.resource.data.target in ['register', 'payment', 'expense', 'settings']
+        && request.resource.data.target in ['register', 'payment', 'expense', 'settings', 'dayclose']
         && request.resource.data.targetId is string
         && request.resource.data.targetId.size() > 0
         && request.resource.data.summary is string;

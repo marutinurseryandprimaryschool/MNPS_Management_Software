@@ -1,455 +1,435 @@
-/* Principal Register engine — unit suite.
+/* ============================================
+   Principal Register engine — Phase 1 + Phase 2 money math
+   ============================================
+   Covers the finance scenarios in the Phase 2 spec (§37) against the PURE
+   engine, which is where every screen gets its numbers from:
 
-   The authoritative scenario is the client's: "in August only June and July
-   count as due — never the whole year". Everything else hangs off that. */
+     Test 1/2  school fee partial → completion       (feeStatus, computeRowSummary)
+     Test 3/4  ECA and van partial                   (month schedules)
+     Test 5    the four payment modes                (computeModeTotals)
+     Test 6    cash collected − cash spent           (computeModeTotals)
+     Test 7    daily / monthly buckets use paymentDate (computeDailyLedger…)
+     plus      the Phase 2 roll-ups                  (teacher / outstanding)
+
+   Test 8 (double-click save) is a UI guard, not engine behavior — it lives in
+   RecordPaymentModal's in-flight `saving` check and its duplicate warning.
+*/
 
 import { describe, it, expect } from 'vitest';
-import { ACADEMIC_MONTHS } from '@/lib/fee-utils';
 import {
-  computeClassSummary,
   computeDailyLedger,
+  computeDayCloseAssessment,
+  computeModeTotals,
   computeMonthlyLedger,
+  computeOutstandingSummary,
+  computeReceiptSnapshot,
+  computeReceiptSnapshots,
   computeRowSummary,
-  emptyRowSummary,
-  resolveMonths,
-  splitAnnualAcrossMonths,
+  computeTeacherSummaries,
+  feeStatus,
+  groupPaymentsByRow,
+  normalizeMode,
 } from '@/lib/principal-fees';
 import type {
-  LedgerSettingsFacts,
-  PrincipalExpenseFacts,
-  PrincipalPaymentFacts,
-  RegisterRowFacts,
+  PrincipalExpenseFacts, PrincipalPaymentFacts, RegisterRowFacts, RowSummary, TeacherRowFacts,
 } from '@/types/principal';
 
 /* ── Fixtures ─────────────────────────────────────────────────────────── */
 
-const AY = '2025-2026';
-/** Sharmi's authoritative example date: 10 August 2025 (local). */
-const AUGUST_10 = new Date(2025, 7, 10);
+const YEAR = '2026-27';
+/** Mid-September: June, July and August have ENDED; September has not. */
+const TODAY = new Date(2026, 8, 15);
 
-const MONTHS = [...ACADEMIC_MONTHS];
-
-const row = (overrides: Partial<RegisterRowFacts> = {}): RegisterRowFacts => ({
-  id: 'row1',
-  academicYear: AY,
+const ram: TeacherRowFacts = {
+  id: 'row-ram',
+  academicYear: YEAR,
   className: 'Class 5',
-  schoolFee: 0,
+  teacherUid: 'uid-anita',
+  teacherName: 'Mrs. Anita',
+  schoolFee: 10000,
+  ecaAnnual: 5000,
+  ecaMonths: ['June', 'July', 'August', 'September', 'October',
+    'November', 'December', 'January', 'February', 'March'],
+  vanMonthly: 600,
+  vanMonths: ['June', 'July', 'August', 'September', 'October',
+    'November', 'December', 'January', 'February', 'March'],
+};
+
+/** No ECA, no van — the "not every student has these" case (§11, §19). */
+const arun: TeacherRowFacts = {
+  id: 'row-arun',
+  academicYear: YEAR,
+  className: 'Class 5',
+  teacherUid: 'uid-anita',
+  teacherName: 'Mrs. Anita',
+  schoolFee: 8000,
   ecaAnnual: 0,
-  ecaMonths: MONTHS,
+  ecaMonths: [],
   vanMonthly: 0,
   vanMonths: [],
-  ...overrides,
+};
+
+const pay = (over: Partial<PrincipalPaymentFacts> = {}): PrincipalPaymentFacts => ({
+  head: 'school', amount: 1000, dateKey: '2026-09-01', mode: 'cash', ...over,
 });
 
-const pay = (overrides: Partial<PrincipalPaymentFacts> = {}): PrincipalPaymentFacts => ({
-  head: 'school',
-  amount: 0,
-  dateKey: '2025-08-10',
-  mode: 'cash',
-  ...overrides,
+const spend = (over: Partial<PrincipalExpenseFacts> = {}): PrincipalExpenseFacts => ({
+  amount: 1000, dateKey: '2026-09-01', mode: 'cash', ...over,
 });
 
-const dueMonths = (cells: { month: string; isDue: boolean }[]): string[] =>
-  cells.filter(c => c.isDue).map(c => c.month);
+/* ── feeStatus (§17) ──────────────────────────────────────────────────── */
 
-/* ── ECA split: exact, never overshooting ─────────────────────────────── */
-
-describe('splitAnnualAcrossMonths', () => {
-  it('splits an even annual into equal months', () => {
-    expect(splitAnnualAcrossMonths(10000, 10)).toEqual(Array(10).fill(1000));
+describe('feeStatus', () => {
+  it('is PENDING when nothing has been received', () => {
+    expect(feeStatus(10000, 0)).toBe('pending');
   });
 
-  it('sums EXACTLY to the annual when it does not divide evenly', () => {
-    const slices = splitAnnualAcrossMonths(1005, 10);
-    expect(slices.reduce((s, v) => s + v, 0)).toBe(1005);
-    // Largest remainder: the first five months carry the extra rupee.
-    expect(slices).toEqual([101, 101, 101, 101, 101, 100, 100, 100, 100, 100]);
+  it('is PARTIAL when some but not all has been received', () => {
+    expect(feeStatus(10000, 3000)).toBe('partial');
   });
 
-  it('never overshoots on a tiny annual', () => {
-    const slices = splitAnnualAcrossMonths(5, 10);
-    expect(slices.reduce((s, v) => s + v, 0)).toBe(5);
-    expect(Math.min(...slices)).toBe(0);
-    expect(Math.max(...slices)).toBe(1);
+  it('is PAID when the full amount has been received', () => {
+    expect(feeStatus(10000, 10000)).toBe('paid');
   });
 
-  it('handles zero, blank and zero-month inputs without producing money', () => {
-    expect(splitAnnualAcrossMonths(0, 10)).toEqual(Array(10).fill(0));
-    expect(splitAnnualAcrossMonths(null, 10).reduce((s, v) => s + v, 0)).toBe(0);
-    expect(splitAnnualAcrossMonths(1000, 0)).toEqual([]);
+  it('is PAID when more than the due amount has been received', () => {
+    expect(feeStatus(500, 700)).toBe('paid');
   });
 
-  it('sums exactly for every annual across every month count', () => {
-    for (let annual = 0; annual <= 120; annual += 7) {
-      for (let count = 1; count <= 10; count += 1) {
-        const slices = splitAnnualAcrossMonths(annual, count);
-        expect(slices.reduce((s, v) => s + v, 0)).toBe(annual);
-        expect(Math.min(...slices)).toBeGreaterThanOrEqual(0);
-      }
+  it('compares in whole rupees so a paisa cannot leave a settled head PARTIAL', () => {
+    expect(feeStatus(500, 499.6)).toBe('paid');
+  });
+
+  it('is PENDING for a head that charges nothing and received nothing', () => {
+    expect(feeStatus(0, 0)).toBe('pending');
+  });
+});
+
+/* ── Tests 1–4: partial payments (§37) ────────────────────────────────── */
+
+describe('school fee — partial then complete (§37 tests 1 & 2)', () => {
+  it('Test 1: ₹3,000 against ₹10,000 leaves ₹7,000 PARTIAL', () => {
+    const summary = computeRowSummary(ram, [pay({ amount: 3000 })], TODAY);
+    expect(summary.school.charged).toBe(10000);
+    expect(summary.school.paid).toBe(3000);
+    expect(summary.school.pending).toBe(7000);
+    expect(summary.school.status).toBe('partial');
+  });
+
+  it('Test 2: a further ₹7,000 settles it, and BOTH receipts remain', () => {
+    const payments = [pay({ amount: 3000 }), pay({ amount: 7000, dateKey: '2026-09-10' })];
+    const summary = computeRowSummary(ram, payments, TODAY);
+    expect(summary.school.paid).toBe(10000);
+    expect(summary.school.pending).toBe(0);
+    expect(summary.school.status).toBe('paid');
+    // The engine never merges or drops history — it sums what it is given.
+    expect(payments).toHaveLength(2);
+  });
+});
+
+describe('monthly heads — ECA and van (§37 tests 3 & 4, §18, §19)', () => {
+  it('Test 3: ₹300 of a ₹500 ECA month is PARTIAL for that month', () => {
+    const summary = computeRowSummary(
+      ram, [pay({ head: 'eca', month: 'September', amount: 300 })], TODAY,
+    );
+    const september = summary.eca.months.find(cell => cell.month === 'September');
+    expect(september?.amount).toBe(500);
+    expect(september?.paid).toBe(300);
+    expect(september?.pending).toBe(200);
+    // September has not ended on 15 Sep, so it is not chaseable yet.
+    expect(september?.isDue).toBe(false);
+  });
+
+  it('Test 4: ₹2,000 against van keeps the remaining months pending', () => {
+    const summary = computeRowSummary(
+      ram, [pay({ head: 'van', month: 'June', amount: 400 })], TODAY,
+    );
+    const june = summary.van.months.find(cell => cell.month === 'June');
+    expect(june?.amount).toBe(600);
+    expect(june?.paid).toBe(400);
+    expect(june?.pending).toBe(200);
+    expect(june?.isDue).toBe(true); // June ended
+    expect(summary.van.status).toBe('partial');
+  });
+
+  it('keeps August and September separate rather than one blurred balance', () => {
+    const summary = computeRowSummary(ram, [
+      pay({ head: 'eca', month: 'August', amount: 500 }),
+      pay({ head: 'eca', month: 'September', amount: 300 }),
+    ], TODAY);
+    const august = summary.eca.months.find(cell => cell.month === 'August');
+    const september = summary.eca.months.find(cell => cell.month === 'September');
+    expect(august?.pending).toBe(0);
+    expect(september?.pending).toBe(200);
+  });
+
+  it('charges no ECA or van to a student who carries neither', () => {
+    const summary = computeRowSummary(arun, [], TODAY);
+    expect(summary.eca.charged).toBe(0);
+    expect(summary.van.charged).toBe(0);
+    expect(summary.totalCharged).toBe(8000);
+  });
+});
+
+/* ── Test 5 & 6: payment modes (§14, §15, §37) ────────────────────────── */
+
+describe('computeModeTotals (§37 tests 5 & 6)', () => {
+  const payments = [
+    pay({ amount: 3000, mode: 'cash' }),
+    pay({ amount: 300, mode: 'upi' }),
+    pay({ amount: 2000, mode: 'bank' }),
+    pay({ amount: 500, mode: 'other' }),
+  ];
+
+  it('Test 5: files each receipt under its own channel', () => {
+    const totals = computeModeTotals(payments, [], '', '');
+    const by = Object.fromEntries(totals.rows.map(row => [row.mode, row.collected]));
+    expect(by.cash).toBe(3000);
+    expect(by.upi).toBe(300);
+    expect(by.bank).toBe(2000);
+    expect(by.other).toBe(500);
+    expect(totals.collected).toBe(5800);
+  });
+
+  it('always reports all four channels, in a fixed order', () => {
+    const totals = computeModeTotals([], [], '', '');
+    expect(totals.rows.map(row => row.mode)).toEqual(['cash', 'upi', 'bank', 'other']);
+  });
+
+  it('Test 6: ₹10,000 cash in less ₹2,000 cash out leaves ₹8,000 available', () => {
+    const totals = computeModeTotals(
+      [pay({ amount: 10000, mode: 'cash' })],
+      [spend({ amount: 2000, mode: 'cash' })],
+      '', '',
+    );
+    const cash = totals.rows.find(row => row.mode === 'cash');
+    expect(cash?.collected).toBe(10000);
+    expect(cash?.spent).toBe(2000);
+    expect(cash?.net).toBe(8000);
+  });
+
+  it('honours the date window and ignores soft-deleted receipts', () => {
+    const totals = computeModeTotals([
+      pay({ amount: 1000, dateKey: '2026-09-01' }),
+      pay({ amount: 500, dateKey: '2026-10-01' }),
+      pay({ amount: 999, dateKey: '2026-09-02', deleted: true }),
+    ], [], '2026-09-01', '2026-09-30');
+    expect(totals.collected).toBe(1000);
+  });
+
+  it('treats an unknown or missing mode as cash, like the ledgers do', () => {
+    expect(normalizeMode(undefined)).toBe('cash');
+    expect(normalizeMode('cheque')).toBe('cash');
+    expect(normalizeMode('upi')).toBe('upi');
+  });
+});
+
+/* ── Test 7: dates drive the ledgers (§12) ────────────────────────────── */
+
+describe('ledgers bucket on the payment date, not the entry date (§37 test 7)', () => {
+  const payments = [
+    pay({ amount: 3000, dateKey: '2026-09-01' }),
+    pay({ amount: 2000, dateKey: '2026-09-10' }),
+    pay({ amount: 1500, dateKey: '2026-10-02' }),
+  ];
+
+  it('a day sheet counts only that day', () => {
+    const day = computeDailyLedger(payments, [], null, '2026-09-01');
+    expect(day.income).toBe(3000);
+  });
+
+  it('a month sheet counts only that month', () => {
+    const month = computeMonthlyLedger(payments, [], null, '2026-09');
+    expect(month.income).toBe(5000);
+  });
+
+  it('UPI, bank and other settle into the bank balance; only cash moves cash', () => {
+    const day = computeDailyLedger([
+      pay({ amount: 1000, mode: 'cash', dateKey: '2026-09-01' }),
+      pay({ amount: 100, mode: 'upi', dateKey: '2026-09-01' }),
+      pay({ amount: 200, mode: 'bank', dateKey: '2026-09-01' }),
+      pay({ amount: 300, mode: 'other', dateKey: '2026-09-01' }),
+    ], [], null, '2026-09-01');
+    expect(day.incomeCash).toBe(1000);
+    expect(day.incomeBank).toBe(600);
+    expect(day.cashInHand).toBe(1000);
+    expect(day.bankBalance).toBe(600);
+  });
+});
+
+/* ── Phase 2 roll-ups (§4, §7) ────────────────────────────────────────── */
+
+describe('groupPaymentsByRow', () => {
+  it('buckets payments by their row and drops rowless ones', () => {
+    const grouped = groupPaymentsByRow([
+      { rowId: 'row-ram', amount: 1 },
+      { rowId: 'row-ram', amount: 2 },
+      { rowId: '', amount: 3 },
+    ]);
+    expect(grouped['row-ram']).toHaveLength(2);
+    expect(Object.keys(grouped)).toEqual(['row-ram']);
+  });
+});
+
+describe('computeTeacherSummaries (§7)', () => {
+  const rows: TeacherRowFacts[] = [ram, arun, {
+    ...arun, id: 'row-priya', teacherUid: '', teacherName: null, schoolFee: 6000,
+  }];
+
+  const summaries = new Map<string, RowSummary>([
+    ['row-ram', computeRowSummary(ram, [pay({ amount: 3000 })], TODAY)],
+    ['row-arun', computeRowSummary(arun, [pay({ amount: 8000 })], TODAY)],
+    ['row-priya', computeRowSummary({ ...arun, schoolFee: 6000 }, [], TODAY)],
+  ]);
+  const summaryFor = (id: string) => summaries.get(id)!;
+
+  it('groups students under their responsible teacher', () => {
+    const teachers = computeTeacherSummaries(rows, summaryFor);
+    const anita = teachers.find(teacher => teacher.teacherUid === 'uid-anita');
+    expect(anita?.teacherName).toBe('Mrs. Anita');
+    expect(anita?.students).toBe(2);
+    expect(anita?.collected).toBe(11000);
+  });
+
+  it('rolls students with no teacher into one Unassigned group', () => {
+    const teachers = computeTeacherSummaries(rows, summaryFor);
+    const unassigned = teachers.find(teacher => teacher.teacherUid === '');
+    expect(unassigned?.teacherName).toBe('Unassigned');
+    expect(unassigned?.students).toBe(1);
+    expect(unassigned?.outstanding).toBe(6000);
+  });
+
+  it('puts the biggest outstanding first', () => {
+    const teachers = computeTeacherSummaries(rows, summaryFor);
+    expect(teachers[0].outstanding).toBeGreaterThanOrEqual(teachers[1].outstanding);
+  });
+});
+
+describe('computeOutstandingSummary (§4)', () => {
+  const rows: RegisterRowFacts[] = [ram, arun, { ...arun, id: 'row-priya', schoolFee: 6000 }];
+  const summaries = new Map<string, RowSummary>([
+    ['row-ram', computeRowSummary(ram, [pay({ amount: 3000 })], TODAY)],   // partial
+    ['row-arun', computeRowSummary(arun, [pay({ amount: 8000 })], TODAY)], // paid
+    ['row-priya', computeRowSummary({ ...arun, schoolFee: 6000 }, [], TODAY)], // pending
+  ]);
+  const summaryFor = (id: string) => summaries.get(id)!;
+
+  it('counts students in each status and totals what is owed', () => {
+    const totals = computeOutstandingSummary(rows, summaryFor);
+    expect(totals.students).toBe(3);
+    expect(totals.paidStudents).toBe(1);
+    expect(totals.partialStudents).toBe(1);
+    expect(totals.pendingStudents).toBe(1);
+    expect(totals.collected).toBe(11000);
+    expect(totals.outstanding).toBe(totals.charged - totals.collected);
+  });
+
+  it('ignores soft-deleted rows', () => {
+    const totals = computeOutstandingSummary(
+      [...rows, { ...arun, id: 'row-gone', deleted: true }],
+      (id: string) => summaries.get(id) ?? summaries.get('row-priya')!,
+    );
+    expect(totals.students).toBe(3);
+  });
+});
+
+/* ── Day close (Phase 3 §16, §34 tests 19–24) ─────────────────────────── */
+
+describe('computeDayCloseAssessment', () => {
+  it('MATCHED when the count equals the expectation', () => {
+    expect(computeDayCloseAssessment(25000, 25000)).toEqual({ difference: 0, assessment: 'matched' });
+  });
+
+  it('SHORT when less cash was counted (spec example: −₹500)', () => {
+    expect(computeDayCloseAssessment(25000, 24500)).toEqual({ difference: -500, assessment: 'short' });
+  });
+
+  it('EXCESS when more cash was counted', () => {
+    expect(computeDayCloseAssessment(25000, 25200)).toEqual({ difference: 200, assessment: 'excess' });
+  });
+
+  it('compares in whole rupees, so paisa noise cannot break a match', () => {
+    expect(computeDayCloseAssessment(24999.6, 25000)).toEqual({ difference: 0, assessment: 'matched' });
+  });
+
+  it('treats missing values as zero', () => {
+    expect(computeDayCloseAssessment(undefined, 100)).toEqual({ difference: 100, assessment: 'excess' });
+  });
+});
+
+/* ── Receipt snapshot (Phase 3 §19, §34 tests 25–31) ──────────────────── */
+
+describe('computeReceiptSnapshot', () => {
+  // Arun: school fee only, ₹8,000. Two payments in entry order.
+  const history = [
+    { id: 'p1', head: 'school', amount: 3000, dateKey: '2026-09-01', mode: 'cash', createdAt: new Date(2026, 8, 1, 10) },
+    { id: 'p2', head: 'school', amount: 2000, dateKey: '2026-09-10', mode: 'upi', createdAt: new Date(2026, 8, 10, 10) },
+    { id: 'p3', head: 'school', amount: 3000, dateKey: '2026-09-20', mode: 'bank', createdAt: new Date(2026, 8, 20, 10) },
+  ];
+
+  it('shows the balance before and after the FIRST payment', () => {
+    const snap = computeReceiptSnapshot(arun, history, 'p1', TODAY);
+    expect(snap).toEqual({ previousPending: 8000, remainingPending: 5000, status: 'partial' });
+  });
+
+  it('a MIDDLE payment counts everything recorded before it', () => {
+    const snap = computeReceiptSnapshot(arun, history, 'p2', TODAY);
+    expect(snap).toEqual({ previousPending: 5000, remainingPending: 3000, status: 'partial' });
+  });
+
+  it('the settling payment reads PAID with a zero balance', () => {
+    const snap = computeReceiptSnapshot(arun, history, 'p3', TODAY);
+    expect(snap).toEqual({ previousPending: 3000, remainingPending: 0, status: 'paid' });
+  });
+
+  it('a reprint is deterministic — later payments never change an old receipt', () => {
+    const withOnlyTwo = history.slice(0, 2);
+    expect(computeReceiptSnapshot(arun, withOnlyTwo, 'p1', TODAY))
+      .toEqual(computeReceiptSnapshot(arun, history, 'p1', TODAY));
+  });
+
+  it('orders by ENTRY (createdAt), so a backdated payment entered later does not rewrite older receipts', () => {
+    const withBackdated = [
+      ...history,
+      // Money from 20 Aug, typed in on 25 Sep — after p1..p3 were entered.
+      { id: 'p4', head: 'school', amount: 500, dateKey: '2026-08-20', mode: 'cash', createdAt: new Date(2026, 8, 25, 10) },
+    ];
+    // p1's receipt still shows the numbers as they stood when p1 was entered.
+    expect(computeReceiptSnapshot(arun, withBackdated, 'p1', TODAY))
+      .toEqual({ previousPending: 8000, remainingPending: 5000, status: 'partial' });
+  });
+
+  it('returns null for an unknown or soft-deleted payment', () => {
+    expect(computeReceiptSnapshot(arun, history, 'nope', TODAY)).toBeNull();
+    const withDeleted = [...history, { id: 'p9', head: 'school', amount: 100, dateKey: '2026-09-21', mode: 'cash', deleted: true, createdAt: new Date(2026, 8, 21) }];
+    expect(computeReceiptSnapshot(arun, withDeleted, 'p9', TODAY)).toBeNull();
+  });
+
+  /* The payment-history list reads every snapshot at once (§18). The one-pass
+     form must agree exactly with the single-payment form it replaced. */
+  it('computeReceiptSnapshots agrees with the single-payment form for every row', () => {
+    const all = computeReceiptSnapshots(arun, history, TODAY);
+    for (const payment of history) {
+      expect(all.get(payment.id)).toEqual(
+        computeReceiptSnapshot(arun, history, payment.id, TODAY),
+      );
     }
   });
-});
 
-describe('resolveMonths', () => {
-  it('sorts into academic order and drops duplicates', () => {
-    expect(resolveMonths(['July', 'June', 'July'], [])).toEqual(['June', 'July']);
+  it('computeReceiptSnapshots chains the balances: each starts where the last ended', () => {
+    const all = computeReceiptSnapshots(arun, history, TODAY);
+    expect(all.get('p1')!.remainingPending).toBe(all.get('p2')!.previousPending);
+    expect(all.get('p2')!.remainingPending).toBe(all.get('p3')!.previousPending);
+    expect(all.get('p3')!.remainingPending).toBe(0);
   });
 
-  it('falls back only when the list is empty', () => {
-    expect(resolveMonths([], MONTHS)).toEqual(MONTHS);
-    expect(resolveMonths(null, [])).toEqual([]);
-  });
-});
+  it('computeReceiptSnapshots is order-independent and skips deleted payments', () => {
+    const shuffled = [history[2], history[0], history[1]];
+    const all = computeReceiptSnapshots(arun, shuffled, TODAY);
+    expect(all.get('p1')).toEqual({ previousPending: 8000, remainingPending: 5000, status: 'partial' });
+    expect(all.size).toBe(3);
 
-/* ── Sharmi's arrears rule ────────────────────────────────────────────── */
-
-describe('ECA arrears — a month is due only AFTER it ends', () => {
-  const ecaRow = row({ ecaAnnual: 10000, ecaMonths: MONTHS });
-
-  it('charges only June + July in August — NEVER the whole year', () => {
-    const summary = computeRowSummary(ecaRow, [], AUGUST_10);
-    expect(summary.eca.charged).toBe(10000);
-    expect(summary.eca.dueNow).toBe(2000);
-    expect(summary.eca.dueNow).not.toBe(10000);
-    expect(dueMonths(summary.eca.months)).toEqual(['June', 'July']);
-    expect(summary.totalDueNow).toBe(2000);
-    expect(summary.totalPending).toBe(10000);
-  });
-
-  it('holds July back until July has actually ended', () => {
-    expect(computeRowSummary(ecaRow, [], new Date(2025, 6, 31)).eca.dueNow).toBe(1000);
-    expect(computeRowSummary(ecaRow, [], new Date(2025, 7, 1)).eca.dueNow).toBe(2000);
-  });
-
-  it('never counts the current month, even in March', () => {
-    const march31 = computeRowSummary(ecaRow, [], new Date(2026, 2, 31));
-    expect(dueMonths(march31.eca.months)).not.toContain('March');
-    expect(march31.eca.dueNow).toBe(9000);
-    const april1 = computeRowSummary(ecaRow, [], new Date(2026, 3, 1));
-    expect(april1.eca.dueNow).toBe(10000);
-  });
-
-  it('nothing is due before the year starts', () => {
-    expect(computeRowSummary(ecaRow, [], new Date(2025, 5, 15)).eca.dueNow).toBe(0);
-  });
-
-  it('defaults to the ten academic months when none are stored', () => {
-    const summary = computeRowSummary(row({ ecaAnnual: 10000, ecaMonths: [] }), [], AUGUST_10);
-    expect(summary.eca.months).toHaveLength(10);
-    expect(summary.eca.charged).toBe(10000);
-  });
-});
-
-/* ── School fee ───────────────────────────────────────────────────────── */
-
-describe('school fee', () => {
-  it('is due immediately, on day one of the year', () => {
-    const summary = computeRowSummary(row({ schoolFee: 5000 }), [], new Date(2025, 5, 1));
-    expect(summary.school).toEqual({ charged: 5000, paid: 0, pending: 5000 });
-    expect(summary.totalDueNow).toBe(5000);
-  });
-
-  it('is knocked down by school payments only', () => {
-    const summary = computeRowSummary(
-      row({ schoolFee: 5000, ecaAnnual: 10000 }),
-      [pay({ head: 'school', amount: 2000 })],
-      AUGUST_10,
-    );
-    expect(summary.school.paid).toBe(2000);
-    expect(summary.school.pending).toBe(3000);
-    expect(summary.eca.paid).toBe(0);
-    expect(summary.totalDueNow).toBe(3000 + 2000);
-  });
-});
-
-/* ── Van fee ──────────────────────────────────────────────────────────── */
-
-describe('van fee', () => {
-  it('charges vanMonthly for each listed month and follows the arrears rule', () => {
-    const summary = computeRowSummary(row({ vanMonthly: 500, vanMonths: MONTHS }), [], AUGUST_10);
-    expect(summary.van.charged).toBe(5000);
-    expect(summary.van.dueNow).toBe(1000);
-    expect(summary.van.months.every(c => c.amount === 500)).toBe(true);
-  });
-
-  it('charges nothing when the student has no van months', () => {
-    const summary = computeRowSummary(row({ vanMonthly: 500, vanMonths: [] }), [], AUGUST_10);
-    expect(summary.van.charged).toBe(0);
-    expect(summary.van.months).toEqual([]);
-    expect(summary.totalCharged).toBe(0);
-  });
-
-  it('supports a part-year van rider', () => {
-    const summary = computeRowSummary(
-      row({ vanMonthly: 500, vanMonths: ['August', 'June', 'July'] }),
-      [],
-      AUGUST_10,
-    );
-    expect(summary.van.months.map(c => c.month)).toEqual(['June', 'July', 'August']);
-    expect(summary.van.charged).toBe(1500);
-    expect(summary.van.dueNow).toBe(1000);
-  });
-});
-
-/* ── Payment matching ─────────────────────────────────────────────────── */
-
-describe('payment matching (head + month)', () => {
-  const ecaRow = row({ ecaAnnual: 10000, ecaMonths: MONTHS });
-
-  it('fills the month cell it is tagged to', () => {
-    const summary = computeRowSummary(ecaRow, [pay({ head: 'eca', month: 'June', amount: 1000 })], AUGUST_10);
-    const june = summary.eca.months.find(c => c.month === 'June');
-    expect(june).toMatchObject({ amount: 1000, paid: 1000, pending: 0, isDue: true });
-    expect(summary.eca.dueNow).toBe(1000); // July only
-    expect(summary.eca.pending).toBe(9000);
-  });
-
-  it('lets an untagged head payment clear arrears without filling a cell', () => {
-    const summary = computeRowSummary(ecaRow, [pay({ head: 'eca', amount: 2000 })], AUGUST_10);
-    expect(summary.eca.months.every(c => c.paid === 0)).toBe(true);
-    expect(summary.eca.paid).toBe(2000);
-    expect(summary.eca.pending).toBe(8000);
-    expect(summary.eca.dueNow).toBe(0);
-  });
-
-  it('treats a month outside the schedule as untagged money', () => {
-    const summary = computeRowSummary(
-      row({ vanMonthly: 500, vanMonths: ['June'] }),
-      [pay({ head: 'van', month: 'July', amount: 500 })],
-      AUGUST_10,
-    );
-    expect(summary.van.months.find(c => c.month === 'June')?.paid).toBe(0);
-    expect(summary.van.paid).toBe(500);
-    expect(summary.van.dueNow).toBe(0);
-  });
-
-  it('never drives a cell or a total negative on overpayment', () => {
-    const summary = computeRowSummary(ecaRow, [pay({ head: 'eca', month: 'June', amount: 5000 })], AUGUST_10);
-    const june = summary.eca.months.find(c => c.month === 'June');
-    expect(june?.paid).toBe(5000);
-    expect(june?.pending).toBe(0);
-    expect(summary.eca.pending).toBe(5000);
-    expect(summary.totalPending).toBe(5000);
-    expect(summary.totalDueNow).toBe(0);
-  });
-
-  it('ignores zero and negative amounts', () => {
-    const summary = computeRowSummary(ecaRow, [
-      pay({ head: 'eca', month: 'June', amount: 0 }),
-      pay({ head: 'eca', month: 'June', amount: -500 }),
-    ], AUGUST_10);
-    expect(summary.eca.paid).toBe(0);
-    expect(summary.totalPaid).toBe(0);
-  });
-});
-
-/* ── 'other' receipts ─────────────────────────────────────────────────── */
-
-describe("'other' payments", () => {
-  const mixedRow = row({ schoolFee: 5000, ecaAnnual: 10000 });
-
-  it('reduce the totals but belong to no bucket', () => {
-    const summary = computeRowSummary(mixedRow, [pay({ head: 'other', amount: 1500 })], AUGUST_10);
-    expect(summary.other.paid).toBe(1500);
-    expect(summary.school.paid).toBe(0);
-    expect(summary.eca.paid).toBe(0);
-    expect(summary.eca.months.every(c => c.paid === 0)).toBe(true);
-    expect(summary.totalPaid).toBe(1500);
-    expect(summary.totalCharged).toBe(15000);
-    expect(summary.totalPending).toBe(13500);
-    // school 5000 + eca (June+July) 2000 − 1500 unallocated
-    expect(summary.totalDueNow).toBe(5500);
-  });
-
-  it('collect any unrecognised head so no money is lost', () => {
-    const summary = computeRowSummary(
-      mixedRow,
-      [pay({ head: 'stationery', amount: 200 }), pay({ head: null, amount: 100 })],
-      AUGUST_10,
-    );
-    expect(summary.other.paid).toBe(300);
-    expect(summary.totalPaid).toBe(300);
-  });
-});
-
-/* ── Soft deletes ─────────────────────────────────────────────────────── */
-
-describe('soft-deleted payments', () => {
-  it('are excluded from every bucket and every total', () => {
-    const summary = computeRowSummary(row({ schoolFee: 5000, ecaAnnual: 10000 }), [
-      pay({ head: 'school', amount: 5000, deleted: true }),
-      pay({ head: 'eca', month: 'June', amount: 1000, deleted: true }),
-      pay({ head: 'other', amount: 900, deleted: true }),
-      pay({ head: 'school', amount: 1000 }),
-    ], AUGUST_10);
-    expect(summary.school.paid).toBe(1000);
-    expect(summary.eca.months.find(c => c.month === 'June')?.paid).toBe(0);
-    expect(summary.other.paid).toBe(0);
-    expect(summary.totalPaid).toBe(1000);
-    expect(summary.totalDueNow).toBe(4000 + 2000);
-  });
-});
-
-/* ── Purity ───────────────────────────────────────────────────────────── */
-
-describe('purity', () => {
-  it('does not mutate its inputs', () => {
-    const input = row({ ecaAnnual: 1005, ecaMonths: ['July', 'June'] });
-    const payments = [pay({ head: 'eca', month: 'June', amount: 100 })];
-    const snapshot = JSON.stringify({ input, payments });
-    computeRowSummary(input, payments, AUGUST_10);
-    expect(JSON.stringify({ input, payments })).toBe(snapshot);
-  });
-
-  it('emptyRowSummary hands back independent month arrays', () => {
-    const summary = emptyRowSummary();
-    expect(summary.eca.months).not.toBe(summary.van.months);
-    expect(summary.totalDueNow).toBe(0);
-  });
-});
-
-/* ── Class-wise roll-up ───────────────────────────────────────────────── */
-
-describe('computeClassSummary', () => {
-  const rows: RegisterRowFacts[] = [
-    row({ id: 'a', className: 'Class 10', schoolFee: 5000, ecaAnnual: 10000 }),
-    row({ id: 'b', className: 'Class 2', schoolFee: 3000, ecaAnnual: 0 }),
-    row({ id: 'c', className: 'Class 2', schoolFee: 3000, ecaAnnual: 0 }),
-    row({ id: 'd', className: 'Class 2', schoolFee: 9999, deleted: true }),
-  ];
-  const payments: Record<string, PrincipalPaymentFacts[]> = {
-    a: [pay({ head: 'school', amount: 5000 })],
-    b: [pay({ head: 'school', amount: 1000 })],
-  };
-
-  it('aggregates per class, skipping soft-deleted rows', () => {
-    const summaries = computeClassSummary(rows, payments, AUGUST_10);
-    expect(summaries.map(s => s.className)).toEqual(['Class 2', 'Class 10']); // numeric sort
-    const two = summaries[0];
-    expect(two).toEqual({
-      className: 'Class 2', students: 2, charged: 6000, paid: 1000, pending: 5000, dueNow: 5000,
-    });
-    const ten = summaries[1];
-    expect(ten).toEqual({
-      className: 'Class 10', students: 1, charged: 15000, paid: 5000, pending: 10000, dueNow: 2000,
-    });
-  });
-
-  it('treats a row with no payments and no class safely', () => {
-    const summaries = computeClassSummary([row({ id: 'z', className: '' })], {}, AUGUST_10);
-    expect(summaries).toEqual([
-      { className: 'Unassigned', students: 1, charged: 0, paid: 0, pending: 0, dueNow: 0 },
-    ]);
-  });
-});
-
-/* ── Ledgers ──────────────────────────────────────────────────────────── */
-
-describe('daily and monthly ledger', () => {
-  const settings: LedgerSettingsFacts = {
-    openingCash: 1000,
-    openingBank: 5000,
-    openingAsOf: '2025-08-01',
-  };
-
-  const payments: PrincipalPaymentFacts[] = [
-    pay({ amount: 999, dateKey: '2025-07-31', mode: 'cash' }),   // before opening — ignored
-    pay({ amount: 500, dateKey: '2025-08-01', mode: 'cash' }),   // ON opening — counted
-    pay({ amount: 2000, dateKey: '2025-08-05', mode: 'bank' }),
-    pay({ amount: 300, dateKey: '2025-08-05', mode: 'cash' }),
-    pay({ amount: 700, dateKey: '2025-09-02', mode: 'cash' }),   // next month
-    pay({ amount: 250, dateKey: '2025-08-05', mode: 'cash', deleted: true }),
-  ];
-
-  const expenses: PrincipalExpenseFacts[] = [
-    { amount: 100, dateKey: '2025-08-05', mode: 'cash' },
-    { amount: 400, dateKey: '2025-08-06', mode: 'bank' },
-    { amount: 5000, dateKey: '2025-07-20', mode: 'cash' },       // before opening — ignored
-    { amount: 800, dateKey: '2025-08-06', mode: 'cash', deleted: true },
-  ];
-
-  it('reports the day and the closing balances for that day', () => {
-    const day = computeDailyLedger(payments, expenses, settings, '2025-08-05');
-    expect(day).toMatchObject({
-      dateKey: '2025-08-05',
-      incomeCash: 300, incomeBank: 2000, expenseCash: 100, expenseBank: 0,
-      income: 2300, expense: 100, net: 2200,
-    });
-    expect(day.cashInHand).toBe(1000 + 500 + 300 - 100);
-    expect(day.bankBalance).toBe(5000 + 2000);
-    expect(day.total).toBe(day.cashInHand + day.bankBalance);
-  });
-
-  it('counts a transaction dated ON openingAsOf, not one dated before it', () => {
-    const openingDay = computeDailyLedger(payments, expenses, settings, '2025-08-01');
-    expect(openingDay.incomeCash).toBe(500);
-    expect(openingDay.cashInHand).toBe(1500);
-
-    const beforeOpening = computeDailyLedger(payments, expenses, settings, '2025-07-31');
-    expect(beforeOpening.income).toBe(0);
-    expect(beforeOpening.cashInHand).toBe(1000);
-    expect(beforeOpening.bankBalance).toBe(5000);
-  });
-
-  it('falls back to paidAt when a payment has no dateKey', () => {
-    const day = computeDailyLedger(
-      [pay({ amount: 400, dateKey: null, paidAt: new Date(2025, 7, 12), mode: 'cash' })],
-      [], settings, '2025-08-12',
-    );
-    expect(day.incomeCash).toBe(400);
-  });
-
-  it('treats an unknown mode as cash', () => {
-    const day = computeDailyLedger(
-      [pay({ amount: 60, dateKey: '2025-08-09', mode: 'upi' })],
-      [], settings, '2025-08-09',
-    );
-    expect(day.incomeCash).toBe(60);
-    expect(day.incomeBank).toBe(0);
-  });
-
-  it('totals the month and closes with the month-end balances', () => {
-    const month = computeMonthlyLedger(payments, expenses, settings, '2025-08');
-    expect(month).toMatchObject({
-      monthKey: '2025-08',
-      incomeCash: 800, incomeBank: 2000, expenseCash: 100, expenseBank: 400,
-      income: 2800, expense: 500, net: 2300,
-    });
-    expect(month.cashInHand).toBe(1000 + 800 - 100);
-    expect(month.bankBalance).toBe(5000 + 2000 - 400);
-    expect(month.total).toBe(1700 + 6600);
-  });
-
-  it('lists one row per active day with a running balance', () => {
-    const month = computeMonthlyLedger(payments, expenses, settings, '2025-08');
-    expect(month.days.map(d => d.dateKey)).toEqual(['2025-08-01', '2025-08-05', '2025-08-06']);
-    expect(month.days[0].cashInHand).toBe(1500);
-    expect(month.days[1].cashInHand).toBe(1700);
-    expect(month.days[1].bankBalance).toBe(7000);
-    expect(month.days[2]).toMatchObject({ expenseBank: 400, expenseCash: 0 });
-    expect(month.days[2].bankBalance).toBe(6600);
-  });
-
-  it('carries earlier months into the balance but never into the totals', () => {
-    const september = computeMonthlyLedger(payments, expenses, settings, '2025-09');
-    expect(september.income).toBe(700);
-    expect(september.days.map(d => d.dateKey)).toEqual(['2025-09-02']);
-    // August's closing cash (1700) rolled forward, plus September's 700.
-    expect(september.cashInHand).toBe(2400);
-    expect(september.bankBalance).toBe(6600);
-  });
-
-  it('keeps later months out of an earlier month’s closing balance', () => {
-    const july = computeMonthlyLedger(payments, expenses, { openingCash: 1000, openingBank: 5000 }, '2025-07');
-    // No openingAsOf cut-off, so July's own transactions count and August's do not.
-    expect(july.income).toBe(999);
-    expect(july.expense).toBe(5000);
-    expect(july.cashInHand).toBe(1000 + 999 - 5000);
-  });
-
-  it('works with no settings at all', () => {
-    const day = computeDailyLedger(payments, expenses, null, '2025-08-05');
-    expect(day.cashInHand).toBe(999 + 500 + 300 - 5000 - 100);
-    expect(day.incomeBank).toBe(2000);
+    const withDeleted = [...history, { id: 'pX', head: 'school', amount: 999, dateKey: '2026-09-22', mode: 'cash', deleted: true, createdAt: new Date(2026, 8, 22) }];
+    expect(computeReceiptSnapshots(arun, withDeleted, TODAY).has('pX')).toBe(false);
   });
 });

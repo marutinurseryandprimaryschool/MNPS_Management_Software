@@ -31,6 +31,28 @@ const MAX_ENTRIES = 1000;
 
 const ALL_ACTORS = '__all__';
 
+/** Entries bucketed by calendar day, newest day first, order preserved inside. */
+function groupByDay(entries: PrincipalAuditEntry[]): {
+  dateKey: string; label: string; entries: PrincipalAuditEntry[];
+}[] {
+  const groups: { dateKey: string; label: string; entries: PrincipalAuditEntry[] }[] = [];
+  for (const entry of entries) {
+    const key = auditDateKey(entry);
+    const last = groups[groups.length - 1];
+    if (last && last.dateKey === key) {
+      last.entries.push(entry);
+      continue;
+    }
+    const label = key
+      ? new Date(`${key}T00:00:00`).toLocaleDateString('en-IN', {
+        weekday: 'short', day: 'numeric', month: 'long', year: 'numeric',
+      })
+      : 'Saving…';
+    groups.push({ dateKey: key, label, entries: [entry] });
+  }
+  return groups;
+}
+
 export default function PrincipalActivity() {
   const { role } = useAuth();
   const canView = hasCapability(role, 'viewPrincipalAccounts');
@@ -43,6 +65,10 @@ export default function PrincipalActivity() {
   const [actorUid, setActorUid] = useState(ALL_ACTORS);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  /* Which day groups are open. The NEWEST day opens by itself; older days
+     start collapsed so the page stays a short list of dates, not one long
+     scroll (each header still shows its change count). */
+  const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
 
   /**
    * Fetches into state. `isStale` lets an unmounted/superseded run drop its
@@ -184,8 +210,50 @@ export default function PrincipalActivity() {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {visible.map(entry => <AuditEntryCard key={entry.id} entry={entry} />)}
+        /* Grouped by day, newest first. Only the newest day starts open —
+           tapping any other date expands it, so the log reads as a short
+           list of dates instead of one endless scroll. */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          {groupByDay(visible).map((group, index) => {
+            const key = group.dateKey || 'undated';
+            const isOpen = openDays[key] ?? index === 0;
+            return (
+              <section
+                key={key}
+                style={{
+                  background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)', overflow: 'hidden',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenDays(prev => ({ ...prev, [key]: !isOpen }))}
+                  aria-expanded={isOpen}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                    padding: 'var(--space-3) var(--space-4)', border: 'none', cursor: 'pointer',
+                    background: 'var(--color-surface-variant)', font: 'inherit', textAlign: 'left',
+                    minHeight: 44,
+                  }}
+                >
+                  <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                    {isOpen ? '▾' : '▸'} {group.label}
+                  </span>
+                  <span className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
+                    {group.entries.length} {group.entries.length === 1 ? 'change' : 'changes'}
+                  </span>
+                </button>
+                {isOpen && (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: 'var(--space-2)',
+                    padding: 'var(--space-3)',
+                  }}>
+                    {group.entries.map(entry => <AuditEntryCard key={entry.id} entry={entry} />)}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
 

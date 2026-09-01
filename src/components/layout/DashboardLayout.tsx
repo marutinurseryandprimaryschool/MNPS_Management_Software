@@ -69,7 +69,8 @@ const PAGE_TITLES: Record<string, string> = {
   'principal-note': 'Fees Note',
   'principal-classes': 'Class-wise Register',
   'principal-teachers': 'Teacher-wise Register',
-  'principal-accounts': 'Income & Expense',
+  'principal-accounts': "Today's Billing & Expenses",
+  'principal-monthly': 'Accounts (Monthly)',
   'principal-activity': 'Activity Log',
   reports: 'Reports',
   settings: 'Settings',
@@ -141,7 +142,10 @@ export default function DashboardLayout() {
         case 'principal-note': return guard('editPrincipalRegister', <PrincipalFeesNote />);
         case 'principal-classes': return guard('editPrincipalRegister', <ClassWiseSection />);
         case 'principal-teachers': return guard('viewPrincipalRegister', <TeacherWiseSection />);
-        case 'principal-accounts': return guard('viewPrincipalAccounts', <PrincipalAccounts />);
+        case 'principal-accounts': return guard('viewPrincipalAccounts', <PrincipalAccounts initialView="daily" />);
+        case 'principal-monthly': return guard('viewPrincipalAccounts', <PrincipalAccounts initialView="monthly" />);
+        // Off the nav by request, but the audit surface stays reachable —
+        // removing the LOG would gut the accountability the rules promise.
         case 'principal-activity': return guard('viewPrincipalAccounts', <PrincipalActivity />);
 
         case 'reports': return <AdminReports />;
@@ -236,7 +240,7 @@ function MoreMenu({
         ...(hasCapability(role, 'viewPrincipalAccounts')
           ? [
               { id: 'principal-teachers', icon: <UsersIcon size={22} />, label: 'Teacher-wise' },
-              { id: 'principal-activity', icon: <ClockIcon size={22} />, label: 'Activity' },
+              { id: 'principal-monthly', icon: <ClockIcon size={22} />, label: 'Monthly' },
               { id: 'students', icon: <GraduationCapIcon size={22} />, label: 'Students' },
               { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
             ]

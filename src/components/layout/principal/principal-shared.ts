@@ -123,8 +123,22 @@ export function refreshFailedMessage(committedWhat: string): string {
 
 export const PRINCIPAL_MODE_LABELS: Record<PrincipalPaymentMode, string> = {
   cash: 'Cash',
+  upi: 'GPay / UPI',
   bank: 'Bank',
+  other: 'Other',
 };
+
+/** Dropdown options for every payment/expense mode select, in display order. */
+export const PRINCIPAL_MODE_OPTIONS: { value: PrincipalPaymentMode; label: string }[] = [
+  { value: 'cash', label: PRINCIPAL_MODE_LABELS.cash },
+  { value: 'upi', label: PRINCIPAL_MODE_LABELS.upi },
+  { value: 'bank', label: PRINCIPAL_MODE_LABELS.bank },
+  { value: 'other', label: PRINCIPAL_MODE_LABELS.other },
+];
+
+/** Select value → mode, defaulting unknowns to 'cash' (same as the engine). */
+export const asPrincipalMode = (value: string): PrincipalPaymentMode =>
+  (value === 'upi' || value === 'bank' || value === 'other' ? value : 'cash');
 
 export const PRINCIPAL_HEAD_LABELS: Record<PrincipalFeeHead, string> = {
   school: 'School fee',
@@ -133,20 +147,27 @@ export const PRINCIPAL_HEAD_LABELS: Record<PrincipalFeeHead, string> = {
   other: 'Other',
 };
 
-/** Anything not explicitly 'bank' is cash — same rule as the ledger engine. */
+/** Unknown/missing modes read as Cash — same default as the ledger engine. */
 export const modeLabel = (mode: string | null | undefined): string =>
-  (mode === 'bank' ? PRINCIPAL_MODE_LABELS.bank : PRINCIPAL_MODE_LABELS.cash);
+  PRINCIPAL_MODE_LABELS[asPrincipalMode(mode || 'cash')];
 
 export const headLabel = (head: string | null | undefined): string =>
   PRINCIPAL_HEAD_LABELS[(head || 'other') as PrincipalFeeHead] ?? 'Other';
 
 /** Seeded into `principalSettings.expenseCategories` on first save. */
 export const DEFAULT_EXPENSE_CATEGORIES: readonly string[] = [
+  'Staff',
+  'Salary',
+  // Money handed BACK to a parent (over-payment, withdrawal, cancelled van).
+  // It leaves the drawer, so it belongs here with the other outgoings.
+  'Refund to parent',
   'Stationery',
+  'Supplies',
+  'Office',
   'Utilities',
   'Repairs & Maintenance',
-  'Salary',
   'Transport',
+  'Emergency',
   'Events',
   'Cleaning',
   'Food',

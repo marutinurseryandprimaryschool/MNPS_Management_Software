@@ -21,8 +21,13 @@
 /** The three heads Sharmi keeps, plus a catch-all that belongs to no bucket. */
 export type PrincipalFeeHead = 'school' | 'eca' | 'van' | 'other';
 
-/** Money movement channel. Anything unknown is treated as cash. */
-export type PrincipalPaymentMode = 'cash' | 'bank';
+/**
+ * Money movement channel. For BALANCES only 'cash' moves Cash in Hand; 'upi',
+ * 'bank' and 'other' all land in Bank Balance (client decision, 2026-09-01) —
+ * so the drawer count stays strictly physical cash. Reports still show each
+ * channel on its own line. Legacy docs hold only 'cash' | 'bank'.
+ */
+export type PrincipalPaymentMode = 'cash' | 'upi' | 'bank' | 'other';
 
 /** Who performed a mutation (stamped on the doc AND on the audit entry). */
 export interface PrincipalActor {
@@ -90,6 +95,8 @@ export interface PrincipalExpense {
   academicYear: string;
   amount: number;
   category: string;
+  /** Who the money went to — a staff member, vendor or shop (optional). */
+  paidTo?: string;
   description?: string;
   dateKey: string;
   mode: PrincipalPaymentMode;
@@ -100,7 +107,7 @@ export interface PrincipalExpense {
 }
 
 export type PrincipalAuditAction = 'create' | 'update' | 'delete';
-export type PrincipalAuditTarget = 'register' | 'payment' | 'expense' | 'settings';
+export type PrincipalAuditTarget = 'register' | 'payment' | 'expense' | 'settings' | 'dayclose';
 
 /** Write-once. Never updated, never deleted. */
 export interface PrincipalAuditEntry {
@@ -116,6 +123,45 @@ export interface PrincipalAuditEntry {
   summary: string;
   before?: Record<string, unknown> | null;
   after?: Record<string, unknown> | null;
+}
+
+/** How the counted cash compares to what the ledger expected. */
+export type DayCloseAssessment = 'matched' | 'short' | 'excess';
+
+/**
+ * One business day's cash reconciliation (Phase 3 §16–§18).
+ *
+ *   Collection : principalDayClose/{dateKey}
+ *   Doc id     : the business date 'yyyy-MM-dd' — one close per day is
+ *                structural, no uniqueness check needed.
+ *   Fields     : below. `expectedCash` is the ledger's Cash in Hand at the
+ *                close of that day, STORED at close time so the record keeps
+ *                saying what the Principal actually compared against, even if
+ *                later corrections move the live number.
+ *   Security   : principal-only read/write, no hard delete (firestore.rules).
+ *   Purpose    : the daily "count the drawer" anchor; a 'closed' day also
+ *                blocks new/edited payments and expenses on that date until
+ *                the Principal reopens it (the auditable correction path).
+ */
+export interface PrincipalDayClose {
+  /** Same as the doc id. */
+  dateKey: string;
+  academicYear: string;
+  /** Ledger Cash in Hand at close of the day, at the moment of closing. */
+  expectedCash: number;
+  /** What the Principal physically counted. */
+  actualCash: number;
+  /** actualCash − expectedCash. */
+  difference: number;
+  assessment: DayCloseAssessment;
+  /** 'closed' protects the day; 'reopened' lifts it for corrections. */
+  status: 'closed' | 'reopened';
+  /** The Principal's explanation when the count does not match. */
+  note?: string;
+  closedByUid: string;
+  closedByName: string;
+  closedAt: Date;
+  updatedAt: Date;
 }
 
 export interface PrincipalSettings {
@@ -143,6 +189,17 @@ export type NewPrincipalExpense = Omit<
   PrincipalExpense,
   'id' | 'deleted' | 'createdAt' | 'enteredByUid' | 'enteredByName'
 >;
+
+/** What the Day Close screen submits; the service computes the rest. */
+export interface DayCloseInput {
+  dateKey: string;
+  academicYear: string;
+  /** Ledger Cash in Hand at close of the day, as shown to the Principal. */
+  expectedCash: number;
+  /** What the Principal physically counted. */
+  actualCash: number;
+  note?: string;
+}
 
 /* ── Engine inputs (structural — stored docs are assignable) ──────────── */
 
@@ -178,6 +235,23 @@ export interface PrincipalExpenseFacts {
   deleted?: boolean;
 }
 
+/**
+ * What the expense report needs on top of the ledger facts.
+ * `PrincipalExpense` satisfies this.
+ */
+export interface ExpenseReportFacts extends PrincipalExpenseFacts {
+  category?: string | null;
+}
+
+/**
+ * What the teacher roll-up needs on top of the row facts.
+ * `RegisterRow` satisfies this.
+ */
+export interface TeacherRowFacts extends RegisterRowFacts {
+  teacherUid?: string | null;
+  teacherName?: string | null;
+}
+
 /** Opening-balance slice of `PrincipalSettings` the ledgers need. */
 export interface LedgerSettingsFacts {
   openingCash?: number | null;
@@ -198,11 +272,20 @@ export interface MonthCell {
   isDue: boolean;
 }
 
+/**
+ * Where a head stands once its payments are counted.
+ * 'pending' nothing received · 'partial' some received · 'paid' settled.
+ * A head with nothing charged reads 'pending' until money arrives against it —
+ * "not applicable" is `charged === 0`, which callers test separately.
+ */
+export type FeeStatus = 'pending' | 'partial' | 'paid';
+
 /** School fee: one flat charge, due immediately. */
 export interface HeadSummary {
   charged: number;
   paid: number;
   pending: number;
+  status: FeeStatus;
 }
 
 /** ECA / van: a month grid plus head-level totals. */
@@ -223,6 +306,8 @@ export interface RowSummary {
   totalPending: number;
   /** The arrears number: what Sharmi can chase TODAY. */
   totalDueNow: number;
+  /** The row as a whole, from totalCharged vs totalPaid. */
+  status: FeeStatus;
 }
 
 export interface ClassSummary {
@@ -232,6 +317,35 @@ export interface ClassSummary {
   paid: number;
   pending: number;
   dueNow: number;
+}
+
+/** One teacher's money, for the Accounts teacher list (Phase 2 §7). */
+export interface TeacherSummary {
+  /** The teacher's AUTH uid; '' for students nobody is responsible for. */
+  teacherUid: string;
+  teacherName: string;
+  students: number;
+  charged: number;
+  collected: number;
+  /** Everything still unpaid, including months that have not ended. */
+  outstanding: number;
+  /** What can be chased today — the arrears number. */
+  dueNow: number;
+}
+
+/**
+ * School-wide outstanding position for the finance home (Phase 2 §4).
+ * Student counts use the same three states as `feeStatus`.
+ */
+export interface OutstandingSummary {
+  students: number;
+  charged: number;
+  collected: number;
+  outstanding: number;
+  dueNow: number;
+  pendingStudents: number;
+  partialStudents: number;
+  paidStudents: number;
 }
 
 /** Money that moved in a period, split by channel. */
@@ -266,4 +380,77 @@ export interface MonthlyLedger extends LedgerFlows {
   total: number;
   /** Days with activity, oldest first, each carrying its running balance. */
   days: DailyLedger[];
+}
+
+/* ── Expense report ───────────────────────────────────────────────────── */
+
+/** One category's spend over the reported window. */
+export interface ExpenseCategoryTotal {
+  /** Trimmed category, or 'Uncategorised' when the entry carries none. */
+  category: string;
+  cash: number;
+  bank: number;
+  total: number;
+  /** How many entries rolled up into this line. */
+  count: number;
+  /** Percent (0–100) of the window's total spend. 0 when nothing was spent. */
+  share: number;
+}
+
+/**
+ * Spend over a date window, split by category and by mode. Unlike the daily /
+ * monthly ledgers this applies NO opening-balance cut-off: a report answers
+ * "what did we spend between these dates", which includes entries the balance
+ * carries as opening money.
+ */
+export interface ExpenseReport {
+  /** Inclusive 'yyyy-MM-dd' bounds actually reported on. */
+  fromKey: string;
+  toKey: string;
+  /** Biggest spend first; ties broken by category name. */
+  categories: ExpenseCategoryTotal[];
+  cash: number;
+  bank: number;
+  total: number;
+  count: number;
+}
+
+/* ── Receipt snapshot (Phase 3 §19) ───────────────────────────────────── */
+
+/**
+ * The balance story of ONE payment, reconstructed from the immutable history:
+ * what the student owed before it, what remained after it, and the row's
+ * status at that point. Deterministic for historical receipts — it counts
+ * only payments recorded up to and including this one, so reprinting a
+ * September receipt in March still shows September's numbers.
+ */
+export interface ReceiptSnapshot {
+  previousPending: number;
+  remainingPending: number;
+  status: FeeStatus;
+}
+
+/* ── Per-method money (Phase 1 §15) ───────────────────────────────────── */
+
+/** One payment channel's movement over a window: in, out, and the difference. */
+export interface ModeTotalsRow {
+  mode: PrincipalPaymentMode;
+  collected: number;
+  spent: number;
+  net: number;
+}
+
+/**
+ * Collected / spent / net per payment channel over an inclusive date window.
+ * Always carries all four channels, in fixed order (cash, upi, bank, other),
+ * so a consumer never has to guard against a missing row. Reporting only —
+ * balances stay on the cash/bank buckets of the ledgers.
+ */
+export interface ModeTotals {
+  fromKey: string;
+  toKey: string;
+  rows: ModeTotalsRow[];
+  collected: number;
+  spent: number;
+  net: number;
 }

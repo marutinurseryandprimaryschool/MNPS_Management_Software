@@ -22,6 +22,16 @@ import {
 } from './accounts-ui';
 import type { DailyLedger, PrincipalExpense, PrincipalPayment } from '@/types/principal';
 
+/** 'yyyy-MM-dd' shifted by whole days, built from parts (never UTC parsing). */
+function shiftDateKey(dateKey: string, days: number): string {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  if (!year || !month || !day) return dateKey;
+  const shifted = new Date(year, month - 1, day + days);
+  const mm = `${shifted.getMonth() + 1}`.padStart(2, '0');
+  const dd = `${shifted.getDate()}`.padStart(2, '0');
+  return `${shifted.getFullYear()}-${mm}-${dd}`;
+}
+
 interface AccountsDailyProps {
   dateKey: string;
   maxDate: string;
@@ -33,13 +43,15 @@ interface AccountsDailyProps {
   canManageExpenses: boolean;
   onDeleteExpense: (expense: PrincipalExpense) => void;
   onShowExpenseHistory: (expense: PrincipalExpense) => void;
+  /** Removes a wrongly-entered receipt right where it shows (soft delete). */
+  onDeletePayment?: (payment: PrincipalPayment) => void;
   /** 'yyyy-MM-dd' cut-off from settings; '' when no opening date is set. */
   openingAsOf: string;
 }
 
 export default function AccountsDaily({
   dateKey, maxDate, onDateChange, ledger, payments, expenses,
-  canManageExpenses, onDeleteExpense, onShowExpenseHistory, openingAsOf,
+  canManageExpenses, onDeleteExpense, onShowExpenseHistory, onDeletePayment, openingAsOf,
 }: AccountsDailyProps) {
   const countedPayments = partitionByOpening(payments, openingAsOf);
   const countedExpenses = partitionByOpening(expenses, openingAsOf);
@@ -61,6 +73,17 @@ export default function AccountsDaily({
         strong: true,
       },
     ],
+    actions: onDeletePayment ? (
+      <button
+        type="button"
+        onClick={() => onDeletePayment(payment)}
+        title="Remove this payment (kept in the activity log)"
+        aria-label="Remove payment"
+        style={{ ...iconButtonStyle, color: 'var(--color-error)' }}
+      >
+        <TrashIcon size={14} />
+      </button>
+    ) : undefined,
   }));
 
   const expenseItems: RecordItem[] = expenses.map(expense => ({
@@ -68,6 +91,7 @@ export default function AccountsDaily({
     title: expense.category || 'Uncategorised',
     subtitle: expense.description || undefined,
     cells: [
+      { label: 'Paid to', value: expense.paidTo || '—' },
       { label: 'Mode', value: modeLabel(expense.mode) },
       { label: 'Entered by', value: expense.enteredByName || '—' },
       {
@@ -112,6 +136,30 @@ export default function AccountsDaily({
           onChange={e => onDateChange(e.target.value || maxDate)}
           style={pickerStyle}
         />
+        {/* Jumping back a day or two is the common case — no typing needed. */}
+        {[
+          { label: 'Today', offset: 0 },
+          { label: 'Yesterday', offset: -1 },
+          { label: '2 days ago', offset: -2 },
+        ].map(({ label, offset }) => {
+          const target = shiftDateKey(maxDate, offset);
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => onDateChange(target)}
+              style={{
+                padding: '6px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.78rem',
+                fontWeight: 600, minHeight: 34, cursor: 'pointer',
+                border: `1px solid ${dateKey === target ? 'var(--color-text-primary)' : 'var(--color-border)'}`,
+                background: dateKey === target ? 'var(--color-text-primary)' : 'var(--color-surface)',
+                color: dateKey === target ? 'var(--color-text-inverse)' : 'var(--color-text-secondary)',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
         <Badge variant="info">{dateKeyLabel(dateKey)}</Badge>
       </div>
 

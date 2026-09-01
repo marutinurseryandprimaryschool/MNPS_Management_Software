@@ -30,6 +30,7 @@ export const TARGET_LABELS: Record<PrincipalAuditTarget, string> = {
   payment: 'Payment',
   expense: 'Expense',
   settings: 'Settings',
+  dayclose: 'Day close',
 };
 
 /** Human labels for the fields that appear in a before/after blob. */

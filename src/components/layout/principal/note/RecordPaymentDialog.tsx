@@ -19,9 +19,10 @@ import React, { useEffect, useState } from 'react';
 import Button from '@/components/ui/Button';
 import Input, { Select, Textarea } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
-import { PrincipalPaymentsService } from '@/lib/principal-service';
+import { PrincipalDayCloseService, PrincipalPaymentsService } from '@/lib/principal-service';
 import {
-  formatINR, headLabel, principalWriteError, refreshFailedMessage, todayKey,
+  PRINCIPAL_MODE_OPTIONS, asPrincipalMode, formatINR, headLabel,
+  principalWriteError, refreshFailedMessage, todayKey,
 } from '../principal-shared';
 import ResponsiveSheet, { SheetActions } from './ResponsiveSheet';
 import { dateFromKey, type PaymentPrefill } from './note-helpers';
@@ -213,6 +214,23 @@ export default function RecordPaymentDialog({
     };
 
     setSaving(true);
+
+    // Closed-day guard (§18): the rules reject a payment on a closed date —
+    // check first so Sharmi reads a sentence instead of a permission error.
+    try {
+      const dayClose = await PrincipalDayCloseService.get(form.dateKey);
+      if (dayClose?.status === 'closed') {
+        showToast(
+          `${form.dateKey} is closed in the day-close book. Reopen it from Accounts → Daily to record corrections.`,
+          'error',
+        );
+        setSaving(false);
+        return;
+      }
+    } catch {
+      // Could not read the day-close record — firestore.rules still enforce it.
+    }
+
     try {
       await PrincipalPaymentsService.create(payload, actor);
       showToast(`${formatINR(amount)} recorded for ${row.name}`);
@@ -275,7 +293,7 @@ export default function RecordPaymentDialog({
             gap: 'var(--space-3)',
           }}>
             <Input
-              label="Amount (₹)"
+              label="Amount Received"
               type="number"
               min={0}
               value={form.amount}
@@ -283,7 +301,7 @@ export default function RecordPaymentDialog({
               onChange={event => setField('amount', event.target.value)}
             />
             <Input
-              label="Collection date"
+              label="Payment Date"
               type="date"
               value={form.dateKey}
               max={todayKey()}
@@ -292,15 +310,12 @@ export default function RecordPaymentDialog({
               onChange={event => setField('dateKey', event.target.value)}
             />
             <Select
-              label="Received as"
+              label="Payment Method"
               value={form.mode}
               disabled={saving}
-              options={[
-                { value: 'cash', label: 'Cash' },
-                { value: 'bank', label: 'Bank' },
-              ]}
+              options={PRINCIPAL_MODE_OPTIONS}
               onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
-                setField('mode', event.target.value === 'bank' ? 'bank' : 'cash')}
+                setField('mode', asPrincipalMode(event.target.value))}
             />
           </div>
 

@@ -24,15 +24,36 @@ const norm = (v: string): string => v.toLowerCase().replace(/\s+/g, ' ').trim();
 
 export default function PickStudentDialog({ isOpen, rows, onClose, onPick }: PickStudentDialogProps) {
   const [term, setTerm] = useState('');
+  /** Narrow by class, then by section — how a parent is actually located. */
+  const [className, setClassName] = useState('');
+  const [section, setSection] = useState('');
+
+  const live = useMemo(() => rows.filter(r => !r.deleted), [rows]);
+
+  const classNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of live) if (row.className) set.add(row.className);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [live]);
+
+  /** Sections available inside the chosen class (all sections when none). */
+  const sections = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of live) {
+      if (className && row.className !== className) continue;
+      if (row.sectionName) set.add(row.sectionName);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [live, className]);
 
   const matches = useMemo(() => {
-    const live = rows.filter(r => !r.deleted);
     const q = norm(term);
-    if (!q) return live.slice(0, 60);
     return live
-      .filter(r => norm(`${r.name} ${r.className} ${r.rollNo || ''}`).includes(q))
+      .filter(r => !className || r.className === className)
+      .filter(r => !section || r.sectionName === section)
+      .filter(r => !q || norm(`${r.name} ${r.className} ${r.rollNo || ''}`).includes(q))
       .slice(0, 60);
-  }, [rows, term]);
+  }, [live, term, className, section]);
 
   if (!isOpen) return null;
 
@@ -60,6 +81,37 @@ export default function PickStudentDialog({ isOpen, rows, onClose, onPick }: Pic
           />
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+          <select
+            aria-label="Filter by class"
+            value={className}
+            onChange={e => { setClassName(e.target.value); setSection(''); }}
+            style={{
+              width: '100%', padding: '10px 12px', fontSize: '0.9rem', minHeight: 44,
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+              background: 'var(--color-surface)', color: 'var(--color-text-primary)',
+            }}
+          >
+            <option value="">All classes</option>
+            {classNames.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
+          <select
+            aria-label="Filter by section"
+            value={section}
+            onChange={e => setSection(e.target.value)}
+            disabled={sections.length === 0}
+            style={{
+              width: '100%', padding: '10px 12px', fontSize: '0.9rem', minHeight: 44,
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+              background: 'var(--color-surface)', color: 'var(--color-text-primary)',
+              opacity: sections.length === 0 ? 0.5 : 1,
+            }}
+          >
+            <option value="">All sections</option>
+            {sections.map(name => <option key={name} value={name}>Section {name}</option>)}
+          </select>
+        </div>
+
         <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
           {matches.length === 0 ? (
             <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.85rem' }}>
@@ -79,8 +131,10 @@ export default function PickStudentDialog({ isOpen, rows, onClose, onPick }: Pic
               }}
             >
               <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{row.name}</span>
-              <span className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
-                {row.className}{row.rollNo ? ` • ${row.rollNo}` : ''}
+              <span className="text-caption" style={{ color: 'var(--color-text-tertiary)', textAlign: 'right' }}>
+                {[row.className, row.sectionName].filter(Boolean).join(' - ')}
+                {row.rollNo ? ` • Roll ${row.rollNo}` : ''}
+                {row.teacherName ? <><br />{row.teacherName}</> : ''}
               </span>
             </button>
           ))}

@@ -34,6 +34,9 @@ interface NoteHeaderProps {
   /** Payments need at least one student, so this is gated separately. */
   canAddPayment: boolean;
   onAddPayment: () => void;
+  /** Bulk-add from the school's registered students (Principal only). */
+  canImport: boolean;
+  onImport: () => void;
 }
 
 interface StatTile {
@@ -56,7 +59,7 @@ const tileStyle: React.CSSProperties = {
 export default function NoteHeader({
   academicYear, totals, visibleCount, search, onSearchChange,
   classFilter, classNames, onClassFilterChange, canAddStudent, onAddStudent,
-  canAddPayment, onAddPayment,
+  canAddPayment, onAddPayment, canImport, onImport,
 }: NoteHeaderProps) {
   const tiles: StatTile[] = [
     { label: 'Charged', value: formatINR(totals.charged) },
@@ -92,9 +95,18 @@ export default function NoteHeader({
               Add New Payment
             </Button>
           )}
-          {canAddStudent && (
+          {canImport && (
             <Button
               variant={canAddPayment ? 'secondary' : 'primary'}
+              icon={<PlusIcon size={16} />}
+              onClick={onImport}
+            >
+              Add from student list
+            </Button>
+          )}
+          {canAddStudent && (
+            <Button
+              variant="secondary"
               icon={<PlusIcon size={16} />}
               onClick={onAddStudent}
             >

@@ -518,6 +518,19 @@ describeRules('principalPayments: create', () => {
     );
   });
 
+  // Phase 1 §15: GPay/UPI and Other joined cash/bank as accepted channels.
+  it('ALLOWS the upi payment mode', async () => {
+    await assertSucceeds(
+      asTeacher().doc('principalPayments/pay-mode-upi').set(principalPayment({ mode: 'upi' }))
+    );
+  });
+
+  it('ALLOWS the other payment mode', async () => {
+    await assertSucceeds(
+      asTeacher().doc('principalPayments/pay-mode-other').set(principalPayment({ mode: 'other' }))
+    );
+  });
+
   it('DENIES an academicYear that does not match the row', async () => {
     await assertFails(
       asTeacher().doc('principalPayments/pay-year-1').set(principalPayment({ academicYear: '2099-00' }))
@@ -828,5 +841,129 @@ describeRules('principalSettings', () => {
 
   it('DENIES a signed-out caller reading settings', async () => {
     await assertFails(asSignedOut().doc('principalSettings/main').get());
+  });
+});
+
+/* ── Day close (Phase 3 §16–§18) ─────────────────────────────────────── */
+
+const CLOSED_DATE = '2026-08-19';
+
+const dayClose = (overrides: Record<string, unknown> = {}) => ({
+  dateKey: CLOSED_DATE,
+  academicYear: YEAR,
+  expectedCash: 25000,
+  actualCash: 24500,
+  difference: -500,
+  assessment: 'short',
+  status: 'closed',
+  note: 'expense receipt missing',
+  closedByUid: PRINCIPAL_UID,
+  closedByName: 'Sharmi',
+  closedAt: serverNow(),
+  updatedAt: serverNow(),
+  ...overrides,
+});
+
+describeRules('principalDayClose: create and update', () => {
+  it('ALLOWS the principal closing a day with pinned fields', async () => {
+    await assertSucceeds(asPrincipal().doc(`principalDayClose/${CLOSED_DATE}`).set(dayClose()));
+  });
+
+  it('DENIES a teacher closing a day', async () => {
+    await assertFails(asTeacher().doc(`principalDayClose/${CLOSED_DATE}`).set(
+      dayClose({ closedByUid: TEACHER_UID })));
+  });
+
+  it('DENIES an admin closing a day', async () => {
+    await assertFails(asAdmin().doc(`principalDayClose/${CLOSED_DATE}`).set(
+      dayClose({ closedByUid: ADMIN_UID })));
+  });
+
+  it('DENIES a difference that does not equal actual - expected', async () => {
+    await assertFails(asPrincipal().doc(`principalDayClose/${CLOSED_DATE}`).set(
+      dayClose({ difference: 0 })));
+  });
+
+  it('DENIES a negative counted cash', async () => {
+    await assertFails(asPrincipal().doc(`principalDayClose/${CLOSED_DATE}`).set(
+      dayClose({ actualCash: -1, difference: -25001 })));
+  });
+
+  it('DENIES a doc whose dateKey disagrees with its id', async () => {
+    await assertFails(asPrincipal().doc('principalDayClose/2026-08-20').set(dayClose()));
+  });
+
+  it('DENIES being born already reopened', async () => {
+    await assertFails(asPrincipal().doc(`principalDayClose/${CLOSED_DATE}`).set(
+      dayClose({ status: 'reopened' })));
+  });
+
+  it('ALLOWS the principal reopening a closed day', async () => {
+    await seedDocs({ [`principalDayClose/${CLOSED_DATE}`]: dayClose({ closedAt: '2026-08-19T18:00:00+05:30', updatedAt: '2026-08-19T18:00:00+05:30' }) });
+    await assertSucceeds(asPrincipal().doc(`principalDayClose/${CLOSED_DATE}`)
+      .update({ status: 'reopened' }));
+  });
+
+  it('DENIES a teacher reading a day-close record (cash counts are principal-only)', async () => {
+    await seedDocs({ [`principalDayClose/${CLOSED_DATE}`]: dayClose({ closedAt: '2026-08-19T18:00:00+05:30', updatedAt: '2026-08-19T18:00:00+05:30' }) });
+    await assertFails(asTeacher().doc(`principalDayClose/${CLOSED_DATE}`).get());
+  });
+
+  it('DENIES deleting a day-close record', async () => {
+    await seedDocs({ [`principalDayClose/${CLOSED_DATE}`]: dayClose({ closedAt: '2026-08-19T18:00:00+05:30', updatedAt: '2026-08-19T18:00:00+05:30' }) });
+    await assertFails(asPrincipal().doc(`principalDayClose/${CLOSED_DATE}`).delete());
+  });
+});
+
+describeRules('principalDayClose: closed-day protection (§18)', () => {
+  beforeEach(async () => {
+    await seedRows();
+    await seedDocs({
+      [`principalDayClose/${CLOSED_DATE}`]: dayClose({
+        closedAt: '2026-08-19T18:00:00+05:30', updatedAt: '2026-08-19T18:00:00+05:30',
+      }),
+    });
+  });
+
+  it('DENIES the principal creating a payment on a closed date', async () => {
+    await assertFails(asPrincipal().doc('principalPayments/pay-closed-1').set(
+      principalPayment({ dateKey: CLOSED_DATE, enteredByUid: PRINCIPAL_UID, enteredByRole: 'principal' })));
+  });
+
+  it('DENIES a teacher creating a payment on a closed date', async () => {
+    await assertFails(asTeacher().doc('principalPayments/pay-closed-2').set(
+      principalPayment({ dateKey: CLOSED_DATE })));
+  });
+
+  it('ALLOWS the same payment on an OPEN date', async () => {
+    await assertSucceeds(asPrincipal().doc('principalPayments/pay-open-1').set(
+      principalPayment({ dateKey: '2026-08-20', enteredByUid: PRINCIPAL_UID, enteredByRole: 'principal' })));
+  });
+
+  it('ALLOWS the payment once the day is REOPENED', async () => {
+    await seedDocs({
+      [`principalDayClose/${CLOSED_DATE}`]: dayClose({
+        status: 'reopened', closedAt: '2026-08-19T18:00:00+05:30', updatedAt: '2026-08-19T18:00:00+05:30',
+      }),
+    });
+    await assertSucceeds(asPrincipal().doc('principalPayments/pay-reopened-1').set(
+      principalPayment({ dateKey: CLOSED_DATE, enteredByUid: PRINCIPAL_UID, enteredByRole: 'principal' })));
+  });
+
+  it('DENIES editing a payment that sits on a closed date', async () => {
+    await seedDocs({ 'principalPayments/pay-1': principalPayment({ dateKey: CLOSED_DATE, createdAt: '2026-08-19T10:00:00+05:30' }) });
+    await assertFails(asPrincipal().doc('principalPayments/pay-1').update({ amount: 100 }));
+  });
+
+  it('DENIES moving a payment INTO a closed date', async () => {
+    await seedDocs({ 'principalPayments/pay-2': principalPayment({ dateKey: '2026-08-20', createdAt: '2026-08-20T10:00:00+05:30' }) });
+    await assertFails(asPrincipal().doc('principalPayments/pay-2').update({ dateKey: CLOSED_DATE }));
+  });
+
+  it('DENIES an expense on a closed date, ALLOWS it on an open one', async () => {
+    await assertFails(asPrincipal().doc('principalExpenses/exp-closed-1').set(
+      principalExpense({ dateKey: CLOSED_DATE })));
+    await assertSucceeds(asPrincipal().doc('principalExpenses/exp-open-1').set(
+      principalExpense({ dateKey: '2026-08-20' })));
   });
 });
