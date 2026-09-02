@@ -24,7 +24,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { Badge } from '@/components/ui/SharedUI';
 import { SearchInput } from '@/components/ui/Input';
-import { TeachersService } from '@/lib/firestore-service';
+import { StudentsService, TeachersService } from '@/lib/firestore-service';
+import type { RegisterRow } from '@/types/principal';
 import { useRegisterData } from '../principal/registers/useRegisterData';
 import StudentRegisterList from '../principal/registers/StudentRegisterList';
 import StudentDetailSheet from '../principal/registers/StudentDetailSheet';
@@ -33,8 +34,10 @@ import {
   EmptyBlock, ErrorBlock, LoadingBlock, NoticeBanner, StatGrid, surfaceCard, useIsNarrow,
 } from '../principal/registers/register-ui';
 
-/** One class-section this teacher is responsible for. */
-interface AssignedSection {
+/** The single section this teacher is CLASS TEACHER of. */
+interface ClassTeacherOf {
+  classId: string;
+  sectionId: string;
   className: string;
   sectionName: string;
 }
@@ -47,18 +50,25 @@ export default function TeacherClassFeeRegister() {
   const narrow = useIsNarrow();
   const data = useRegisterData(school?.academicYear);
 
-  const [sections, setSections] = useState<AssignedSection[] | null>(null);
+  /** null = still resolving; the object or 'none' once known. */
+  const [classOf, setClassOf] = useState<ClassTeacherOf | 'none' | null>(null);
   const [sectionError, setSectionError] = useState<string | null>(null);
+  /** The section's FULL roll, from the school's student list. */
+  const [classStudents, setClassStudents] = useState<Record<string, unknown>[]>([]);
   const [search, setSearch] = useState('');
   const [detailRowId, setDetailRowId] = useState<string | null>(null);
 
   const myUid = user?.uid || user?.id || '';
 
   /**
-   * Which class-sections this teacher holds. Read from their teacher record
-   * and the per-year assignments, matched on the AUTH uid — the same identity
-   * firestore.rules compares — with the teacher-doc id as a fallback for
-   * records whose uid has not been healed yet.
+   * The section this teacher is CLASS TEACHER of — not every section they
+   * teach a subject in. That was the old register's scope and the one the
+   * teachers asked for: "my class", singular. A teacher who takes a subject
+   * in four sections is class teacher of at most one.
+   *
+   * The section's whole roll then comes from the school's student list, so
+   * the page shows CLASS STRENGTH rather than only the children who happen
+   * to be in the fees register already.
    */
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +76,7 @@ export default function TeacherClassFeeRegister() {
       try {
         const [teachers, assignments] = await Promise.all([
           TeachersService.getAll(),
-          TeachersService.getAllAssignments(school?.academicYear),
+          TeachersService.getAllAssignments(school?.academicYear ?? ''),
         ]);
         if (cancelled) return;
 
@@ -79,36 +89,87 @@ export default function TeacherClassFeeRegister() {
           ? (assignments as Record<string, unknown>[]).find(a => a.teacherId === mine.id)
           : undefined;
 
-        const list = ((mineAssignments?.assignments ?? []) as Record<string, unknown>[])
-          .map(entry => ({
-            className: String(entry.className ?? ''),
-            sectionName: String(entry.sectionName ?? ''),
-          }))
-          .filter(entry => entry.className);
+        // Assignments live per-year; older records keep them on the teacher doc.
+        const entries = [
+          ...((mineAssignments?.assignments ?? []) as Record<string, unknown>[]),
+          ...((mine?.assignedClasses ?? []) as Record<string, unknown>[]),
+        ];
+        const classTeacherEntry = entries.find(entry => entry.isClassTeacher === true);
 
-        setSections(list);
+        if (!classTeacherEntry) {
+          setClassOf('none');
+          setSectionError(null);
+          return;
+        }
+
+        const section: ClassTeacherOf = {
+          classId: String(classTeacherEntry.classId ?? ''),
+          sectionId: String(classTeacherEntry.sectionId ?? ''),
+          className: String(classTeacherEntry.className ?? ''),
+          sectionName: String(classTeacherEntry.sectionName ?? ''),
+        };
+
+        const roll = section.sectionId
+          ? await StudentsService.getByClassSection(
+            section.classId, section.sectionId, school?.academicYear)
+          : await StudentsService.getByClass(section.classId, school?.academicYear);
+        if (cancelled) return;
+
+        setClassStudents((roll as Record<string, unknown>[]) ?? []);
+        setClassOf(section);
         setSectionError(null);
       } catch (error) {
         if (cancelled) return;
-        console.error('[class-fee-register] could not load your class assignment', error);
+        console.error('[class-fee-register] could not load your class', error);
         // Never fall back to "no students" — that reads as an empty class.
-        setSectionError('Could not load which class you are assigned to. Please retry.');
-        setSections(null);
+        setSectionError('Could not load your class list. Please retry.');
+        setClassOf(null);
       }
     })();
     return () => { cancelled = true; };
   }, [myUid, user?.email, school?.academicYear]);
 
-  /** Register rows belonging to any class-section this teacher holds. */
+  /**
+   * The section's roll as REGISTER rows, so school / ECA / van balances come
+   * from the very records the Principal maintains. A child on the roll with
+   * no register row yet is carried as a zero row rather than dropped — the
+   * class teacher should see their whole class, and a missing fee setup is
+   * information, not a reason to hide the student.
+   */
   const myRows = useMemo(() => {
-    if (!sections || sections.length === 0) return [];
-    return data.rows
-      .filter(row => sections.some(section =>
-        norm(row.className) === norm(section.className)
-        // A section-less assignment covers the whole class.
-        && (!section.sectionName || norm(row.sectionName) === norm(section.sectionName))))
+    if (!classOf || classOf === 'none') return [];
+    const byKey = new Map<string, RegisterRow>();
+    for (const row of data.rows) {
+      byKey.set(`${norm(row.name)}|${norm(row.className)}`, row);
+    }
+    return classStudents
+      .map((student, index) => {
+        const name = String(student.name ?? '');
+        const className = String(student.className ?? classOf.className);
+        const existing = byKey.get(`${norm(name)}|${norm(className)}`);
+        if (existing) return existing;
+        return {
+          id: `unregistered:${String(student.id ?? index)}`,
+          academicYear: school?.academicYear ?? '',
+          name,
+          className,
+          sectionName: String(student.sectionName ?? student.section ?? ''),
+          rollNo: String(student.rollNo ?? student.rollNumber ?? ''),
+          schoolFee: 0,
+          ecaAnnual: 0,
+          ecaMonths: [],
+          vanMonthly: 0,
+          vanMonths: [],
+        } as unknown as RegisterRow;
+      })
       .sort(compareStudents);
-  }, [data.rows, sections]);
+  }, [classStudents, classOf, data.rows, school?.academicYear]);
+
+  /** How many of the class have no fee row yet — worth saying out loud. */
+  const unregisteredCount = useMemo(
+    () => myRows.filter(row => row.id.startsWith('unregistered:')).length,
+    [myRows],
+  );
 
   const term = search.trim().toLowerCase();
   const visibleRows = useMemo(() => (term
@@ -130,7 +191,7 @@ export default function TeacherClassFeeRegister() {
 
   const detailRow = data.rows.find(row => row.id === detailRowId) ?? null;
 
-  if (data.loading || sections === null) {
+  if (data.loading || classOf === null) {
     if (sectionError) {
       return (
         <div className="page-container">
@@ -166,18 +227,18 @@ export default function TeacherClassFeeRegister() {
             {school?.academicYear && <Badge variant="primary">{school.academicYear}</Badge>}
           </div>
           <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-            {sections.length > 0
-              ? `${sections.map(s => [s.className, s.sectionName].filter(Boolean).join(' · ')).join(', ')}`
-              : 'Your class-section'}
-            {' — school, ECA and van fees for every student. View only.'}
+            {classOf !== 'none'
+              ? [classOf.className, classOf.sectionName].filter(Boolean).join(' · ')
+              : 'Your class'}
+            {' — school, ECA and van fees for every student in your class. View only.'}
           </p>
         </div>
       </div>
 
-      {sections.length === 0 ? (
+      {classOf === 'none' ? (
         <EmptyBlock
-          title="No class assigned to you yet"
-          hint="Ask the office to assign your class and section on your teacher record — this page then lists that section's fees."
+          title="You are not set as a class teacher yet"
+          hint="This page lists your own class. Ask the office to mark you as class teacher of your section on your teacher record, and your class appears here."
         />
       ) : (
         <>
@@ -203,6 +264,14 @@ export default function TeacherClassFeeRegister() {
             View only. Fee amounts and payments are recorded by the Principal; tap a student to see
             their full breakdown and payment history.
           </NoticeBanner>
+
+          {unregisteredCount > 0 && (
+            <NoticeBanner tone="warning">
+              {unregisteredCount} of your {myRows.length} students {unregisteredCount === 1 ? 'is' : 'are'} on
+              the class roll but not yet in the fees register, so {unregisteredCount === 1 ? 'it shows' : 'they show'} ₹0.
+              The Principal adds them from the Fees Note.
+            </NoticeBanner>
+          )}
 
           <div style={{ marginBottom: 'var(--space-4)', maxWidth: narrow ? '100%' : 360 }}>
             <SearchInput value={search} onChange={setSearch} placeholder="Search student, section or roll" />
