@@ -21,7 +21,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Button from '@/components/ui/Button';
 import { SearchInput, Select } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
-import { TeachersService } from '@/lib/firestore-service';
+import { TeachersService, UsersService } from '@/lib/firestore-service';
 import { computeTeacherSummaries } from '@/lib/principal-fees';
 import { PrincipalRegisterService } from '@/lib/principal-service';
 import type { PrincipalActor, RegisterRow, TeacherSummary } from '@/types/principal';
@@ -91,6 +91,37 @@ export default function TeacherAssignPanel({ data, actor, academicYear }: Teache
       try {
         const docs = await TeachersService.getAll();
         if (cancelled) return;
+
+        // Auto-heal missing UIDs: when a new teacher logs in, their users doc gets
+        // a real Auth UID, but their teacher doc is left with userId: '' because
+        // they lack permission to update it. The Principal has permission, so we
+        // heal it here on the fly.
+        try {
+          const usersDocs = await UsersService.getAll();
+          for (const t of docs) {
+            const currentUid = teacherAuthUid(t as { userId?: string; uid?: string; id?: string });
+            const teacherEmail = String(t.email ?? '').trim().toLowerCase();
+            if (currentUid || !teacherEmail) continue;
+            // users docs are KEYED by the auth uid — it lives in `id`, not in a
+            // `uid` field (that was the bug: `u.uid` was always undefined, so
+            // the heal never fired). Emails compare case-insensitively because
+            // Google lowercases them while the teacher card may not.
+            const activeUser = usersDocs.find(u =>
+              String(u.email ?? '').trim().toLowerCase() === teacherEmail
+              && u.status === 'active');
+            const healedUid = activeUser ? String(activeUser.uid || activeUser.id || '') : '';
+            if (healedUid) {
+              await TeachersService.update(t.id, { userId: healedUid, uid: healedUid });
+              t.userId = healedUid;
+              t.uid = healedUid;
+            }
+          }
+        } catch (healErr) {
+          console.warn('[principal-register] could not auto-heal teacher UIDs', healErr);
+        }
+
+        if (cancelled) return;
+
         setTeachers(docs
           .map(doc => ({
             id: String(doc.id ?? ''),

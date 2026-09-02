@@ -135,6 +135,27 @@ export default function AdminTimetable() {
   // ── Get slot for a specific day/period ──
   const getSlot = (day: DayOfWeek, period: number) => slots.find(s => s.day === day && s.period === period);
 
+  /**
+   * A saved cell froze whatever teacher was known at SAVE time — which is why
+   * assigning a teacher later never changed the grid. Resolve the name LIVE
+   * from the current teacher setup (subject + this class/section) at every
+   * render: assign a teacher today and the timetable shows their name
+   * immediately, no re-save needed. Falls back to the stored teacher (by id,
+   * so renames follow) and only then to the frozen text.
+   */
+  const liveTeacherName = (slot: { subjectId: string; subjectName: string; teacherId: string; teacherName: string }): string => {
+    const match = teachers.find(t => {
+      const teachesSubject = t.subjects?.includes(slot.subjectId)
+        || t.subjectNames?.some(n => n.toLowerCase() === slot.subjectName.toLowerCase());
+      const assignedHere = t.assignedClasses?.some(ac =>
+        ac.classId === selectedClass && ac.sectionId === selectedSection);
+      return teachesSubject && assignedHere;
+    });
+    if (match) return match.name;
+    const stored = teachers.find(t => t.id === slot.teacherId);
+    return stored?.name || slot.teacherName || 'Unassigned';
+  };
+
   // ── Handle dropping a subject onto a cell ──
   const handleDrop = (day: DayOfWeek, period: number) => {
     if (!dragItem.current) return;
@@ -261,6 +282,23 @@ export default function AdminTimetable() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      /* Re-resolve every slot's teacher from the CURRENT setup before saving.
+         The teacher's own timetable filters saved slots by teacherId, so a
+         slot frozen as ''/Unassigned would stay invisible to the teacher
+         forever — saving is the moment the stored ids catch up. */
+      const resolvedSlots = slots.map(slot => {
+        const match = teachers.find(t => {
+          const teachesSubject = t.subjects?.includes(slot.subjectId)
+            || t.subjectNames?.some(n => n.toLowerCase() === slot.subjectName.toLowerCase());
+          const assignedHere = t.assignedClasses?.some(ac =>
+            ac.classId === selectedClass && ac.sectionId === selectedSection);
+          return teachesSubject && assignedHere;
+        });
+        return match
+          ? { ...slot, teacherId: match.id, teacherName: match.name }
+          : slot;
+      });
+
       const data = {
         classId: selectedClass,
         sectionId: selectedSection,
@@ -270,7 +308,7 @@ export default function AdminTimetable() {
         version: (timetable?.version || 0) + 1,
         status: TimetableStatus.PUBLISHED,
         effectiveFrom: new Date(),
-        slots,
+        slots: resolvedSlots,
         createdBy: user?.id || '',
       };
       if (timetable?.id) {
@@ -613,7 +651,7 @@ export default function AdminTimetable() {
                                 {slot.subjectName}
                               </div>
                               <div style={{ fontSize: '0.65rem', color: color?.text || '#6B7280', opacity: 0.7, marginTop: 2 }}>
-                                {slot.teacherName}
+                                {liveTeacherName(slot)}
                               </div>
                               {editing && (
                                 <button
@@ -741,7 +779,7 @@ export default function AdminTimetable() {
                           {slot.subjectName}
                         </div>
                         <div style={{ fontSize: '0.65rem', color: color?.text, opacity: 0.75, marginTop: 2 }}>
-                          {slot.teacherName}
+                          {liveTeacherName(slot)}
                         </div>
                         <button
                           onClick={() => removeSatSlot(timing.period!)}
