@@ -251,15 +251,30 @@ export function computeRowSummary(
   // The school fee is due immediately, so its pending is arrears on day one.
   const dueRaw = school.pending + ecaSummary.dueNow + vanSummary.dueNow;
 
+  /*
+   * Money in hand that no charge has absorbed. A head's pending clamps at
+   * zero, so ₹20,840 against a ₹13,500 school fee used to leave ₹7,340
+   * simply unaccounted for: the totals counted it (totalPending fell) while
+   * the heads did not (each still showed its own full pending), and the
+   * Principal saw two different answers on one screen. Overpayment on any
+   * head now behaves exactly as an 'other' receipt already did — it offsets
+   * what can be chased.
+   */
+  const excess = Math.max(0, school.paid - school.charged)
+    + Math.max(0, ecaSummary.paid - ecaSummary.charged)
+    + Math.max(0, vanSummary.paid - vanSummary.charged);
+  const credit = otherPaid + excess;
+
   return {
     school,
     eca: ecaSummary,
     van: vanSummary,
     other: { paid: otherPaid },
+    credit,
     totalCharged,
     totalPaid,
     totalPending: Math.max(0, totalCharged - totalPaid),
-    totalDueNow: Math.max(0, dueRaw - otherPaid),
+    totalDueNow: Math.max(0, dueRaw - credit),
     status: feeStatus(totalCharged, totalPaid),
   };
 }
@@ -272,6 +287,7 @@ export function emptyRowSummary(): RowSummary {
     eca: emptyMonthly(),
     van: emptyMonthly(),
     other: { paid: 0 },
+    credit: 0,
     totalCharged: 0,
     totalPaid: 0,
     totalPending: 0,

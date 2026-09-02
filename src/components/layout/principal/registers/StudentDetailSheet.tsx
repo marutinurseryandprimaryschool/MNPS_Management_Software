@@ -385,10 +385,17 @@ export default function StudentDetailSheet({
           </p>
         )}
 
-        {summary.other.paid > 0 && (
+        {/* Without this, a head showing "PENDING ₹3,500" next to a total of
+            ₹1,160 reads as a broken sum. It is not: money paid beyond one
+            head's charge is sitting on the row, already offsetting the rest. */}
+        {summary.credit > 0 && (
           <NoticeBanner tone="info">
-            {inr(summary.other.paid)} received under &ldquo;other&rdquo;. It counts towards this
-            student&rsquo;s total collected but belongs to no month.
+            {inr(summary.credit)} is paid in advance on this student
+            {summary.other.paid > 0 && ` (${inr(summary.other.paid)} of it recorded under “other”)`}.
+            The heads below each show their own charge, but this credit already counts
+            against them — {summary.totalPending > 0
+              ? `${inr(summary.totalPending)} is the real balance.`
+              : 'nothing is outstanding overall.'}
           </NoticeBanner>
         )}
 

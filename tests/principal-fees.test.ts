@@ -105,6 +105,67 @@ describe('feeStatus', () => {
   });
 });
 
+/* ── Overpayment on one head (the Aadvik case) ────────────────────────── */
+
+describe('a head paid beyond its charge credits the rest of the row', () => {
+  /* Real production row: school 13,500 + ECA 3,500 + van 5,000/yr = 22,000
+     charged, with 20,840 recorded entirely against SCHOOL fee. */
+  const aadvik: RegisterRowFacts = {
+    id: 'row-aadvik',
+    academicYear: YEAR,
+    className: 'Class 5',
+    schoolFee: 13500,
+    ecaAnnual: 3500,
+    ecaMonths: ['June', 'July', 'August', 'September', 'October',
+      'November', 'December', 'January', 'February', 'March'],
+    vanMonthly: 500,
+    vanMonths: ['June', 'July', 'August', 'September', 'October',
+      'November', 'December', 'January', 'February', 'March'],
+  };
+  const overpaid = [pay({ head: 'school', amount: 20840, month: 'Term 1' })];
+
+  it('totals stay internally consistent (charged − paid = pending)', () => {
+    const summary = computeRowSummary(aadvik, overpaid, TODAY);
+    expect(summary.totalCharged).toBe(22000);
+    expect(summary.totalPaid).toBe(20840);
+    expect(summary.totalPending).toBe(1160);
+  });
+
+  it('the surplus is reported as credit rather than vanishing', () => {
+    const summary = computeRowSummary(aadvik, overpaid, TODAY);
+    // 20,840 paid against a 13,500 school fee.
+    expect(summary.credit).toBe(7340);
+  });
+
+  it('nothing is chaseable while the credit exceeds the arrears', () => {
+    const summary = computeRowSummary(aadvik, overpaid, TODAY);
+    // Ended months (Jun/Jul/Aug): ECA 1,050 + van 1,500 = 2,550 raw arrears,
+    // fully covered by the 7,340 already in hand.
+    expect(summary.totalDueNow).toBe(0);
+  });
+
+  it('a row paid exactly to its charge carries no credit', () => {
+    const summary = computeRowSummary(aadvik, [pay({ head: 'school', amount: 13500 })], TODAY);
+    expect(summary.credit).toBe(0);
+    expect(summary.totalPending).toBe(8500);
+  });
+
+  it('partial credit reduces the arrears without going negative', () => {
+    // 15,000 on school = 1,500 surplus against 2,550 of ended arrears.
+    const summary = computeRowSummary(aadvik, [pay({ head: 'school', amount: 15000 })], TODAY);
+    expect(summary.credit).toBe(1500);
+    expect(summary.totalDueNow).toBe(1050);
+  });
+
+  it("an 'other' receipt still credits the row, as it always did", () => {
+    const summary = computeRowSummary(aadvik, [pay({ head: 'other', amount: 3000 })], TODAY);
+    expect(summary.credit).toBe(3000);
+    // School fee is due from day one, so 13,500 + 1,050 ECA + 1,500 van of
+    // ended arrears = 16,050 raw, less the 3,000 in hand.
+    expect(summary.totalDueNow).toBe(13050);
+  });
+});
+
 /* ── Tests 1–4: partial payments (§37) ────────────────────────────────── */
 
 describe('school fee — partial then complete (§37 tests 1 & 2)', () => {

@@ -301,6 +301,12 @@ export interface RowSummary {
   van: MonthlyHeadSummary;
   /** Catch-all receipts: counted in totals, owned by no bucket. */
   other: { paid: number };
+  /**
+   * Money the school holds that no charge has absorbed: 'other' receipts plus
+   * any head paid beyond what it charges. It offsets what can be chased, so a
+   * parent who overpaid one head is never asked to pay another.
+   */
+  credit: number;
   totalCharged: number;
   totalPaid: number;
   totalPending: number;

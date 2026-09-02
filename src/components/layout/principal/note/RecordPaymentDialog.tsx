@@ -52,6 +52,7 @@ interface RecordPaymentDialogProps {
 interface PaymentForm {
   head: PrincipalFeeHead;
   month: string;
+  schoolMonth?: string;
   amount: string;
   dateKey: string;
   mode: PrincipalPaymentMode;
@@ -99,6 +100,7 @@ function initialForm(target: PaymentTarget): PaymentForm {
   return {
     head,
     month,
+    schoolMonth: '',
     amount: amount > 0 ? String(amount) : '',
     dateKey: todayKey(),
     mode: 'cash',
@@ -181,8 +183,8 @@ export default function RecordPaymentDialog({
       }
       if (!form.month) { showToast('Choose which month this payment is for', 'error'); return; }
     }
-    if (form.head === 'school' && !form.month) {
-      showToast('Pick which term this school-fee payment is for', 'error');
+    if (form.head === 'school' && (!form.month || !form.schoolMonth)) {
+      showToast('Pick both the term and the month this school-fee payment is for', 'error');
       return;
     }
     if (!actor.uid) {
@@ -209,7 +211,7 @@ export default function RecordPaymentDialog({
       studentName: row.name,
       className: row.className,
       head: form.head,
-      month: isMonthly(form.head) || form.head === 'school' ? form.month : undefined,
+      month: isMonthly(form.head) ? form.month : form.head === 'school' ? `${form.month} — ${form.schoolMonth}` : undefined,
       amount,
       dateKey: form.dateKey,
       paidAt: dateFromKey(form.dateKey),
@@ -293,17 +295,30 @@ export default function RecordPaymentDialog({
             {form.head === 'school' && (
               /* School fees are collected term-wise: the term rides in the
                  payment's month field, printed on history and receipts. */
-              <Select
-                label="Term"
-                value={form.month}
-                disabled={saving}
-                placeholder="Which term?"
-                options={['Term 1', 'Term 2', 'Term 3'].map(t => ({ value: t, label: t }))}
-                onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
-                  setForm(prev => (prev ? { ...prev, month: event.target.value } : prev));
-                  setDuplicateAcknowledged(false);
-                }}
-              />
+              <>
+                <Select
+                  label="Term"
+                  value={form.month}
+                  disabled={saving}
+                  placeholder="Which term?"
+                  options={['Term 1', 'Term 2', 'Term 3'].map(t => ({ value: t, label: t }))}
+                  onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
+                    setForm(prev => (prev ? { ...prev, month: event.target.value } : prev));
+                    setDuplicateAcknowledged(false);
+                  }}
+                />
+                <Select
+                  label="Month"
+                  value={form.schoolMonth || ''}
+                  disabled={saving}
+                  placeholder="Which month?"
+                  options={['June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'].map(m => ({ value: m, label: m }))}
+                  onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
+                    setForm(prev => (prev ? { ...prev, schoolMonth: event.target.value } : prev));
+                    setDuplicateAcknowledged(false);
+                  }}
+                />
+              </>
             )}
           </div>
 

@@ -25,7 +25,7 @@ import Button from '@/components/ui/Button';
 import Input, { Select } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { useSchool } from '@/context/SchoolContext';
-import { toDateKey } from '@/lib/fee-utils';
+import { ACADEMIC_MONTHS, toDateKey } from '@/lib/fee-utils';
 import { feeStatus } from '@/lib/principal-fees';
 import { PrincipalDayCloseService, PrincipalPaymentsService } from '@/lib/principal-service';
 import { exportPaymentReceiptPdf } from '@/lib/export-utils';
@@ -158,6 +158,8 @@ export default function RecordPaymentModal({
   const [dateKey, setDateKey] = useState(() => toDateKey(new Date()));
   /** Which term a SCHOOL-fee payment belongs to (Term 1/2/3). */
   const [term, setTerm] = useState('');
+  /** Which month within the term the payment applies to. */
+  const [schoolMonth, setSchoolMonth] = useState('');
   const [mode, setMode] = useState<PrincipalPaymentMode>('cash');
   const [remarks, setRemarks] = useState('');
   const [saving, setSaving] = useState(false);
@@ -239,8 +241,8 @@ export default function RecordPaymentModal({
       setFormError('Pick the month this ECA / van payment is for — otherwise its month stays open.');
       return;
     }
-    if (head === 'school' && !term) {
-      setFormError('Pick which term this school-fee payment is for.');
+    if (head === 'school' && (!term || !schoolMonth)) {
+      setFormError('Pick both the term and the month this school-fee payment is for.');
       return;
     }
     if (!dateKey) {
@@ -297,7 +299,7 @@ export default function RecordPaymentModal({
         studentName: row.name,
         className: row.className,
         head,
-        month: needsMonth ? month : head === 'school' ? term : undefined,
+        month: needsMonth ? month : head === 'school' ? `${term} — ${schoolMonth}` : undefined,
         amount: value,
         dateKey,
         paidAt: localDateFromKey(dateKey),
@@ -325,7 +327,7 @@ export default function RecordPaymentModal({
         paymentId,
         amount: value,
         head,
-        month: needsMonth ? month : head === 'school' ? term : undefined,
+        month: needsMonth ? month : head === 'school' ? `${term} — ${schoolMonth}` : undefined,
         mode,
         dateKey,
         remarks: remarks.trim() || undefined,
@@ -443,13 +445,22 @@ export default function RecordPaymentModal({
         )}
 
         {head === 'school' && (
-          <Select
-            label="Term"
-            value={term}
-            onChange={e => { setTerm(e.target.value); touch(); }}
-            placeholder="Which term is this payment for?"
-            options={SCHOOL_TERMS.map(t => ({ value: t, label: t }))}
-          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+            <Select
+              label="Term"
+              value={term}
+              onChange={e => { setTerm(e.target.value); touch(); }}
+              placeholder="Which term?"
+              options={SCHOOL_TERMS.map(t => ({ value: t, label: t }))}
+            />
+            <Select
+              label="Month"
+              value={schoolMonth}
+              onChange={e => { setSchoolMonth(e.target.value); touch(); }}
+              placeholder="Which month?"
+              options={ACADEMIC_MONTHS.map(m => ({ value: m, label: m }))}
+            />
+          </div>
         )}
 
         {needsMonth && (
