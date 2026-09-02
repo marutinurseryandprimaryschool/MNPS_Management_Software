@@ -62,7 +62,7 @@ export default function TeacherWiseSection() {
   return (
     <div className="page-container">
       {canManageAssignment ? (
-        <TeacherAssignPanel data={data} actor={actor} />
+        <TeacherAssignPanel data={data} actor={actor} academicYear={school?.academicYear} />
       ) : (
         <TeacherOwnRegister
           data={data}

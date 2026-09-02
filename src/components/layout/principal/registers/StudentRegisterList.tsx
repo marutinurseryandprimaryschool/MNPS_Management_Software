@@ -17,7 +17,7 @@
 
 import React from 'react';
 import Button from '@/components/ui/Button';
-import type { RegisterRow, RowSummary } from '@/types/principal';
+import type { FeeStatus, RegisterRow, RowSummary } from '@/types/principal';
 import { inr } from './register-shared';
 import {
   Chip, Money, StatGrid, surfaceCard, table, tableScroll,
@@ -32,7 +32,31 @@ export interface StudentRegisterListProps {
   onEditFees?: (row: RegisterRow) => void;
   /** Show the class column/line — on by default off a class group. */
   showClass?: boolean;
+  /** Show the responsible teacher — the class-wise view reads across teachers. */
+  showTeacher?: boolean;
+  /** Show the PENDING / PARTIAL / PAID column (Accounts screens). */
+  showStatus?: boolean;
   emptyLabel?: string;
+}
+
+/* Status presentation. The STATE itself comes from summary.status, i.e. from
+   feeStatus() in the engine — this maps it to a label/tone and never decides
+   it (Phase 2 §17: exactly one status calculation in the codebase). Both the
+   word and the colour carry the meaning, per §40. */
+const STATUS_LABEL: Record<FeeStatus, string> = {
+  pending: 'PENDING',
+  partial: 'PARTIAL',
+  paid: 'PAID',
+};
+
+const STATUS_TONE: Record<FeeStatus, 'due' | 'pending' | 'paid'> = {
+  pending: 'due',
+  partial: 'pending',
+  paid: 'paid',
+};
+
+export function StatusChip({ status }: { status: FeeStatus }) {
+  return <Chip label={STATUS_LABEL[status]} tone={STATUS_TONE[status]} />;
 }
 
 export default function StudentRegisterList(props: StudentRegisterListProps) {
@@ -53,7 +77,8 @@ export default function StudentRegisterList(props: StudentRegisterListProps) {
 /* ── Desktop: frozen-first-column grid ────────────────────────────────── */
 
 function Grid({
-  rows, summaryFor, onOpen, onRecordPayment, onEditFees, showClass = false,
+  rows, summaryFor, onOpen, onRecordPayment, onEditFees,
+  showClass = false, showTeacher = false, showStatus = false,
 }: StudentRegisterListProps) {
   const hasActions = Boolean(onRecordPayment || onEditFees);
   return (
@@ -64,12 +89,14 @@ function Grid({
             <th style={thSticky}>Student</th>
             {showClass && <th style={th}>Class</th>}
             <th style={th}>Sec / Roll</th>
+            {showTeacher && <th style={th}>Teacher</th>}
             <th style={thRight} title="School fee still unpaid — due from day one">School due</th>
             <th style={thRight} title="ECA months that have ENDED and are still unpaid">ECA due</th>
             <th style={thRight} title="Van months that have ENDED and are still unpaid">Van due</th>
             <th style={thRight}>Collected</th>
             <th style={thRight}>Pending</th>
             <th style={thRight}>Due now</th>
+            {showStatus && <th style={thRight}>Status</th>}
             {hasActions && <th style={thRight}>&nbsp;</th>}
           </tr>
         </thead>
@@ -97,12 +124,21 @@ function Grid({
                 <td style={td}>
                   {[row.sectionName, row.rollNo].filter(Boolean).join(' · ') || '—'}
                 </td>
+                {showTeacher && (
+                  <td style={td}>
+                    {row.teacherName
+                      || <span style={{ color: 'var(--color-warning-text)' }}>Unassigned</span>}
+                  </td>
+                )}
                 <td style={tdRight}><Money amount={summary.school.pending} tone="due" /></td>
                 <td style={tdRight}><Money amount={summary.eca.dueNow} tone="due" /></td>
                 <td style={tdRight}><Money amount={summary.van.dueNow} tone="due" /></td>
                 <td style={tdRight}><Money amount={summary.totalPaid} tone="paid" /></td>
                 <td style={tdRight}><Money amount={summary.totalPending} tone="pending" /></td>
                 <td style={tdRight}><Money amount={summary.totalDueNow} tone="due" bold /></td>
+                {showStatus && (
+                  <td style={tdRight}><StatusChip status={summary.status} /></td>
+                )}
                 {hasActions && (
                   <td style={{ ...tdRight, whiteSpace: 'nowrap' }}>
                     {onEditFees && (
@@ -127,7 +163,8 @@ function Grid({
 /* ── Mobile: one card per student ─────────────────────────────────────── */
 
 function CardList({
-  rows, summaryFor, onOpen, onRecordPayment, onEditFees, showClass = false,
+  rows, summaryFor, onOpen, onRecordPayment, onEditFees,
+  showClass = false, showTeacher = false, showStatus = false,
 }: StudentRegisterListProps) {
   return (
     <div style={{ display: 'grid', gap: 'var(--space-2)', padding: 'var(--space-3)' }}>
@@ -153,14 +190,21 @@ function CardList({
                 <div>
                   <div style={{ fontWeight: 700 }}>{row.name}</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
-                    {[showClass ? row.className : '', row.sectionName, row.rollNo ? `Roll ${row.rollNo}` : '']
-                      .filter(Boolean).join(' · ') || '—'}
+                    {[
+                      showClass ? row.className : '',
+                      row.sectionName,
+                      row.rollNo ? `Roll ${row.rollNo}` : '',
+                      showTeacher ? (row.teacherName || 'Unassigned') : '',
+                    ].filter(Boolean).join(' · ') || '—'}
                   </div>
                 </div>
-                <Chip
-                  label={summary.totalDueNow > 0 ? `Due ${inr(summary.totalDueNow)}` : 'Up to date'}
-                  tone={summary.totalDueNow > 0 ? 'due' : 'paid'}
-                />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  {showStatus && <StatusChip status={summary.status} />}
+                  <Chip
+                    label={summary.totalDueNow > 0 ? `Due ${inr(summary.totalDueNow)}` : 'Up to date'}
+                    tone={summary.totalDueNow > 0 ? 'due' : 'paid'}
+                  />
+                </div>
               </div>
               <StatGrid
                 compact

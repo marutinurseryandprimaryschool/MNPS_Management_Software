@@ -32,6 +32,7 @@ import {
 import StudentRegisterList from './StudentRegisterList';
 import StudentDetailSheet from './StudentDetailSheet';
 import RecordPaymentModal from './RecordPaymentModal';
+import EditStudentFeesSheet from './EditStudentFeesSheet';
 import { useRegisterData } from './useRegisterData';
 
 export default function ClassWiseSection() {
@@ -42,6 +43,7 @@ export default function ClassWiseSection() {
 
   const canView = hasCapability(role, 'viewPrincipalRegister');
   const canRecord = hasCapability(role, 'recordPrincipalPayments');
+  const canEditFees = hasCapability(role, 'editPrincipalRegister');
   const actor = useMemo(() => toActor(user, role), [user, role]);
 
   const [search, setSearch] = useState('');
@@ -49,6 +51,7 @@ export default function ClassWiseSection() {
   const [duesOnly, setDuesOnly] = useState(false);
   const [detailRowId, setDetailRowId] = useState<string | null>(null);
   const [payRowId, setPayRowId] = useState<string | null>(null);
+  const [editRowId, setEditRowId] = useState<string | null>(null);
 
   const term = search.trim().toLowerCase();
 
@@ -188,8 +191,25 @@ export default function ClassWiseSection() {
           payments={data.paymentsFor(detailRow.id)}
           onClose={() => setDetailRowId(null)}
           onRecordPayment={canRecord ? () => { setPayRowId(detailRow.id); setDetailRowId(null); } : undefined}
+          onEditFees={canEditFees ? () => { setEditRowId(detailRow.id); setDetailRowId(null); } : undefined}
+          actor={actor}
+          canDeletePayments={canEditFees}
+          onPaymentsChanged={data.refreshQuietly}
         />
       )}
+
+      {editRowId && (() => {
+        const editRow = data.rows.find(row => row.id === editRowId);
+        if (!editRow) return null;
+        return (
+          <EditStudentFeesSheet
+            row={editRow}
+            actor={actor}
+            onClose={() => setEditRowId(null)}
+            onSaved={data.refreshQuietly}
+          />
+        );
+      })()}
 
       {payRow && (
         <RecordPaymentModal
@@ -234,23 +254,27 @@ function ClassGroup({
           padding: 'var(--space-3) var(--space-4)', font: 'inherit',
           background: 'var(--color-surface-variant)',
           borderBottom: expanded ? '1px solid var(--color-border)' : 'none',
-          display: 'grid', gap: 'var(--space-2)',
+          display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)',
+          alignItems: 'center', justifyContent: 'space-between',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700 }}>{expanded ? '▾' : '▸'} {className}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', minWidth: 'max-content' }}>
+          <span style={{ fontWeight: 700, width: 16, display: 'inline-block' }}>{expanded ? '▾' : '▸'}</span>
+          <span style={{ fontWeight: 700 }}>{className}</span>
           <Chip label={`${rows.length} student${rows.length === 1 ? '' : 's'}`} />
           {defaulters > 0 && <Chip label={`${defaulters} with dues`} tone="due" />}
         </div>
-        <StatGrid
-          compact
-          stats={[
-            { label: 'Charged', value: inr(totals?.charged ?? 0) },
-            { label: 'Collected', value: inr(totals?.paid ?? 0), tone: 'paid' },
-            { label: 'Pending', value: inr(totals?.pending ?? 0), tone: 'pending' },
-            { label: 'Due now', value: inr(totals?.dueNow ?? 0), tone: 'due' },
-          ]}
-        />
+        <div style={{ flex: '1 1 400px', maxWidth: 600 }}>
+          <StatGrid
+            compact
+            stats={[
+              { label: 'Charged', value: inr(totals?.charged ?? 0) },
+              { label: 'Collected', value: inr(totals?.paid ?? 0), tone: 'paid' },
+              { label: 'Pending', value: inr(totals?.pending ?? 0), tone: 'pending' },
+              { label: 'Due now', value: inr(totals?.dueNow ?? 0), tone: 'due' },
+            ]}
+          />
+        </div>
       </button>
 
       {expanded && (
@@ -259,6 +283,8 @@ function ClassGroup({
           summaryFor={summaryFor}
           onOpen={onOpen}
           onRecordPayment={onRecordPayment}
+          showTeacher
+          showStatus
         />
       )}
     </section>

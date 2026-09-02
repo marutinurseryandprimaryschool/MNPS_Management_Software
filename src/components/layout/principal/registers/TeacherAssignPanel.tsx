@@ -19,11 +19,17 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Button from '@/components/ui/Button';
-import { SearchInput } from '@/components/ui/Input';
+import { SearchInput, Select } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { TeachersService } from '@/lib/firestore-service';
+import { computeTeacherSummaries } from '@/lib/principal-fees';
 import { PrincipalRegisterService } from '@/lib/principal-service';
-import type { PrincipalActor, RegisterRow } from '@/types/principal';
+import type { PrincipalActor, RegisterRow, TeacherSummary } from '@/types/principal';
+import ImportStudentsDialog from './ImportStudentsDialog';
+import StudentDetailSheet from './StudentDetailSheet';
+import RecordPaymentModal from './RecordPaymentModal';
+import EditStudentFeesSheet from './EditStudentFeesSheet';
+import { StatusChip } from './StudentRegisterList';
 import {
   compareClassNames, compareStudents, describeError, inr,
   teacherAuthUid, teacherLoadStatus, TARGET_STUDENTS_PER_TEACHER,
@@ -50,9 +56,11 @@ const FILTER_LABELS: Record<StudentFilter, string> = {
 export interface TeacherAssignPanelProps {
   data: RegisterData;
   actor: PrincipalActor | null;
+  /** The active academic year — new register rows are created under it. */
+  academicYear?: string;
 }
 
-export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelProps) {
+export default function TeacherAssignPanel({ data, actor, academicYear }: TeacherAssignPanelProps) {
   const { showToast } = useToast();
   const narrow = useIsNarrow();
 
@@ -61,8 +69,16 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [filter, setFilter] = useState<StudentFilter>('unassigned');
   const [search, setSearch] = useState('');
+  /** Class-wise narrowing on top of the assignment filters ('' = every class). */
+  const [classFilter, setClassFilter] = useState('');
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
+  /* Student drill-down + payment entry (Principal-only on this screen). */
+  const [detailRow, setDetailRow] = useState<RegisterRow | null>(null);
+  const [paymentRow, setPaymentRow] = useState<RegisterRow | null>(null);
+  const [editFeesRow, setEditFeesRow] = useState<RegisterRow | null>(null);
+  /* "Add from student list" — the in-app bridge to the school's real students. */
+  const [importOpen, setImportOpen] = useState(false);
 
   /**
    * The teacher list is the one thing this panel loads for itself (the rows
@@ -105,11 +121,32 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
   const selectedTeacher = teachers.find(teacher => teacher.id === selectedTeacherId) ?? null;
   const unassignedCount = data.rows.filter(row => !row.teacherUid).length;
 
+  /* Per-teacher money — the SAME engine roll-up the Accounts screen uses, so
+     "collected under Mrs. Anita" can never disagree between the two screens. */
+  const moneyByTeacherUid = useMemo(() => {
+    const map = new Map<string, TeacherSummary>();
+    for (const summary of computeTeacherSummaries(data.rows, data.summaryFor)) {
+      map.set(summary.teacherUid, summary);
+    }
+    return map;
+  }, [data.rows, data.summaryFor]);
+
+  const selectedTeacherMoney = selectedTeacher?.uid
+    ? moneyByTeacherUid.get(selectedTeacher.uid) ?? null
+    : null;
+
   /** Rows assigned to a uid nobody in the teacher list owns any more. */
   const orphanedRows = useMemo(() => {
     const known = new Set(teachers.map(teacher => teacher.uid).filter(Boolean));
     return data.rows.filter(row => row.teacherUid && !known.has(row.teacherUid));
   }, [data.rows, teachers]);
+
+  /** Every class present in the register, in progression order, for the filter. */
+  const classNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of data.rows) if (row.className) set.add(row.className);
+    return Array.from(set).sort(compareClassNames);
+  }, [data.rows]);
 
   const term = search.trim().toLowerCase();
   const visibleRows = useMemo(() => data.rows
@@ -118,9 +155,10 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
       if (filter === 'mine') return Boolean(selectedTeacher) && row.teacherUid === selectedTeacher?.uid;
       return true;
     })
+    .filter(row => !classFilter || row.className === classFilter)
     .filter(row => !term || `${row.name} ${row.className} ${row.sectionName ?? ''}`.toLowerCase().includes(term))
     .sort((a, b) => compareClassNames(a.className, b.className) || compareStudents(a, b)),
-  [data.rows, filter, selectedTeacher, term]);
+  [data.rows, filter, selectedTeacher, classFilter, term]);
 
   const pickedIds = useMemo(
     () => visibleRows.filter(row => picked[row.id]).map(row => row.id),
@@ -202,8 +240,12 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
           <h2 className="text-h1">Teacher-wise Register</h2>
           <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', marginTop: 2 }}>
             Assign each student to the teacher responsible for collecting their fees.
+            Tap a student&rsquo;s name to see their full fee details.
           </p>
         </div>
+        <Button variant="primary" onClick={() => setImportOpen(true)}>
+          Add from student list
+        </Button>
       </div>
 
       {teacherError && <NoticeBanner tone="error">{teacherError}</NoticeBanner>}
@@ -234,8 +276,14 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
         <TeacherColumn
           teachers={teachers}
           countsByUid={countsByUid}
+          moneyByUid={moneyByTeacherUid}
           selectedId={selectedTeacherId}
-          onSelect={id => { setSelectedTeacherId(id); setFilter(id ? 'unassigned' : 'all'); }}
+          onSelect={id => {
+            // Selecting a teacher jumps straight to THEIR students with the
+            // money visible — the Principal's "check this teacher" flow.
+            setSelectedTeacherId(id);
+            setFilter(id ? 'mine' : 'all');
+          }}
         />
 
         <div style={{ ...surfaceCard, overflow: 'hidden' }}>
@@ -264,8 +312,41 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
                 </button>
               ))}
             </div>
-            <SearchInput value={search} onChange={setSearch} placeholder="Search students" />
+            <div style={{
+              display: 'grid', gap: 'var(--space-2)',
+              gridTemplateColumns: narrow ? '1fr' : '1fr minmax(150px, 200px)',
+            }}>
+              <SearchInput value={search} onChange={setSearch} placeholder="Search students" />
+              <Select
+                label=""
+                aria-label="Filter by class"
+                value={classFilter}
+                options={[
+                  { value: '', label: 'All classes' },
+                  ...classNames.map(name => ({ value: name, label: name })),
+                ]}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setClassFilter(e.target.value)}
+              />
+            </div>
           </div>
+
+          {/* The selected teacher's money at a glance (engine roll-up). */}
+          {filter === 'mine' && selectedTeacher && selectedTeacherMoney && (
+            <div style={{
+              padding: 'var(--space-3) var(--space-4)',
+              borderBottom: '1px solid var(--color-border)',
+            }}>
+              <StatGrid
+                compact
+                stats={[
+                  { label: 'Students', value: String(selectedTeacherMoney.students) },
+                  { label: 'Collected', value: inr(selectedTeacherMoney.collected), tone: 'paid' },
+                  { label: 'Outstanding', value: inr(selectedTeacherMoney.outstanding), tone: 'pending' },
+                  { label: 'Due now', value: inr(selectedTeacherMoney.dueNow), tone: 'due' },
+                ]}
+              />
+            </div>
+          )}
 
           {visibleRows.length === 0 ? (
             <EmptyBlock
@@ -285,7 +366,13 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
                 picked={picked}
                 onToggle={togglePick}
                 summaryFor={data.summaryFor}
+                onOpenDetails={setDetailRow}
+                onRecordPayment={setPaymentRow}
               />
+              {/* The bulk assignment bar is for ASSIGNING. Looking at a
+                  teacher's own students, it only appears once something is
+                  ticked — otherwise the money view stays uncluttered. */}
+              {(filter !== 'mine' || pickedIds.length > 0) && (
               <div style={{
                 position: 'sticky', bottom: 0, padding: 'var(--space-3) var(--space-4)',
                 borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)',
@@ -316,19 +403,78 @@ export default function TeacherAssignPanel({ data, actor }: TeacherAssignPanelPr
                   {selectedTeacher ? `Assign to ${selectedTeacher.name}` : 'Pick a teacher'}
                 </Button>
               </div>
+              )}
             </>
           )}
         </div>
       </div>
+
+      {/* Full fee details for one student — the SAME sheet the other register
+          screens use, history and receipts included. Recording from here is
+          Principal-only by construction: this panel renders only in the
+          Principal's assignment mode. */}
+      {detailRow && (
+        <StudentDetailSheet
+          row={detailRow}
+          summary={data.summaryFor(detailRow.id)}
+          payments={data.paymentsFor(detailRow.id)}
+          onClose={() => setDetailRow(null)}
+          onRecordPayment={() => {
+            const row = detailRow;
+            setDetailRow(null);
+            setPaymentRow(row);
+          }}
+          onEditFees={() => {
+            const row = detailRow;
+            setDetailRow(null);
+            setEditFeesRow(row);
+          }}
+          actor={actor}
+          canDeletePayments
+          onPaymentsChanged={data.refreshQuietly}
+        />
+      )}
+
+      {editFeesRow && (
+        <EditStudentFeesSheet
+          row={editFeesRow}
+          actor={actor}
+          onClose={() => setEditFeesRow(null)}
+          onSaved={data.refreshQuietly}
+        />
+      )}
+
+      {paymentRow && actor && (
+        <RecordPaymentModal
+          row={paymentRow}
+          summary={data.summaryFor(paymentRow.id)}
+          payments={data.paymentsFor(paymentRow.id)}
+          actor={actor}
+          onClose={() => setPaymentRow(null)}
+          onSaved={data.refreshQuietly}
+        />
+      )}
+
+      {importOpen && (
+      <ImportStudentsDialog
+        academicYear={academicYear ?? data.rows[0]?.academicYear ?? ''}
+        existingRows={data.rows}
+        teachers={teachers.filter(teacher => teacher.uid).map(teacher => ({ uid: teacher.uid, name: teacher.name }))}
+        actor={actor}
+        onClose={() => setImportOpen(false)}
+        onSaved={data.refreshQuietly}
+      />
+      )}
     </div>
   );
 }
 
 /* ── Teacher column ───────────────────────────────────────────────────── */
 
-function TeacherColumn({ teachers, countsByUid, selectedId, onSelect }: {
+function TeacherColumn({ teachers, countsByUid, moneyByUid, selectedId, onSelect }: {
   teachers: TeacherOption[];
   countsByUid: Map<string, number>;
+  moneyByUid: Map<string, TeacherSummary>;
   selectedId: string;
   onSelect: (id: string) => void;
 }) {
@@ -363,12 +509,27 @@ function TeacherColumn({ teachers, countsByUid, selectedId, onSelect }: {
                 gap: 'var(--space-2)',
               }}
             >
-              <span>
+              <span style={{ minWidth: 0 }}>
                 <span style={{ fontWeight: 600 }}>{teacher.name}</span>
-                {!teacher.uid && (
+                {!teacher.uid ? (
                   <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--color-warning-text)' }}>
                     No login linked — cannot be assigned
                   </span>
+                ) : (
+                  /* The teacher's money at a glance, from the engine roll-up. */
+                  (() => {
+                    const money = moneyByUid.get(teacher.uid);
+                    if (!money || money.students === 0) return null;
+                    return (
+                      <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+                        <span style={{ color: 'var(--color-success)' }}>{inr(money.collected)} collected</span>
+                        {' · '}
+                        <span style={{ color: money.outstanding > 0 ? 'var(--color-error)' : 'var(--color-text-tertiary)' }}>
+                          {inr(money.outstanding)} pending
+                        </span>
+                      </span>
+                    );
+                  })()
                 )}
               </span>
               <Chip
@@ -388,41 +549,74 @@ function TeacherColumn({ teachers, countsByUid, selectedId, onSelect }: {
 
 /* ── Student pick list ────────────────────────────────────────────────── */
 
-function StudentPickList({ rows, picked, onToggle, summaryFor }: {
+function StudentPickList({ rows, picked, onToggle, summaryFor, onOpenDetails, onRecordPayment }: {
   rows: RegisterRow[];
   picked: Record<string, boolean>;
   onToggle: (rowId: string) => void;
   summaryFor: RegisterData['summaryFor'];
+  /** Opens the full fee details sheet for one student. */
+  onOpenDetails: (row: RegisterRow) => void;
+  /** Straight to the payment form — the Principal's most common action. */
+  onRecordPayment?: (row: RegisterRow) => void;
 }) {
   return (
     <div style={{ display: 'grid', maxHeight: 520, overflowY: 'auto' }}>
       {rows.map(row => {
         const summary = summaryFor(row.id);
         return (
-          <label
+          <div
             key={row.id}
             style={{
               display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minHeight: 56,
-              padding: 'var(--space-2) var(--space-4)', cursor: 'pointer',
+              padding: 'var(--space-2) var(--space-4)',
               borderTop: '1px solid var(--color-divider)',
               background: picked[row.id] ? 'var(--color-surface-variant)' : 'transparent',
             }}
           >
             <input
               type="checkbox"
+              aria-label={`Select ${row.name}`}
               checked={Boolean(picked[row.id])}
               onChange={() => onToggle(row.id)}
-              style={{ width: 18, height: 18, flexShrink: 0 }}
+              style={{ width: 18, height: 18, flexShrink: 0, cursor: 'pointer' }}
             />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontWeight: 600, display: 'block' }}>{row.name}</span>
+            {/* The NAME opens the full details; the checkbox stays for picking. */}
+            <button
+              type="button"
+              onClick={() => onOpenDetails(row)}
+              title="Open full fee details"
+              style={{
+                flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0,
+                cursor: 'pointer', font: 'inherit', textAlign: 'left',
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              <span style={{ fontWeight: 600, display: 'block', textDecoration: 'underline dotted' }}>
+                {row.name}
+              </span>
               <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
                 {[row.className, row.sectionName].filter(Boolean).join(' · ') || '—'}
                 {row.teacherName ? ` · ${row.teacherName}` : ' · unassigned'}
               </span>
+            </button>
+            {/* Each student's money: paid, balance, and PENDING/PARTIAL/PAID —
+                so checking a teacher never needs a second screen. */}
+            <span style={{ textAlign: 'right', flexShrink: 0 }}>
+              <StatusChip status={summary.status} />
+              <span style={{ display: 'block', fontSize: '0.7rem', marginTop: 2, color: 'var(--color-text-tertiary)' }}>
+                <span style={{ color: 'var(--color-success)' }}>{inr(summary.totalPaid)} paid</span>
+                {' · '}
+                <span style={{ color: summary.totalPending > 0 ? 'var(--color-error)' : 'var(--color-text-tertiary)', fontWeight: 600 }}>
+                  {inr(summary.totalPending)} balance
+                </span>
+              </span>
             </span>
-            {summary.totalDueNow > 0 && <Chip label={`Due ${inr(summary.totalDueNow)}`} tone="due" />}
-          </label>
+            {onRecordPayment && (
+              <Button variant="secondary" size="sm" onClick={() => onRecordPayment(row)}>
+                Record payment
+              </Button>
+            )}
+          </div>
         );
       })}
     </div>

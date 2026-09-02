@@ -98,15 +98,14 @@
   animation: spin 1s linear infinite;
 }
 
-.icon {
+.iconWrapper {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
 }
 
-.icon > svg,
-.icon > span > svg {
+.iconWrapper > svg,
+.iconWrapper > span > svg {
   display: block;
 }
 

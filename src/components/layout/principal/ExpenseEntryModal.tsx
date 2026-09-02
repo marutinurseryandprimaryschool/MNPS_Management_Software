@@ -13,10 +13,10 @@ import { useToast } from '@/components/ui/Toast';
 import Input, { Select, Textarea } from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
-import { PrincipalExpensesService } from '@/lib/principal-service';
+import { PrincipalDayCloseService, PrincipalExpensesService } from '@/lib/principal-service';
 import {
-  DEFAULT_EXPENSE_CATEGORIES, formatINR, principalWriteError,
-  refreshFailedMessage, todayKey, usePrincipalActor,
+  DEFAULT_EXPENSE_CATEGORIES, PRINCIPAL_MODE_OPTIONS, asPrincipalMode, formatINR,
+  principalWriteError, refreshFailedMessage, todayKey, usePrincipalActor,
 } from './principal-shared';
 import type { PrincipalExpense, PrincipalPaymentMode } from '@/types/principal';
 
@@ -37,6 +37,8 @@ interface ExpenseForm {
   dateKey: string;
   category: string;
   mode: PrincipalPaymentMode;
+  /** Person / vendor the money went to (optional). */
+  paidTo: string;
   description: string;
 }
 
@@ -45,6 +47,7 @@ const emptyForm = (category: string): ExpenseForm => ({
   dateKey: todayKey(),
   category,
   mode: 'cash',
+  paidTo: '',
   description: '',
 });
 
@@ -95,11 +98,29 @@ export default function ExpenseEntryModal({
     }
 
     setSaving(true);
+
+    // Closed-day guard (§18): a closed date rejects new expenses server-side
+    // anyway — checking first turns a permission error into a sentence.
+    try {
+      const dayClose = await PrincipalDayCloseService.get(form.dateKey);
+      if (dayClose?.status === 'closed') {
+        showToast(
+          `${form.dateKey} is closed in the day-close book. Reopen it from Accounts → Daily to record corrections.`,
+          'error',
+        );
+        setSaving(false);
+        return;
+      }
+    } catch {
+      // Could not read the day-close record — firestore.rules still enforce it.
+    }
+
     try {
       await PrincipalExpensesService.create({
         academicYear,
         amount: Math.round(amount),
         category: form.category,
+        paidTo: form.paidTo.trim() || undefined,
         description: form.description.trim(),
         dateKey: form.dateKey,
         mode: form.mode,
@@ -163,15 +184,22 @@ export default function ExpenseEntryModal({
             label="Paid from"
             value={form.mode}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-              setField('mode', e.target.value === 'bank' ? 'bank' : 'cash')}
-            options={[{ value: 'cash', label: 'Cash' }, { value: 'bank', label: 'Bank' }]}
+              setField('mode', asPrincipalMode(e.target.value))}
+            options={PRINCIPAL_MODE_OPTIONS}
           />
         </div>
+
+        <Input
+          label="Paid to (person / vendor, optional)"
+          placeholder="e.g. John, ABC Stores"
+          value={form.paidTo}
+          onChange={e => setField('paidTo', e.target.value)}
+        />
 
         <Textarea
           label="Description"
           rows={2}
-          placeholder="e.g. Chalk boxes, June electricity bill"
+          placeholder="e.g. Emergency staff payment, June electricity bill"
           value={form.description}
           onChange={e => setField('description', e.target.value)}
         />

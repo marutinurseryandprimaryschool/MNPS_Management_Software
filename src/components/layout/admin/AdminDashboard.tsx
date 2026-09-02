@@ -9,6 +9,7 @@ import { StudentsService, TeachersService, ClassesService, NotificationsService 
 import { PrincipalPaymentsService } from '@/lib/principal-service';
 import { hasCapability } from '@/lib/permissions';
 import { getGreeting, formatCompactCurrency } from '@/lib/utils';
+import DashboardFinanceCard from '../principal/DashboardFinanceCard';
 import {
   GraduationCapIcon, UsersIcon, BarChartIcon, CreditCardIcon,
   UserPlusIcon, CalendarIcon, ZapIcon, MegaphoneIcon,
@@ -146,6 +147,10 @@ export default function AdminDashboard({ onNavigate }: { onNavigate: (id: string
         )}
       </div>
 
+      {/* Today's money — the Principal's first question, answered before any
+          navigation. Only for roles that hold the billing capability. */}
+      {showsFees && <DashboardFinanceCard onOpen={() => onNavigate('principal-accounts')} />}
+
       {/* Quick Actions + Recent Activity Row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
         {/* Quick Actions */}
@@ -158,7 +163,12 @@ export default function AdminDashboard({ onNavigate }: { onNavigate: (id: string
             <ActionCard icon={<UserPlusIcon size={18} />} title="Add Student" description="Register new student" onClick={() => onNavigate('students')} />
             <ActionCard icon={<CalendarIcon size={18} />} title="Create Timetable" description="Build class schedule" onClick={() => onNavigate('timetable')} />
             {canOpenRegister && (
-              <ActionCard icon={<CreditCardIcon size={18} />} title="Record Payment" description="Open the fees note" onClick={() => onNavigate('principal-note')} />
+              <ActionCard
+                icon={<CreditCardIcon size={18} />}
+                title="Today's Billing & Expenses"
+                description="Record payments & expenses for the day"
+                onClick={() => onNavigate('principal-accounts')}
+              />
             )}
             <ActionCard icon={<MegaphoneIcon size={18} />} title="Manage Users" description="Add teachers & staff" onClick={() => onNavigate('settings')} />
           </div>

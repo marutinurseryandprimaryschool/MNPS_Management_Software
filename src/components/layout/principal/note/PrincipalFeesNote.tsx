@@ -32,7 +32,9 @@ import NoteCards from './NoteCards';
 import NoteGrid from './NoteGrid';
 import NoteHeader from './NoteHeader';
 import AddStudentDialog from './AddStudentDialog';
+import ImportStudentsDialog from '../registers/ImportStudentsDialog';
 import PickStudentDialog from './PickStudentDialog';
+import { useTeacherOptions } from './use-teacher-options';
 import RecordPaymentDialog, { type PaymentTarget } from './RecordPaymentDialog';
 import StudentEditSheet from './StudentEditSheet';
 import { useCellAutosave, type RowPatch } from './use-cell-autosave';
@@ -72,6 +74,8 @@ export default function PrincipalFeesNote() {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<CellRef | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  /* Bulk-add from the school's registered students (class-wise, assignable). */
+  const [importOpen, setImportOpen] = useState(false);
   const [pickPaymentOpen, setPickPaymentOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<RegisterRow | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
@@ -85,6 +89,8 @@ export default function PrincipalFeesNote() {
 
   const canView = hasCapability(role, 'viewPrincipalRegister');
   const isRegisterOwner = hasCapability(role, 'editPrincipalRegister');
+  /* Assignable teachers for the import dialog (loaded only for the owner). */
+  const teacherOptions = useTeacherOptions(isRegisterOwner);
   const canEditOwnRows = hasCapability(role, 'editOwnStudentFees');
   const canRecordPayments = hasCapability(role, 'recordPrincipalPayments');
 
@@ -259,6 +265,8 @@ export default function PrincipalFeesNote() {
         onAddStudent={() => setAddOpen(true)}
         canAddPayment={isRegisterOwner && rows.length > 0}
         onAddPayment={() => setPickPaymentOpen(true)}
+        canImport={isRegisterOwner}
+        onImport={() => setImportOpen(true)}
       />
 
       <div style={{ marginTop: 'var(--space-4)' }}>
@@ -267,13 +275,19 @@ export default function PrincipalFeesNote() {
             title="The fees note is empty"
             description={
               isRegisterOwner
-                ? 'Students are added to this note once, then their row stays for the whole year. Add the first one to start.'
+                ? 'Pull your registered students in class by class — or type one in by hand. '
+                  + 'Rows stay for the whole year; fee amounts are filled in right here afterwards.'
                 : 'The Principal has not added any students to the note yet.'
             }
             action={isRegisterOwner ? (
-              <Button variant="primary" icon={<PlusIcon size={16} />} onClick={() => setAddOpen(true)}>
-                Add Student
-              </Button>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Button variant="primary" icon={<PlusIcon size={16} />} onClick={() => setImportOpen(true)}>
+                  Add from student list
+                </Button>
+                <Button variant="secondary" icon={<PlusIcon size={16} />} onClick={() => setAddOpen(true)}>
+                  Add one by hand
+                </Button>
+              </div>
             ) : undefined}
           />
         ) : visibleRows.length === 0 ? (
@@ -318,6 +332,26 @@ export default function PrincipalFeesNote() {
           setPaymentTarget({ row, summary: summaryFor(row.id) });
         }}
       />
+
+      {importOpen && (
+        <ImportStudentsDialog
+          academicYear={academicYear}
+          existingRows={rows}
+          teachers={teacherOptions}
+          actor={actor.uid ? actor : null}
+          onClose={() => setImportOpen(false)}
+          onSaved={async () => {
+            try {
+              await reload();
+              return true;
+            } catch (refreshError) {
+              // The imports COMMITTED; only the refetch failed (§30 contract).
+              console.error('[fees-note] refresh after import failed', refreshError);
+              return false;
+            }
+          }}
+        />
+      )}
 
       <AddStudentDialog
         isOpen={addOpen}

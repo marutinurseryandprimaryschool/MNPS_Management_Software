@@ -66,8 +66,8 @@ const ADMIN_SECTIONS: NavSection[] = [
       { id: 'principal-note', icon: <FileTextIcon size={20} />, label: 'Fees Note', href: '/admin/principal-note', capability: 'editPrincipalRegister' },
       { id: 'principal-classes', icon: <SchoolIcon size={20} />, label: 'Class-wise', href: '/admin/principal-classes', capability: 'editPrincipalRegister' },
       { id: 'principal-teachers', icon: <UsersIcon size={20} />, label: 'Teacher-wise', href: '/admin/principal-teachers', capability: 'viewPrincipalRegister' },
-      { id: 'principal-accounts', icon: <BarChartIcon size={20} />, label: 'Income & Expense', href: '/admin/principal-accounts', capability: 'viewPrincipalAccounts' },
-      { id: 'principal-activity', icon: <ClockIcon size={20} />, label: 'Activity Log', href: '/admin/principal-activity', capability: 'viewPrincipalAccounts' },
+      { id: 'principal-accounts', icon: <BarChartIcon size={20} />, label: "Today's Billing & Expenses", href: '/admin/principal-accounts', capability: 'viewPrincipalAccounts' },
+      { id: 'principal-monthly', icon: <ClockIcon size={20} />, label: 'Accounts (Monthly)', href: '/admin/principal-monthly', capability: 'viewPrincipalAccounts' },
     ],
   },
   {

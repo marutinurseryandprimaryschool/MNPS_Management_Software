@@ -92,7 +92,7 @@ function MonthChip({
     border: `1px solid ${theme.border}`,
     textAlign: 'left',
     width: isMobile ? '100%' : undefined,
-    minWidth: isMobile ? undefined : 132,
+    minWidth: isMobile ? undefined : 170,
   };
 
   if (!clickable) {
@@ -134,7 +134,7 @@ function HeadSection({
         <div style={{
           display: isMobile ? 'flex' : 'grid',
           flexDirection: isMobile ? 'column' : undefined,
-          gridTemplateColumns: isMobile ? undefined : 'repeat(auto-fill, minmax(132px, 1fr))',
+          gridTemplateColumns: isMobile ? undefined : 'repeat(auto-fill, minmax(170px, 1fr))',
           gap: 'var(--space-2)',
         }}>
           {summary.months.map(cell => (

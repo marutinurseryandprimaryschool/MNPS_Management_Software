@@ -25,13 +25,14 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { coerceDate, excludeDeleted } from './fee-utils';
+import { computeDayCloseAssessment } from './principal-fees';
 import {
   describeWriteError, isBrowserOffline, OFFLINE_NOT_SAVED_MESSAGE,
 } from '@/components/layout/admin/fees/error-policy';
 import type {
-  NewPrincipalExpense, NewPrincipalPayment, NewRegisterRow,
+  DayCloseInput, NewPrincipalExpense, NewPrincipalPayment, NewRegisterRow,
   PrincipalActor, PrincipalAuditAction, PrincipalAuditEntry, PrincipalAuditTarget,
-  PrincipalExpense, PrincipalPayment, PrincipalSettings, RegisterRow,
+  PrincipalDayClose, PrincipalExpense, PrincipalPayment, PrincipalSettings, RegisterRow,
 } from '@/types/principal';
 
 /* ── Collections ──────────────────────────────────────────────────────── */
@@ -42,6 +43,8 @@ export const PRINCIPAL_COLLECTIONS = {
   expenses: 'principalExpenses',
   audit: 'principalAudit',
   settings: 'principalSettings',
+  /** Phase 3 §16: one doc per business date, the doc id IS the 'yyyy-MM-dd'. */
+  dayClose: 'principalDayClose',
 } as const;
 
 const SETTINGS_DOC_ID = 'main';
@@ -144,7 +147,7 @@ function sanitizeValue(value: unknown): unknown {
 const sanitize = (data: Record<string, unknown>): Record<string, unknown> =>
   sanitizeValue(data) as Record<string, unknown>;
 
-const TIMESTAMP_FIELDS = ['createdAt', 'updatedAt', 'paidAt', 'at'] as const;
+const TIMESTAMP_FIELDS = ['createdAt', 'updatedAt', 'paidAt', 'at', 'closedAt'] as const;
 
 /** Firestore doc → app shape: id attached, known Timestamps coerced to Dates. */
 function fromFirestore<T>(data: DocumentData, id: string): T {
@@ -429,6 +432,129 @@ export const PrincipalExpensesService = {
         summary: `Deleted a ₹${before.amount ?? 0} expense (${before.category ?? 'uncategorised'}) — kept in the activity log`,
       }),
       'delete',
+    )),
+};
+
+/* ── Day close (Phase 3 §16–§18) ──────────────────────────────────────── */
+
+/**
+ * A day-close write is denied for exactly one reason in practice: the rules
+ * block for principalDayClose has not been deployed yet. Saying "only the
+ * Principal can do this" to the Principal herself is simply wrong — this text
+ * names the real cause and the real fix.
+ */
+const CANNOT_CLOSE_DAY =
+  'Day close is not switched on yet — the updated security rules still need to be '
+  + 'deployed to Firebase. Everything else on this page keeps working.';
+
+const dayCloseRef = (dateKey: string) => doc(db, PRINCIPAL_COLLECTIONS.dayClose, dateKey);
+
+/**
+ * Day close is the newest collection, and its firestore.rules block may not be
+ * deployed yet. Until it is, EVERY read of it is denied — an expected state,
+ * not a failure, so it must not shout in the console on every accounts load.
+ *
+ * A denial is swallowed here (before runRead's error path) and recorded on
+ * this flag, so the UI can say "Day close needs the updated security rules"
+ * instead of silently pretending every day is open. Any OTHER failure —
+ * offline, backend down — still throws and is still reported.
+ */
+let dayCloseDenied = false;
+
+/** True once a day-close read has been denied by the security rules. */
+export const isDayCloseUnavailable = (): boolean => dayCloseDenied;
+
+function swallowDayCloseDenial<T>(error: unknown, fallback: T): T {
+  if (error instanceof FirebaseError && error.code === 'permission-denied') {
+    dayCloseDenied = true;
+    return fallback;
+  }
+  throw error;
+}
+
+export const PrincipalDayCloseService = {
+  /** The close record for one business date, or null when the day is open
+      (also null while the rules for this collection are undeployed). */
+  get: (dateKey: string): Promise<PrincipalDayClose | null> =>
+    runRead('the day-close record', async () => {
+      try {
+        const snap = await getDoc(dayCloseRef(dateKey));
+        if (!snap.exists()) return null;
+        return fromFirestore<PrincipalDayClose>(snap.data(), snap.id);
+      } catch (error) {
+        return swallowDayCloseDenial(error, null);
+      }
+    }),
+
+  /** Every close for the year — the calendars and guards read this once. */
+  listByYear: (year: string): Promise<PrincipalDayClose[]> =>
+    runRead('the day-close records', async () => {
+      try {
+        const docs = await listDocs<PrincipalDayClose>(
+          PRINCIPAL_COLLECTIONS.dayClose, where('academicYear', '==', year));
+        return docs.sort((a, b) => (b.dateKey || '').localeCompare(a.dateKey || ''));
+      } catch (error) {
+        return swallowDayCloseDenial(error, [] as PrincipalDayClose[]);
+      }
+    }),
+
+  /**
+   * Close (or re-close after a reopen) one business date. The arithmetic is
+   * recomputed here AND re-checked by firestore.rules, and the whole record
+   * lands in the same batch as its audit entry. Whole rupees only — the
+   * drawer is counted in notes and coins, not paisa.
+   */
+  close: (input: DayCloseInput, actor: PrincipalActor): Promise<void> =>
+    runWrite(CANNOT_CLOSE_DAY, async () => {
+      const expectedCash = Math.round(Number(input.expectedCash) || 0);
+      const actualCash = Math.round(Number(input.actualCash) || 0);
+      const { difference, assessment } = computeDayCloseAssessment(expectedCash, actualCash);
+
+      const ref = dayCloseRef(input.dateKey);
+      const existing = await getDoc(ref);
+      const isReClose = existing.exists();
+
+      const payload = sanitize({
+        dateKey: input.dateKey,
+        academicYear: input.academicYear,
+        expectedCash,
+        actualCash,
+        difference,
+        assessment,
+        status: 'closed',
+        note: input.note?.trim() || undefined,
+        closedByUid: signedInUid(),
+        closedByName: actor.name,
+      });
+
+      const differenceText = difference === 0
+        ? 'matched'
+        : `${assessment} by ₹${Math.abs(difference)}`;
+      const batch = writeBatch(db);
+      batch.set(ref, { ...payload, closedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      appendAudit(batch, {
+        actor,
+        action: isReClose ? 'update' : 'create',
+        target: 'dayclose',
+        targetId: input.dateKey,
+        summary: `${isReClose ? 'Re-closed' : 'Closed'} ${input.dateKey} — counted ₹${actualCash} `
+          + `against expected ₹${expectedCash} (${differenceText})`
+          + (input.note?.trim() ? ` — ${input.note.trim()}` : ''),
+        before: isReClose ? { ...existing.data() } : null,
+        after: payload,
+      });
+      await batch.commit();
+    }),
+
+  /**
+   * Reopen a closed date so a correction can be recorded — the §18 workflow
+   * is reopen → correct → close again, every step audited. The count that was
+   * standing stays on the record until the re-close overwrites it.
+   */
+  reopen: (dateKey: string, actor: PrincipalActor): Promise<void> =>
+    runWrite(CANNOT_CLOSE_DAY, () => patchWithAudit(
+      PRINCIPAL_COLLECTIONS.dayClose, 'dayclose', dateKey, { status: 'reopened' }, actor,
+      () => ({ summary: `Reopened ${dateKey} for corrections — close it again when done` }),
     )),
 };
 
