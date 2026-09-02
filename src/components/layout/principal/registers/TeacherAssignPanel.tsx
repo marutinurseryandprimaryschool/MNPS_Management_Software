@@ -491,6 +491,7 @@ export default function TeacherAssignPanel({ data, actor, academicYear }: Teache
         academicYear={academicYear ?? data.rows[0]?.academicYear ?? ''}
         existingRows={data.rows}
         teachers={teachers.filter(teacher => teacher.uid).map(teacher => ({ uid: teacher.uid, name: teacher.name }))}
+        settings={data.settings}
         actor={actor}
         onClose={() => setImportOpen(false)}
         onSaved={data.refreshQuietly}

@@ -21,7 +21,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
-import { SearchInput, Select } from '@/components/ui/Input';
+import Input, { SearchInput, Select } from '@/components/ui/Input';
+import { monthsForAmount } from '../note/note-helpers';
+import type { PrincipalSettings } from '@/types/principal';
 import { useToast } from '@/components/ui/Toast';
 import { StudentsService } from '@/lib/firestore-service';
 import { PrincipalRegisterService } from '@/lib/principal-service';
@@ -49,6 +51,8 @@ export interface ImportStudentsDialogProps {
   existingRows: RegisterRow[];
   /** Teachers that CAN be assigned (must carry an auth uid). */
   teachers: { uid: string; name: string }[];
+  /** Supplies the default ECA / van month schedules for the fee step. */
+  settings?: PrincipalSettings | null;
   actor: PrincipalActor | null;
   onClose: () => void;
   /** Post-commit refetch (refreshQuietly): never throws, false = stale list. */
@@ -58,7 +62,7 @@ export interface ImportStudentsDialogProps {
 /* Mounted ONLY while open (the parent conditionally renders it), so every
    opening starts from fresh initial state — no in-effect resets needed. */
 export default function ImportStudentsDialog({
-  academicYear, existingRows, teachers, actor, onClose, onSaved,
+  academicYear, existingRows, teachers, settings, actor, onClose, onSaved,
 }: ImportStudentsDialogProps) {
   const { showToast } = useToast();
 
@@ -66,9 +70,19 @@ export default function ImportStudentsDialog({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('');
+  /** Section narrowing INSIDE the chosen class — LKG A / B / C etc. */
+  const [sectionFilter, setSectionFilter] = useState('');
   const [teacherUid, setTeacherUid] = useState('');
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
+  /* Step 2: the fee amounts to apply to everyone picked. Importing a whole
+     section usually means one fee structure for all of them, so they are
+     entered once here instead of student-by-student in the Fees Note after. */
+  const [step, setStep] = useState<'pick' | 'fees'>('pick');
+  const [schoolFee, setSchoolFee] = useState('');
+  const [ecaAnnual, setEcaAnnual] = useState('');
+  const [vanMonthly, setVanMonthly] = useState('');
+  const [feeError, setFeeError] = useState<string | null>(null);
 
   /* Load the real student list once per mount (= once per opening). */
   useEffect(() => {
@@ -114,13 +128,24 @@ export default function ImportStudentsDialog({
   }, [candidates]);
 
   const term = search.trim().toLowerCase();
+  /** Sections that exist in the chosen class (every section when none picked). */
+  const sectionNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const candidate of candidates) {
+      if (classFilter && candidate.className !== classFilter) continue;
+      if (candidate.sectionName) set.add(candidate.sectionName);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [candidates, classFilter]);
+
   const visible = useMemo(() => candidates
     .filter(candidate => !classFilter || candidate.className === classFilter)
+    .filter(candidate => !sectionFilter || candidate.sectionName === sectionFilter)
     .filter(candidate => !term
       || `${candidate.name} ${candidate.className} ${candidate.rollNo}`.toLowerCase().includes(term))
     .sort((a, b) => compareClassNames(a.className, b.className)
       || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
-  [candidates, classFilter, term]);
+  [candidates, classFilter, sectionFilter, term]);
 
   const pickedIds = visible.filter(candidate => picked[candidate.id]).map(candidate => candidate.id);
   const selectedTeacher = teachers.find(teacher => teacher.uid === teacherUid) ?? null;
@@ -130,6 +155,24 @@ export default function ImportStudentsDialog({
       ? {}
       : Object.fromEntries(visible.map(candidate => [candidate.id, true])),
   );
+
+  /**
+   * The step-2 amounts, with month schedules attached. An ECA or van amount
+   * with no months would charge nothing at all, so monthsForAmount fills them
+   * from the register's defaults — the same rule the Add Student form uses.
+   */
+  const feeAmounts = useMemo(() => {
+    const school = Math.max(0, Math.round(Number(schoolFee) || 0));
+    const eca = Math.max(0, Math.round(Number(ecaAnnual) || 0));
+    const van = Math.max(0, Math.round(Number(vanMonthly) || 0));
+    return {
+      school,
+      eca,
+      van,
+      ecaMonths: monthsForAmount(eca, [], settings?.defaultEcaMonths) ?? [],
+      vanMonths: monthsForAmount(van, [], settings?.defaultVanMonths) ?? [],
+    };
+  }, [schoolFee, ecaAnnual, vanMonthly, settings]);
 
   /** One audited createRow per student; partial failures reported honestly. */
   const importPicked = async () => {
@@ -152,13 +195,14 @@ export default function ImportStudentsDialog({
           rollNo: candidate.rollNo || undefined,
           teacherUid: selectedTeacher?.uid ?? null,
           teacherName: selectedTeacher?.name ?? null,
-          // Born with every fee at zero — amounts are typed in the Fees Note,
-          // the same contract as the original seed script.
-          schoolFee: 0,
-          ecaAnnual: 0,
-          ecaMonths: [],
-          vanMonthly: 0,
-          vanMonths: [],
+          // The amounts typed in step 2. A head left blank stays 0 and simply
+          // does not apply to these students — a van fee of 0 means "no van",
+          // exactly as it does everywhere else.
+          schoolFee: feeAmounts.school,
+          ecaAnnual: feeAmounts.eca,
+          ecaMonths: feeAmounts.ecaMonths,
+          vanMonthly: feeAmounts.van,
+          vanMonths: feeAmounts.vanMonths,
           isScholarship: false,
         }, actor);
         saved += 1;
@@ -174,6 +218,7 @@ export default function ImportStudentsDialog({
 
     if (saved === chosen.length) {
       const assignedNote = selectedTeacher ? ` and assigned to ${selectedTeacher.name}` : '';
+      setStep('pick');
       showToast(
         refreshed
           ? `${saved} student${saved === 1 ? '' : 's'} added to the register${assignedNote}`
@@ -189,13 +234,91 @@ export default function ImportStudentsDialog({
     );
   };
 
+  /* ── Step 2: the fee amounts everyone picked will be created with ── */
+  if (step === 'fees') {
+    const nothingCharged = feeAmounts.school <= 0 && feeAmounts.eca <= 0 && feeAmounts.van <= 0;
+    return (
+      <Modal
+        isOpen
+        onClose={busy ? () => {} : onClose}
+        title={`Fee details — ${pickedIds.length} student${pickedIds.length === 1 ? '' : 's'}`}
+        size="md"
+      >
+        <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+          <p className="text-body-sm" style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+            These amounts apply to all {pickedIds.length} selected student
+            {pickedIds.length === 1 ? '' : 's'}
+            {classFilter ? ` in ${classFilter}${sectionFilter ? ` - ${sectionFilter}` : ''}` : ''}
+            {selectedTeacher ? `, assigned to ${selectedTeacher.name}` : ''}.
+            Leave a fee blank when it does not apply — a student with no van simply has none.
+            Individual amounts can still be adjusted per student afterwards.
+          </p>
+
+          <Input
+            label="School fees (whole year)"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={schoolFee}
+            onChange={e => { setSchoolFee(e.target.value); setFeeError(null); }}
+            hint="Charged from the start of the year."
+          />
+          <Input
+            label="ECA fees (whole year)"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={ecaAnnual}
+            onChange={e => { setEcaAnnual(e.target.value); setFeeError(null); }}
+            hint={feeAmounts.eca > 0
+              ? `Split across ${feeAmounts.ecaMonths.length} months automatically.`
+              : 'Leave blank if these students have no ECA.'}
+          />
+          <Input
+            label="Van fees (per month)"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={vanMonthly}
+            onChange={e => { setVanMonthly(e.target.value); setFeeError(null); }}
+            hint={feeAmounts.van > 0
+              ? `Charged for ${feeAmounts.vanMonths.length} months — ₹${feeAmounts.van * feeAmounts.vanMonths.length} a year.`
+              : 'Leave blank if these students do not use the van.'}
+          />
+
+          {nothingCharged && (
+            <NoticeBanner tone="warning">
+              No fees entered. The students will still be added, but they will show ₹0 charged
+              until amounts are set in the Fees Note.
+            </NoticeBanner>
+          )}
+          {feeError && <NoticeBanner tone="error">{feeError}</NoticeBanner>}
+
+          <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <Button variant="secondary" onClick={() => setStep('pick')} disabled={busy}>
+              ← Back to students
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => void importPicked()}
+              loading={busy}
+              disabled={busy || pickedIds.length === 0}
+            >
+              Add {pickedIds.length} student{pickedIds.length === 1 ? '' : 's'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal isOpen onClose={busy ? () => {} : onClose} title="Add students from the school list" size="lg">
       <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
         <p className="text-body-sm" style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
           These are the school&rsquo;s registered students who are not in the fees register yet.
-          Pick a class, tick the students, and add them — fee amounts are typed in the Fees Note
-          afterwards. Choosing a teacher assigns them in the same step.
+          Pick a class and section, tick the students, choose their teacher, then add the fee
+          amounts on the next step.
         </p>
 
         {loadError && <NoticeBanner tone="error">{loadError}</NoticeBanner>}
@@ -213,8 +336,26 @@ export default function ImportStudentsDialog({
               { value: '', label: 'All classes' },
               ...classNames.map(name => ({ value: name, label: name })),
             ]}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setClassFilter(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              // A new class has its own sections, so the old pick can't stand.
+              setClassFilter(e.target.value);
+              setSectionFilter('');
+            }}
           />
+          {/* Only shown once there are sections to choose between — classes
+              with a single (or no) section get no pointless dropdown. */}
+          {sectionNames.length > 0 && (
+            <Select
+              label=""
+              aria-label="Filter by section"
+              value={sectionFilter}
+              options={[
+                { value: '', label: classFilter ? `All sections of ${classFilter}` : 'All sections' },
+                ...sectionNames.map(name => ({ value: name, label: `Section ${name}` })),
+              ]}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSectionFilter(e.target.value)}
+            />
+          )}
           <Select
             label=""
             aria-label="Assign to teacher"
@@ -274,19 +415,16 @@ export default function ImportStudentsDialog({
             {pickedIds.length === visible.length && visible.length > 0 ? 'Clear selection' : 'Select all shown'}
           </Button>
           <span className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-            {pickedIds.length} selected · {candidates.length} not in the register yet
+            {pickedIds.length} selected · showing {visible.length} of {candidates.length} not in the register yet
           </span>
           <div style={{ flex: 1 }} />
           <Button variant="secondary" onClick={onClose} disabled={busy}>Close</Button>
           <Button
             variant="primary"
-            onClick={() => void importPicked()}
-            loading={busy}
+            onClick={() => { setFeeError(null); setStep('fees'); }}
             disabled={busy || pickedIds.length === 0}
           >
-            {selectedTeacher
-              ? `Add & assign to ${selectedTeacher.name}`
-              : `Add ${pickedIds.length || ''} student${pickedIds.length === 1 ? '' : 's'}`}
+            Add fee details →
           </Button>
         </div>
       </div>

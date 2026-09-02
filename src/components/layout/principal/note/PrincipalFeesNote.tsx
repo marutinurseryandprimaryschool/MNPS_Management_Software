@@ -338,6 +338,7 @@ export default function PrincipalFeesNote() {
           academicYear={academicYear}
           existingRows={rows}
           teachers={teacherOptions}
+          settings={settings}
           actor={actor.uid ? actor : null}
           onClose={() => setImportOpen(false)}
           onSaved={async () => {
