@@ -36,6 +36,7 @@ import AdminBus from './admin/AdminBus';
 import PrincipalFeesNote from './principal/note/PrincipalFeesNote';
 import ClassWiseSection from './principal/registers/ClassWiseSection';
 import TeacherWiseSection from './principal/registers/TeacherWiseSection';
+import TeacherFees from './teacher/TeacherFees';
 import PrincipalAccounts from './principal/PrincipalAccounts';
 import PrincipalActivity from './principal/activity/PrincipalActivity';
 
@@ -69,6 +70,7 @@ const PAGE_TITLES: Record<string, string> = {
   'principal-note': 'Fees Note',
   'principal-classes': 'Class-wise Register',
   'principal-teachers': 'Teacher-wise Register',
+  'teacher-fees': 'Class Fee Register',
   'principal-accounts': "Today's Billing & Expenses",
   'principal-monthly': 'Accounts (Monthly)',
   'principal-activity': 'Activity Log',
@@ -171,10 +173,15 @@ export default function DashboardLayout() {
         case 'co-scholastic': return <TeacherCoScholastic />;
         case 'report-card': return <SharedReportCard view="teacher" />;
         case 'assignments': return <TeacherAssignments />;
-        /* The teacher's only money page: the Principal Register rows assigned
-           to them ("My Students' Fees"). The legacy 'collect-fees' route is
-           removed; TeacherFees.tsx stays on disk, unrouted. */
+        /* The teacher's money pages:
+           - 'principal-teachers': the Principal Register rows assigned to them.
+           - 'teacher-fees': the ORIGINAL read-only class-section fee register
+             (scholarship scaling included) — re-routed at the teachers'
+             request; the register view had replaced it and they lost their
+             scholarship-students view. Read-only against the legacy
+             collections, all still teacher-readable under the live rules. */
         case 'principal-teachers': return guard('viewPrincipalRegister', <TeacherWiseSection />);
+        case 'teacher-fees': return guard('viewOwnClassFees', <TeacherFees />);
         case 'my-class': return <TeacherClassOverview view="dashboard" />;
         case 'class-students': return <TeacherClassOverview view="students" />;
         case 'class-attendance': return <TeacherClassOverview view="attendance" />;

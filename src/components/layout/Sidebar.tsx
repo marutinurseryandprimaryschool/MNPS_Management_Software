@@ -126,11 +126,15 @@ const TEACHER_SECTIONS: NavSection[] = [
     ],
   },
   {
-    // The teacher's single window into the Principal Register: the rows Sharmi
-    // assigned to them. The legacy 'collect-fees' page is retired (unrouted).
+    // Two money windows, deliberately both:
+    // - "My Students' Fees": the Principal Register rows assigned to them.
+    // - "Class Fee Register": the ORIGINAL read-only fee view of their own
+    //   class-section, scholarship scaling included — restored at the
+    //   teachers' request after the register work had unrouted it.
     title: 'FEES',
     items: [
       { id: 'principal-teachers', icon: <CreditCardIcon size={20} />, label: "My Students' Fees", href: '/teacher/principal-teachers', capability: 'viewPrincipalRegister' },
+      { id: 'teacher-fees', icon: <CreditCardIcon size={20} />, label: 'Class Fee Register', href: '/teacher/teacher-fees', capability: 'viewOwnClassFees' },
     ],
   },
 ];
