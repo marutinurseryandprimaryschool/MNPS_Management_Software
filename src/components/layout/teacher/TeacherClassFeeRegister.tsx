@@ -189,7 +189,10 @@ export default function TeacherClassFeeRegister() {
     };
   }, { charged: 0, paid: 0, pending: 0, dueNow: 0, scholarship: 0 }), [myRows, data]);
 
-  const detailRow = data.rows.find(row => row.id === detailRowId) ?? null;
+  /* Look the student up in the ROLL, not in data.rows: a child on the class
+     list who has no register row yet exists only in myRows, so searching
+     data.rows found nothing and the sheet simply never opened for them. */
+  const detailRow = myRows.find(row => row.id === detailRowId) ?? null;
 
   if (data.loading || classOf === null) {
     if (sectionError) {
