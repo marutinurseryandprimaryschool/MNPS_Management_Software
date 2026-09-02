@@ -81,7 +81,7 @@ export default function ImportStudentsDialog({
   const [step, setStep] = useState<'pick' | 'fees'>('pick');
   const [schoolFee, setSchoolFee] = useState('');
   const [ecaAnnual, setEcaAnnual] = useState('');
-  const [vanMonthly, setVanMonthly] = useState('');
+  const [vanYearly, setVanYearly] = useState('');
   const [feeError, setFeeError] = useState<string | null>(null);
 
   /* Load the real student list once per mount (= once per opening). */
@@ -164,15 +164,20 @@ export default function ImportStudentsDialog({
   const feeAmounts = useMemo(() => {
     const school = Math.max(0, Math.round(Number(schoolFee) || 0));
     const eca = Math.max(0, Math.round(Number(ecaAnnual) || 0));
-    const van = Math.max(0, Math.round(Number(vanMonthly) || 0));
+    // Van is entered as the WHOLE-YEAR total (how the school quotes it) and
+    // stored as the monthly rate the engine charges: yearly ÷ van months.
+    const vanYear = Math.max(0, Math.round(Number(vanYearly) || 0));
+    const vanMonths = monthsForAmount(vanYear, [], settings?.defaultVanMonths) ?? [];
+    const vanRate = vanMonths.length > 0 ? Math.round(vanYear / vanMonths.length) : 0;
     return {
       school,
       eca,
-      van,
+      vanYear,
+      vanRate,
       ecaMonths: monthsForAmount(eca, [], settings?.defaultEcaMonths) ?? [],
-      vanMonths: monthsForAmount(van, [], settings?.defaultVanMonths) ?? [],
+      vanMonths,
     };
-  }, [schoolFee, ecaAnnual, vanMonthly, settings]);
+  }, [schoolFee, ecaAnnual, vanYearly, settings]);
 
   /** One audited createRow per student; partial failures reported honestly. */
   const importPicked = async () => {
@@ -201,7 +206,7 @@ export default function ImportStudentsDialog({
           schoolFee: feeAmounts.school,
           ecaAnnual: feeAmounts.eca,
           ecaMonths: feeAmounts.ecaMonths,
-          vanMonthly: feeAmounts.van,
+          vanMonthly: feeAmounts.vanRate,
           vanMonths: feeAmounts.vanMonths,
           isScholarship: false,
         }, actor);
@@ -236,7 +241,7 @@ export default function ImportStudentsDialog({
 
   /* ── Step 2: the fee amounts everyone picked will be created with ── */
   if (step === 'fees') {
-    const nothingCharged = feeAmounts.school <= 0 && feeAmounts.eca <= 0 && feeAmounts.van <= 0;
+    const nothingCharged = feeAmounts.school <= 0 && feeAmounts.eca <= 0 && feeAmounts.vanYear <= 0;
     return (
       <Modal
         isOpen
@@ -275,16 +280,45 @@ export default function ImportStudentsDialog({
               : 'Leave blank if these students have no ECA.'}
           />
           <Input
-            label="Van fees (per month)"
+            label="Van fees (whole year)"
             type="number"
             min={0}
             inputMode="numeric"
-            value={vanMonthly}
-            onChange={e => { setVanMonthly(e.target.value); setFeeError(null); }}
-            hint={feeAmounts.van > 0
-              ? `Charged for ${feeAmounts.vanMonths.length} months — ₹${feeAmounts.van * feeAmounts.vanMonths.length} a year.`
+            value={vanYearly}
+            onChange={e => { setVanYearly(e.target.value); setFeeError(null); }}
+            hint={feeAmounts.vanRate > 0
+              ? `Collected as ₹${feeAmounts.vanRate.toLocaleString('en-IN')} / month across ${feeAmounts.vanMonths.length} months.`
               : 'Leave blank if these students do not use the van.'}
           />
+
+          {/* The one line that catches a per-month amount typed as per-year:
+              the WHOLE-YEAR charge each student will carry, spelled out. */}
+          {!nothingCharged && (
+            <div style={{
+              padding: 'var(--space-3) var(--space-4)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-surface-variant)',
+              border: '1px solid var(--color-border)',
+            }}>
+              <span className="text-overline" style={{ color: 'var(--color-text-tertiary)' }}>
+                Each student will be charged for the year
+              </span>
+              <div style={{ fontSize: '1.3rem', fontWeight: 700 }}>
+                ₹{(feeAmounts.school + feeAmounts.eca
+                  + feeAmounts.vanRate * feeAmounts.vanMonths.length).toLocaleString('en-IN')}
+              </div>
+              <div className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
+                {[
+                  feeAmounts.school > 0 ? `School ₹${feeAmounts.school.toLocaleString('en-IN')}` : '',
+                  feeAmounts.eca > 0 ? `ECA ₹${feeAmounts.eca.toLocaleString('en-IN')}` : '',
+                  feeAmounts.vanRate > 0
+                    ? `Van ₹${feeAmounts.vanRate.toLocaleString('en-IN')} / month × ${feeAmounts.vanMonths.length} months`
+                      + ` = ₹${(feeAmounts.vanRate * feeAmounts.vanMonths.length).toLocaleString('en-IN')}`
+                    : '',
+                ].filter(Boolean).join('  +  ')}
+              </div>
+            </div>
+          )}
 
           {nothingCharged && (
             <NoticeBanner tone="warning">

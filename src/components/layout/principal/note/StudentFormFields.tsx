@@ -30,7 +30,8 @@ export interface StudentFormValues {
   rollNo: string;
   schoolFee: string;
   ecaAnnual: string;
-  vanMonthly: string;
+  /** WHOLE-YEAR van cost as typed; converted to the stored monthly rate on save. */
+  vanYearly: string;
   isScholarship: boolean;
   notes: string;
 }
@@ -43,7 +44,7 @@ export const emptyStudentForm = (): StudentFormValues => ({
   rollNo: '',
   schoolFee: '',
   ecaAnnual: '',
-  vanMonthly: '',
+  vanYearly: '',
   isScholarship: false,
   notes: '',
 });
@@ -56,7 +57,8 @@ export const studentFormFromRow = (row: RegisterRow): StudentFormValues => ({
   rollNo: row.rollNo || '',
   schoolFee: String(Math.round(Number(row.schoolFee) || 0)),
   ecaAnnual: String(Math.round(Number(row.ecaAnnual) || 0)),
-  vanMonthly: String(Math.round(Number(row.vanMonthly) || 0)),
+  // Entered/displayed as the WHOLE-YEAR van cost; stored as a monthly rate.
+  vanYearly: String(Math.round((Number(row.vanMonthly) || 0) * (row.vanMonths?.length ?? 0))),
   isScholarship: Boolean(row.isScholarship),
   notes: row.notes || '',
 });
@@ -74,7 +76,7 @@ export function validateStudentForm(values: StudentFormValues): string | null {
   for (const [label, text] of [
     ['school fee', values.schoolFee],
     ['ECA amount', values.ecaAnnual],
-    ['van fee', values.vanMonthly],
+    ['van fee', values.vanYearly],
   ] as const) {
     const cleaned = (text || '').replace(/[₹,\s]/g, '');
     if (cleaned === '') continue;
@@ -190,12 +192,13 @@ export default function StudentFormFields({
           onChange={event => onChange({ ecaAnnual: event.target.value })}
         />
         <Input
-          label="Van (₹ / month)"
+          label="Van (₹ / year)"
           type="number"
           min={0}
-          value={values.vanMonthly}
+          value={values.vanYearly}
           disabled={disabled}
-          onChange={event => onChange({ vanMonthly: event.target.value })}
+          hint="Total for the year — collected monthly"
+          onChange={event => onChange({ vanYearly: event.target.value })}
         />
       </div>
 

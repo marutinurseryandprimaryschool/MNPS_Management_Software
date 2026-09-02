@@ -116,7 +116,11 @@ export default function AddStudentDialog({
     }
 
     const ecaAnnual = formAmount(form.ecaAnnual);
-    const vanMonthly = formAmount(form.vanMonthly);
+    // Typed as the whole-year van cost; stored as the monthly rate the engine
+    // charges — yearly ÷ the months the schedule covers.
+    const vanYearly = formAmount(form.vanYearly);
+    const vanMonthsList = monthsForAmount(vanYearly, [], settings?.defaultVanMonths) ?? [];
+    const vanMonthly = vanMonthsList.length > 0 ? Math.round(vanYearly / vanMonthsList.length) : 0;
     const payload: NewRegisterRow = {
       academicYear,
       name: form.name.trim(),
@@ -130,7 +134,7 @@ export default function AddStudentDialog({
       ecaMonths: monthsForAmount(ecaAnnual, [], settings?.defaultEcaMonths)
         ?? [...ACADEMIC_MONTHS],
       vanMonthly,
-      vanMonths: monthsForAmount(vanMonthly, [], settings?.defaultVanMonths) ?? [],
+      vanMonths: vanMonthsList,
       isScholarship: form.isScholarship,
       notes: form.notes.trim() || undefined,
     };

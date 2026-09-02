@@ -75,11 +75,16 @@ function buildPatch(
     if (months) patch.ecaMonths = months;
   }
 
-  const vanMonthly = formAmount(form.vanMonthly);
+  // Typed as the whole-year van cost; the stored figure is the monthly rate
+  // (yearly ÷ months on the schedule). Comparing the round-tripped yearly
+  // keeps an untouched field from writing a no-op patch.
+  const vanYearly = formAmount(form.vanYearly);
+  const vanMonthsList = monthsForAmount(vanYearly, row.vanMonths, settings?.defaultVanMonths)
+    ?? (row.vanMonths ?? []);
+  const vanMonthly = vanMonthsList.length > 0 ? Math.round(vanYearly / vanMonthsList.length) : 0;
   if (vanMonthly !== (Number(row.vanMonthly) || 0)) {
     patch.vanMonthly = vanMonthly;
-    const months = monthsForAmount(vanMonthly, row.vanMonths, settings?.defaultVanMonths);
-    if (months) patch.vanMonths = months;
+    if (!row.vanMonths || row.vanMonths.length === 0) patch.vanMonths = vanMonthsList;
   }
 
   return patch;

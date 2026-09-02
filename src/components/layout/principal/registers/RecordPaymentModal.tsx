@@ -61,6 +61,15 @@ function applicableHeadOptions(summary: RowSummary): typeof HEAD_OPTIONS {
 const MODE_OPTIONS: { value: PrincipalPaymentMode; label: string }[] = PRINCIPAL_MODE_OPTIONS;
 
 /**
+ * School fees are collected TERM-WISE at this school. The chosen term rides
+ * in the payment's `month` field — a free label the engine ignores for the
+ * school head (school fee is due from day one, not month-scheduled), but the
+ * history, receipts and exports all print it, which is exactly what's wanted:
+ * "School fee — Term 2".
+ */
+const SCHOOL_TERMS = ['Term 1', 'Term 2', 'Term 3'] as const;
+
+/**
  * 'yyyy-MM-dd' → local midnight. Built from parts, never `new Date(string)`,
  * which parses a bare date as UTC and can land the receipt on the wrong day
  * for anyone east of Greenwich — which is everyone at this school.
@@ -147,6 +156,8 @@ export default function RecordPaymentModal({
     return String(oldestDueMonth(cells)?.pending ?? '');
   });
   const [dateKey, setDateKey] = useState(() => toDateKey(new Date()));
+  /** Which term a SCHOOL-fee payment belongs to (Term 1/2/3). */
+  const [term, setTerm] = useState('');
   const [mode, setMode] = useState<PrincipalPaymentMode>('cash');
   const [remarks, setRemarks] = useState('');
   const [saving, setSaving] = useState(false);
@@ -228,6 +239,10 @@ export default function RecordPaymentModal({
       setFormError('Pick the month this ECA / van payment is for — otherwise its month stays open.');
       return;
     }
+    if (head === 'school' && !term) {
+      setFormError('Pick which term this school-fee payment is for.');
+      return;
+    }
     if (!dateKey) {
       setFormError('Pick the date the money was collected.');
       return;
@@ -282,7 +297,7 @@ export default function RecordPaymentModal({
         studentName: row.name,
         className: row.className,
         head,
-        month: needsMonth ? month : undefined,
+        month: needsMonth ? month : head === 'school' ? term : undefined,
         amount: value,
         dateKey,
         paidAt: localDateFromKey(dateKey),
@@ -310,7 +325,7 @@ export default function RecordPaymentModal({
         paymentId,
         amount: value,
         head,
-        month: needsMonth ? month : undefined,
+        month: needsMonth ? month : head === 'school' ? term : undefined,
         mode,
         dateKey,
         remarks: remarks.trim() || undefined,
@@ -425,6 +440,16 @@ export default function RecordPaymentModal({
               summary.van.charged <= 0 ? 'Van' : '',
             ].filter(Boolean).join(' and ')} fee is not configured for this student.
           </span>
+        )}
+
+        {head === 'school' && (
+          <Select
+            label="Term"
+            value={term}
+            onChange={e => { setTerm(e.target.value); touch(); }}
+            placeholder="Which term is this payment for?"
+            options={SCHOOL_TERMS.map(t => ({ value: t, label: t }))}
+          />
         )}
 
         {needsMonth && (

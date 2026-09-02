@@ -181,6 +181,10 @@ export default function RecordPaymentDialog({
       }
       if (!form.month) { showToast('Choose which month this payment is for', 'error'); return; }
     }
+    if (form.head === 'school' && !form.month) {
+      showToast('Pick which term this school-fee payment is for', 'error');
+      return;
+    }
     if (!actor.uid) {
       showToast('Your session has no user id — sign in again before recording money.', 'error');
       return;
@@ -205,7 +209,7 @@ export default function RecordPaymentDialog({
       studentName: row.name,
       className: row.className,
       head: form.head,
-      month: isMonthly(form.head) ? form.month : undefined,
+      month: isMonthly(form.head) || form.head === 'school' ? form.month : undefined,
       amount,
       dateKey: form.dateKey,
       paidAt: dateFromKey(form.dateKey),
@@ -284,6 +288,21 @@ export default function RecordPaymentDialog({
                 }))}
                 onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
                   changeMonth(event.target.value)}
+              />
+            )}
+            {form.head === 'school' && (
+              /* School fees are collected term-wise: the term rides in the
+                 payment's month field, printed on history and receipts. */
+              <Select
+                label="Term"
+                value={form.month}
+                disabled={saving}
+                placeholder="Which term?"
+                options={['Term 1', 'Term 2', 'Term 3'].map(t => ({ value: t, label: t }))}
+                onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
+                  setForm(prev => (prev ? { ...prev, month: event.target.value } : prev));
+                  setDuplicateAcknowledged(false);
+                }}
               />
             )}
           </div>

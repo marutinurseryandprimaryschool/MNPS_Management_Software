@@ -25,7 +25,9 @@ export type EditableField = (typeof EDITABLE_FIELDS)[number];
 export const FIELD_LABELS: Record<EditableField, string> = {
   schoolFee: 'School',
   ecaAnnual: 'ECA (year)',
-  vanMonthly: 'Van (month)',
+  // The grid cell edits the RATE the engine stores; the forms take the yearly
+  // total and divide. Label the unit loudly so nobody types a yearly figure.
+  vanMonthly: 'Van (₹/month rate)',
 };
 
 /** One cell of the grid, as the keyboard model addresses it. */

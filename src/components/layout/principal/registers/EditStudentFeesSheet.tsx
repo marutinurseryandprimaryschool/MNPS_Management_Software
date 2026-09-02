@@ -101,7 +101,13 @@ export default function EditStudentFeesSheet({
   const [schoolFee, setSchoolFee] = useState(String(row.schoolFee ?? 0));
   const [ecaAnnual, setEcaAnnual] = useState(String(row.ecaAnnual ?? 0));
   const [ecaMonths, setEcaMonths] = useState<string[]>(() => inAcademicOrder(row.ecaMonths ?? []));
-  const [vanMonthly, setVanMonthly] = useState(String(row.vanMonthly ?? 0));
+  /* Van is ENTERED as the whole-year total (how the school quotes it) but
+     STORED as the monthly rate the engine charges — the conversion lives
+     here, at the edge, so the engine's math stays untouched. */
+  const [vanYearly, setVanYearly] = useState(() => {
+    const months = inAcademicOrder(row.vanMonths ?? []).length;
+    return String(Math.round((row.vanMonthly ?? 0) * months));
+  });
   const [vanMonths, setVanMonths] = useState<string[]>(() => inAcademicOrder(row.vanMonths ?? []));
   const [notes, setNotes] = useState(row.notes ?? '');
   const [saving, setSaving] = useState(false);
@@ -115,6 +121,13 @@ export default function EditStudentFeesSheet({
     return min === max ? inr(min) : `${inr(min)}–${inr(max)}`;
   }, [ecaAnnual, ecaMonths.length]);
 
+  /** The monthly rate the yearly figure works out to, for the hint + save. */
+  const vanRate = useMemo(() => {
+    const yearly = Math.round(Number(vanYearly) || 0);
+    if (yearly <= 0 || vanMonths.length === 0) return 0;
+    return Math.round(yearly / vanMonths.length);
+  }, [vanYearly, vanMonths.length]);
+
   const toggle = (list: string[], month: string): string[] =>
     inAcademicOrder(list.includes(month) ? list.filter(item => item !== month) : [...list, month]);
 
@@ -122,8 +135,8 @@ export default function EditStudentFeesSheet({
     if (saving) return;
     const school = Math.round(Number(schoolFee));
     const eca = Math.round(Number(ecaAnnual));
-    const van = Math.round(Number(vanMonthly));
-    if ([school, eca, van].some(value => !Number.isFinite(value) || value < 0)) {
+    const vanYear = Math.round(Number(vanYearly));
+    if ([school, eca, vanYear].some(value => !Number.isFinite(value) || value < 0)) {
       setFormError('Fee amounts must be zero or more.');
       return;
     }
@@ -131,10 +144,12 @@ export default function EditStudentFeesSheet({
       setFormError('Pick the months the ECA fee is spread across — otherwise it can never fall due.');
       return;
     }
-    if (van > 0 && vanMonths.length === 0) {
+    if (vanYear > 0 && vanMonths.length === 0) {
       setFormError('Pick the months this student rides the van.');
       return;
     }
+    // Stored per month: the whole-year figure divided across the van months.
+    const van = vanMonths.length > 0 ? Math.round(vanYear / vanMonths.length) : 0;
     if (!actor) {
       setFormError('Your session has no signed-in user. Refresh the app and sign in again.');
       return;
@@ -215,15 +230,17 @@ export default function EditStudentFeesSheet({
         />
 
         <Input
-          label="Van fees (per month)"
+          label="Van fees (whole year)"
           type="number"
           min={0}
           inputMode="numeric"
-          value={vanMonthly}
-          onChange={e => setVanMonthly(e.target.value)}
-          hint={vanMonths.length > 0
-            ? `Charged for ${vanMonths.length} month${vanMonths.length === 1 ? '' : 's'}.`
-            : 'No van months selected — nothing is charged.'}
+          value={vanYearly}
+          onChange={e => setVanYearly(e.target.value)}
+          hint={vanRate > 0
+            ? `Collected as ${inr(vanRate)} / month across ${vanMonths.length} months.`
+            : vanMonths.length === 0
+              ? 'Pick the van months below — nothing is charged without them.'
+              : 'Leave 0 if this student does not use the van.'}
         />
         <MonthChips
           label="Van months"
