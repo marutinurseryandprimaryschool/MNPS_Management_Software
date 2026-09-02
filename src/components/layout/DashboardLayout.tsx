@@ -36,7 +36,7 @@ import AdminBus from './admin/AdminBus';
 import PrincipalFeesNote from './principal/note/PrincipalFeesNote';
 import ClassWiseSection from './principal/registers/ClassWiseSection';
 import TeacherWiseSection from './principal/registers/TeacherWiseSection';
-import TeacherFees from './teacher/TeacherFees';
+import TeacherClassFeeRegister from './teacher/TeacherClassFeeRegister';
 import PrincipalAccounts from './principal/PrincipalAccounts';
 import PrincipalActivity from './principal/activity/PrincipalActivity';
 
@@ -181,7 +181,7 @@ export default function DashboardLayout() {
              scholarship-students view. Read-only against the legacy
              collections, all still teacher-readable under the live rules. */
         case 'principal-teachers': return guard('viewPrincipalRegister', <TeacherWiseSection />);
-        case 'teacher-fees': return guard('viewOwnClassFees', <TeacherFees />);
+        case 'teacher-fees': return guard('viewOwnClassFees', <TeacherClassFeeRegister />);
         case 'my-class': return <TeacherClassOverview view="dashboard" />;
         case 'class-students': return <TeacherClassOverview view="students" />;
         case 'class-attendance': return <TeacherClassOverview view="attendance" />;
