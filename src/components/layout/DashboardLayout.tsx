@@ -262,6 +262,11 @@ function MoreMenu({
     ? [
         { id: 'class-tests', icon: <FileTextIcon size={22} />, label: 'Class Tests' },
         { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assignments' },
+        // The bottom bar's "Fees" tab is the assigned-students register; the
+        // class-section register (scholarships included) lives here, because
+        // five bottom tabs is the hard ceiling. Teachers reach it on a phone
+        // ONLY through this menu — without it the page is desktop-only.
+        { id: 'teacher-fees', icon: <CreditCardIcon size={22} />, label: 'Class Fee Register' },
       ]
     : [
         { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
