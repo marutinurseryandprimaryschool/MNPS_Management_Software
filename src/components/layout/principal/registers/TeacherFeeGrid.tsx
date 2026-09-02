@@ -58,6 +58,13 @@ export interface TeacherFeeGridProps {
   summaryFor: (rowId: string) => RowSummary;
   actor: PrincipalActor | null;
   canEditFees: boolean;
+  /**
+   * Per-row override. A teacher now sees their whole class-section, but
+   * firestore.rules only lets them edit rows the Principal formally handed
+   * over (teacherUid == their uid). Rows failing this render read-only, so
+   * the grid never offers a keystroke the server would reject.
+   */
+  canEditRow?: (row: RegisterRow) => boolean;
   /** Principal's default schedules; the full academic year when unset. */
   defaultEcaMonths?: string[];
   defaultVanMonths?: string[];
@@ -68,7 +75,7 @@ export interface TeacherFeeGridProps {
 }
 
 export default function TeacherFeeGrid({
-  rows, summaryFor, actor, canEditFees, defaultEcaMonths, defaultVanMonths,
+  rows, summaryFor, actor, canEditFees, canEditRow, defaultEcaMonths, defaultVanMonths,
   onOpen, onEditMonths, onRecordPayment, onSaved,
 }: TeacherFeeGridProps) {
   const { showToast } = useToast();
@@ -234,7 +241,7 @@ export default function TeacherFeeGrid({
                         type="number"
                         min={0}
                         inputMode="numeric"
-                        disabled={!canEditFees || savingKeys[key]}
+                        disabled={!canEditFees || (canEditRow ? !canEditRow(row) : false) || savingKeys[key]}
                         value={value}
                         aria-label={`${field.label} for ${row.name}`}
                         onChange={event => setDraft(key, event.target.value)}

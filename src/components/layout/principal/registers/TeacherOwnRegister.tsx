@@ -16,9 +16,10 @@
    screen — a permanent notice, not a one-time toast.
 */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/SharedUI';
 import { SearchInput } from '@/components/ui/Input';
+import { TeachersService } from '@/lib/firestore-service';
 import type { PrincipalActor, RegisterRow } from '@/types/principal';
 import { compareStudents, inr } from './register-shared';
 import {
@@ -52,10 +53,64 @@ export default function TeacherOwnRegister({
 
   const myUid = actor?.uid ?? '';
 
-  const myRows = useMemo(
-    () => data.rows.filter(row => row.teacherUid && row.teacherUid === myUid).sort(compareStudents),
-    [data.rows, myUid],
-  );
+  /**
+   * The class-sections this teacher holds, from their own teacher record.
+   * Students of those sections are THEIRS automatically — the Principal
+   * should not have to hand-pick each child a second time when the school
+   * has already said who teaches which section. Explicit register
+   * assignments still count, so a student handed over individually (a
+   * transfer, a shared section) shows up too.
+   */
+  const [mySections, setMySections] = useState<{ className: string; sectionName: string }[]>([]);
+
+  useEffect(() => {
+    if (!myUid) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [teachers, assignments] = await Promise.all([
+          TeachersService.getAll(),
+          TeachersService.getAllAssignments(academicYear ?? ''),
+        ]);
+        if (cancelled) return;
+        const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+        const mine = (teachers as Record<string, unknown>[]).find(t =>
+          norm(t.userId) === norm(myUid) || norm(t.uid) === norm(myUid));
+        const mineAssignments = mine
+          ? (assignments as Record<string, unknown>[]).find(a => a.teacherId === mine.id)
+          : undefined;
+        setMySections(((mineAssignments?.assignments ?? []) as Record<string, unknown>[])
+          .map(entry => ({
+            className: String(entry.className ?? ''),
+            sectionName: String(entry.sectionName ?? ''),
+          }))
+          .filter(entry => entry.className));
+      } catch (error) {
+        // Non-fatal: explicitly assigned rows still list without this.
+        console.warn('[teacher-register] could not read your class assignment', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [myUid, academicYear]);
+
+  const myRows = useMemo(() => {
+    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+    const inMySection = (row: RegisterRow) => mySections.some(section =>
+      norm(row.className) === norm(section.className)
+      // A section-less assignment covers the whole class.
+      && (!section.sectionName || norm(row.sectionName) === norm(section.sectionName)));
+    return data.rows
+      .filter(row => (row.teacherUid && row.teacherUid === myUid) || inMySection(row))
+      .sort(compareStudents);
+  }, [data.rows, myUid, mySections]);
+
+  /**
+   * Editing is pinned to `teacherUid == request.auth.uid` in firestore.rules,
+   * so a section student the Principal has not formally handed over is
+   * VIEWABLE here but not editable. Offering the control would only produce a
+   * permission error, so it is withheld per row rather than per screen.
+   */
+  const canActOn = (row: RegisterRow): boolean => Boolean(myUid) && row.teacherUid === myUid;
 
   const term = search.trim().toLowerCase();
   const visibleRows = useMemo(() => (term
@@ -82,8 +137,12 @@ export default function TeacherOwnRegister({
   const payRow = findRow(payRowId);
   const editRow = findRow(editRowId);
 
-  const openPayment = canRecordPayments ? (row: RegisterRow) => setPayRowId(row.id) : undefined;
-  const openEdit = canEditFees ? (row: RegisterRow) => setEditRowId(row.id) : undefined;
+  const openPayment = canRecordPayments
+    ? (row: RegisterRow) => { if (canActOn(row)) setPayRowId(row.id); }
+    : undefined;
+  const openEdit = canEditFees
+    ? (row: RegisterRow) => { if (canActOn(row)) setEditRowId(row.id); }
+    : undefined;
 
   return (
     <div>
@@ -94,7 +153,11 @@ export default function TeacherOwnRegister({
             {academicYear && <Badge variant="primary">{academicYear}</Badge>}
           </div>
           <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-            {myRows.length} student{myRows.length === 1 ? '' : 's'} assigned to you by the Principal.
+            {myRows.length} student{myRows.length === 1 ? '' : 's'}
+            {mySections.length > 0
+              ? ` in ${mySections.map(s => [s.className, s.sectionName].filter(Boolean).join(' · ')).join(', ')}`
+              : ' assigned to you by the Principal'}
+            {' — school, ECA and van fees with balances.'}
           </p>
         </div>
       </div>
@@ -103,8 +166,10 @@ export default function TeacherOwnRegister({
 
       {myRows.length === 0 ? (
         <EmptyBlock
-          title="No students assigned to you yet"
-          hint="The Principal assigns students to teachers from the Teacher-wise register."
+          title="No students to show yet"
+          hint={mySections.length > 0
+            ? 'Your section has no students in the fees register yet — the Principal adds them from the Fees Note.'
+            : 'Your class and section are not set on your teacher record yet. Once the office sets them, your section’s students appear here automatically.'}
         />
       ) : (
         <>
@@ -146,6 +211,7 @@ export default function TeacherOwnRegister({
                 summaryFor={data.summaryFor}
                 actor={actor}
                 canEditFees={canEditFees}
+                canEditRow={canActOn}
                 defaultEcaMonths={data.settings?.defaultEcaMonths}
                 defaultVanMonths={data.settings?.defaultVanMonths}
                 onOpen={row => setDetailRowId(row.id)}
