@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing untyped Firestore data handling in this legacy screen; typed migration tracked separately. */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { TimetablesService, ClassesService, TeachersService } from '@/lib/firestore-service';
 import { formatTime, getUpcomingSaturday, toDateKey } from '@/lib/utils';
 import { useSchool } from '@/context/SchoolContext';
@@ -14,6 +14,10 @@ import {
   findTeacherConflict, isTeacherValidForSlot, resolveAssignedTeacher, resolveEligibleTeachers,
   type BookedSlot, type TeacherLike,
 } from '@/lib/timetable-teachers';
+import {
+  assignmentsForSection, buildAssignmentIndex, eligibleTeachersForSubject,
+  type AssignmentDoc, type SubjectAssignment, type TeacherRecord,
+} from '@/lib/subject-assignments';
 import type { Class, Teacher, Timetable, TimetableSlot, Subject, PeriodTiming, SaturdayOverride } from '@/types/models';
 
 // ── Color palette for subjects ──
@@ -59,6 +63,10 @@ export default function AdminTimetable() {
   const [saving, setSaving] = useState(false);
   /** Every teacher booking across all classes — powers double-booking checks. */
   const [bookedSlots, setBookedSlots] = useState<BookedSlot[]>([]);
+  /** Class-section → subject → teacher, from Subject & Teacher Assignment. */
+  const [assignmentIndex, setAssignmentIndex] = useState<SubjectAssignment[]>([]);
+  /** The cell whose teacher the Admin is overriding (§9). */
+  const [changeTeacherFor, setChangeTeacherFor] = useState<TimetableSlot | null>(null);
   const todayEnum = JS_DAY_MAP[new Date().getDay()] || null;
 
   // ── Per-Saturday override state ──
@@ -90,6 +98,12 @@ export default function AdminTimetable() {
       });
       setClasses(c as unknown as Class[]);
       setTeachers(mergedTeachers as unknown as Teacher[]);
+      // The class-section view of the same allocations the resolver reads —
+      // one source, so this screen and the assignment page cannot disagree.
+      setAssignmentIndex(buildAssignmentIndex(
+        t as unknown as TeacherRecord[],
+        assignments as unknown as AssignmentDoc[],
+      ));
       // Flatten every saved slot into "teacher X is booked day/period" rows.
       setBookedSlots((allTimetables as any[]).flatMap(tt =>
         ((tt.slots ?? []) as TimetableSlot[])
@@ -139,7 +153,24 @@ export default function AdminTimetable() {
   }, [selectedClass, selectedSection, satDateKey]);
 
   const selectedClassData = classes.find(c => c.id === selectedClass);
-  const classSubjects = selectedClassData?.subjects || [];
+  /* §12 — the palette offers only subjects CONFIGURED for this class-section
+     under Subject & Teacher Assignment, not the school's whole subject list.
+     A subject with no allocation has no teacher to put in the cell, so
+     offering it could only produce an unassigned period.
+
+     A section that has been configured shows exactly its configured
+     subjects; one that has not been configured yet falls back to the class's
+     own subject list, so an existing timetable can still be edited while the
+     school works through the new assignment page. */
+  const allClassSubjects = selectedClassData?.subjects || [];
+  const assignedSubjectIds = useMemo(() => new Set(
+    assignmentsForSection(assignmentIndex, selectedClass, selectedSection)
+      .map(a => a.subjectId),
+  ), [assignmentIndex, selectedClass, selectedSection]);
+  const sectionIsConfigured = assignedSubjectIds.size > 0;
+  const classSubjects = sectionIsConfigured
+    ? allClassSubjects.filter(sub => assignedSubjectIds.has(sub.id))
+    : allClassSubjects;
   const days = (school.settings?.schoolDays || []) as DayOfWeek[];
   const rawTimings = school.settings?.periodTimings || [];
   // No custom period timings are configured (and there's no settings UI for them),
@@ -736,7 +767,22 @@ export default function AdminTimetable() {
                               <div style={{ fontWeight: 600, fontSize: '0.8rem', color: color?.text || '#374151', lineHeight: 1.2 }}>
                                 {slot.subjectName}
                               </div>
-                              <div style={{ fontSize: '0.65rem', color: color?.text || '#6B7280', opacity: 0.7, marginTop: 2 }}>
+                              {/* The teacher is READ-ONLY: it comes from the
+                                  configured assignment. Editing offers an
+                                  explicit override rather than a free choice
+                                  (§9, §13). */}
+                              <div
+                                style={{
+                                  fontSize: '0.65rem', color: color?.text || '#6B7280',
+                                  opacity: 0.7, marginTop: 2,
+                                  textDecoration: editing ? 'underline dotted' : 'none',
+                                  cursor: editing ? 'pointer' : 'default',
+                                }}
+                                title={editing ? 'Change teacher for this period' : undefined}
+                                onClick={editing
+                                  ? event => { event.stopPropagation(); setChangeTeacherFor(slot); }
+                                  : undefined}
+                              >
                                 {liveTeacherName(slot)}
                               </div>
                               {editing && (
@@ -891,6 +937,105 @@ export default function AdminTimetable() {
           )}
         </div>
       )}
+
+      {/* Change Teacher (§9) — an explicit override of the configured
+          assignment, offered only among teachers qualified for the subject,
+          and refused when it would double-book. */}
+      {changeTeacherFor && (() => {
+        const slot = changeTeacherFor;
+        const configured = resolveAssignedTeacher(teachers as unknown as TeacherLike[], {
+          classId: selectedClass,
+          sectionId: selectedSection,
+          subjectId: slot.subjectId,
+          subjectName: slot.subjectName,
+        });
+        const options = eligibleTeachersForSubject(
+          teachers as unknown as TeacherRecord[], slot.subjectId, slot.subjectName,
+        );
+        return (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)',
+            }}
+            onClick={() => setChangeTeacherFor(null)}
+          >
+            <div
+              onClick={event => event.stopPropagation()}
+              style={{
+                background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--color-border)', padding: 'var(--space-5)',
+                width: 'min(420px, 100%)', display: 'grid', gap: 'var(--space-3)',
+              }}
+            >
+              <h3 className="text-h3" style={{ margin: 0 }}>Change teacher</h3>
+              <p className="text-body-sm" style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+                {slot.subjectName} · {DAY_SHORT_LABELS[slot.day] ?? slot.day} period {slot.period}
+                {configured
+                  ? ` — assigned to ${configured.name} for this class and section.`
+                  : ' — no teacher is assigned for this subject in this class and section.'}
+              </p>
+
+              <select
+                value={slot.teacherId || ''}
+                onChange={event => {
+                  const teacher = teachers.find(t => t.id === event.target.value);
+                  if (!teacher) return;
+                  const clash = findTeacherConflict(bookedSlots, {
+                    teacherId: teacher.id,
+                    day: String(slot.day),
+                    period: slot.period,
+                    classId: selectedClass,
+                    sectionId: selectedSection,
+                  });
+                  if (clash) {
+                    showToast(
+                      `${teacher.name} is already assigned to ${clash.className ?? 'another class'}`
+                      + `${clash.sectionName ? ` — ${clash.sectionName}` : ''} in this period.`,
+                      'error',
+                    );
+                    return;
+                  }
+                  setSlots(prev => prev.map(item =>
+                    item.day === slot.day && item.period === slot.period
+                      ? { ...item, teacherId: teacher.id, teacherName: teacher.name }
+                      : item));
+                  setChangeTeacherFor(null);
+                  showToast(`${slot.subjectName} → ${teacher.name} for this period`);
+                }}
+                style={{
+                  padding: '8px 12px', minHeight: 40, fontSize: '0.9rem',
+                  border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                  background: 'var(--color-surface)', color: 'var(--color-text-primary)',
+                }}
+              >
+                <option value="">Choose a teacher…</option>
+                {options.map(teacher => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.name}{teacher.id === configured?.id ? ' (assigned)' : ''}
+                  </option>
+                ))}
+              </select>
+
+              {options.length === 0 && (
+                <p className="text-body-sm" style={{ margin: 0, color: 'var(--color-warning-text)' }}>
+                  No teacher lists {slot.subjectName} on their profile. Add it under Teachers, then
+                  set the allocation under Subject &amp; Teacher Assignment.
+                </p>
+              )}
+
+              <p className="text-caption" style={{ margin: 0, color: 'var(--color-text-tertiary)' }}>
+                Overriding here changes this period only. To change who teaches
+                {' '}{slot.subjectName} in this class, edit Subject &amp; Teacher Assignment.
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => setChangeTeacherFor(null)}>Close</Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -563,6 +563,50 @@ export default function AdminTeachers() {
                 <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', margin: 0 }}>No classes assigned</p>
               )}
             </div>
+
+            {/* Teaching Assignments (§15) — what this teacher ACTUALLY takes,
+                read from the same allocations the timetable resolves against.
+                The subject list above is only eligibility; these are the
+                periods that will carry their name. */}
+            <div>
+              <span className="text-overline" style={{ color: 'var(--color-primary-500)', marginBottom: 'var(--space-2)', display: 'block' }}>
+                Teaching Assignments
+              </span>
+              {(() => {
+                const teaching = (selectedTeacher.assignedClasses ?? [])
+                  .filter(a => a.subjectId || a.subjectName)
+                  .sort((a, b) =>
+                    `${a.className}${a.sectionName}`.localeCompare(`${b.className}${b.sectionName}`, undefined, { numeric: true })
+                    || String(a.subjectName ?? '').localeCompare(String(b.subjectName ?? '')));
+                if (teaching.length === 0) {
+                  return (
+                    <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)', margin: 0 }}>
+                      No subject assignments yet. Set them under Academics → Subject &amp; Teacher
+                      Assignment; the timetable takes its teachers from there.
+                    </p>
+                  );
+                }
+                return (
+                  <div style={{ display: 'grid', gap: 4 }}>
+                    {teaching.map((a, i) => (
+                      <div
+                        key={`${a.classId}-${a.sectionId}-${a.subjectId}-${i}`}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)',
+                          padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+                          background: 'var(--color-surface-variant)',
+                        }}
+                      >
+                        <span className="text-body-sm" style={{ fontWeight: 600 }}>
+                          {a.className}{a.sectionName ? ` — ${a.sectionName}` : ''}
+                        </span>
+                        <span className="text-body-sm">{a.subjectName || '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         )}
       </Modal>
