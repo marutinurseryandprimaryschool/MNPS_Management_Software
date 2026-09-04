@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run tests/fee-utils.test.ts tests/principal-fees.test.ts tests/timetable-teachers.test.ts tests/subject-assignments.test.ts",
+    "test": "vitest run tests/fee-utils.test.ts tests/principal-fees.test.ts tests/timetable-teachers.test.ts tests/subject-assignments.test.ts tests/assignment-import.test.ts",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run tests/rules\"",
     "vercel:link": "vercel link",
     "deploy:preview": "vercel deploy",
