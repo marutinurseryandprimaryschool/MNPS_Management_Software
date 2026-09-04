@@ -95,7 +95,17 @@ export default function TeacherClassOverview({ view = 'dashboard' }: TeacherClas
         setTeacher(teacherData);
 
         if (teacherData) {
-          const assignments = (teacherData as any).assignedClasses || [];
+          /* One row per subject means the same class-section can appear
+             several times. This picker chooses a CLASS, so collapse them —
+             keeping the class-teacher row, which carries the flag. */
+          const allRows = (teacherData as any).assignedClasses || [];
+          const bySection = new Map<string, any>();
+          allRows.forEach((row: any) => {
+            const key = `${row.classId}|${row.sectionId}`;
+            const kept = bySection.get(key);
+            if (!kept || (row.isClassTeacher && !kept.isClassTeacher)) bySection.set(key, row);
+          });
+          const assignments = Array.from(bySection.values());
           setAssignedClasses(assignments);
           
           if (assignments.length > 0) {
