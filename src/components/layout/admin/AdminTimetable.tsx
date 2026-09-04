@@ -10,6 +10,10 @@ import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { DAYS_OF_WEEK, DAY_SHORT_LABELS, TimetableStatus, DayOfWeek } from '@/types/enums';
 import { CalendarIcon, PlusIcon } from '@/components/ui/Icons';
+import {
+  findTeacherConflict, isTeacherValidForSlot, resolveAssignedTeacher, resolveEligibleTeachers,
+  type BookedSlot, type TeacherLike,
+} from '@/lib/timetable-teachers';
 import type { Class, Teacher, Timetable, TimetableSlot, Subject, PeriodTiming, SaturdayOverride } from '@/types/models';
 
 // ── Color palette for subjects ──
@@ -53,6 +57,8 @@ export default function AdminTimetable() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Every teacher booking across all classes — powers double-booking checks. */
+  const [bookedSlots, setBookedSlots] = useState<BookedSlot[]>([]);
   const todayEnum = JS_DAY_MAP[new Date().getDay()] || null;
 
   // ── Per-Saturday override state ──
@@ -68,10 +74,13 @@ export default function AdminTimetable() {
   const fetchData = useCallback(async () => {
     try {
       if (!school?.academicYear) return;
-      const [c, t, assignments] = await Promise.all([
+      const [c, t, assignments, allTimetables] = await Promise.all([
         ClassesService.getAll(school.academicYear),
         TeachersService.getAll(),
-        TeachersService.getAllAssignments(school.academicYear)
+        TeachersService.getAllAssignments(school.academicYear),
+        // Every class's timetable, read once, so a drop can tell whether the
+        // teacher is already standing in another room that period (spec §14).
+        TimetablesService.getAll(school.academicYear).catch(() => [] as any[]),
       ]);
       // Assignments are stored per-year in a separate collection, not on the
       // teacher doc — merge them in so class/section matching works.
@@ -81,6 +90,19 @@ export default function AdminTimetable() {
       });
       setClasses(c as unknown as Class[]);
       setTeachers(mergedTeachers as unknown as Teacher[]);
+      // Flatten every saved slot into "teacher X is booked day/period" rows.
+      setBookedSlots((allTimetables as any[]).flatMap(tt =>
+        ((tt.slots ?? []) as TimetableSlot[])
+          .filter(slot => slot.teacherId)
+          .map(slot => ({
+            day: String(slot.day),
+            period: slot.period,
+            teacherId: slot.teacherId,
+            classId: tt.classId,
+            sectionId: tt.sectionId,
+            className: tt.className,
+            sectionName: tt.sectionName,
+          }))));
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [school?.academicYear]);
@@ -144,22 +166,43 @@ export default function AdminTimetable() {
    * so renames follow) and only then to the frozen text.
    */
   const liveTeacherName = (slot: { subjectId: string; subjectName: string; teacherId: string; teacherName: string }): string => {
-    const match = teachers.find(t => {
-      const teachesSubject = t.subjects?.includes(slot.subjectId)
-        || t.subjectNames?.some(n => n.toLowerCase() === slot.subjectName.toLowerCase());
-      const assignedHere = t.assignedClasses?.some(ac =>
-        ac.classId === selectedClass && ac.sectionId === selectedSection);
-      return teachesSubject && assignedHere;
+    /* An existing timetable keeps the teacher it was SAVED with (spec §13):
+       the stored id wins, resolved to the teacher's current name so a rename
+       follows without rewriting the record. Only a cell that never stored a
+       teacher falls through to the allocation, and if nobody is allocated it
+       says so rather than borrowing whoever happens to teach the subject. */
+    const stored = slot.teacherId ? teachers.find(t => t.id === slot.teacherId) : undefined;
+    if (stored) return stored.name;
+
+    const assigned = resolveAssignedTeacher(teachers as unknown as TeacherLike[], {
+      classId: selectedClass,
+      sectionId: selectedSection,
+      subjectId: slot.subjectId,
+      subjectName: slot.subjectName,
     });
-    if (match) return match.name;
-    const stored = teachers.find(t => t.id === slot.teacherId);
-    return stored?.name || slot.teacherName || 'Unassigned';
+    return assigned?.name || slot.teacherName || 'Unassigned';
   };
 
   // ── Handle dropping a subject onto a cell ──
   const handleDrop = (day: DayOfWeek, period: number) => {
     if (!dragItem.current) return;
     const { subjectId, subjectName, teacherId, teacherName } = dragItem.current;
+
+    /* §14 — a teacher cannot stand in two rooms in the same period. Keyed on
+       teacher + day + period, so the same teacher in a DIFFERENT period, or
+       another teacher in this one, passes untouched. This warns rather than
+       blocks: the Admin may be mid-rearrangement across two classes. */
+    const clash = findTeacherConflict(bookedSlots, {
+      teacherId, day: String(day), period, classId: selectedClass, sectionId: selectedSection,
+    });
+    if (clash) {
+      showToast(
+        `${teacherName} is already assigned to ${clash.className ?? 'another class'}`
+        + `${clash.sectionName ? ` — ${clash.sectionName}` : ''} in this period.`,
+        'warning',
+      );
+    }
+
     setSlots(prev => {
       const filtered = prev.filter(s => !(s.day === day && s.period === period));
       return [...filtered, { day, period, subjectId, subjectName, teacherId, teacherName }];
@@ -185,14 +228,14 @@ export default function AdminTimetable() {
     // Build subject-teacher map from teacher assignments
     const subjectTeacherMap = new Map<string, Teacher[]>();
     classSubjects.forEach(sub => {
-      const matching = teachers.filter(t => {
-        const teachesSubject = t.subjects?.includes(sub.id) || 
-                              t.subjectNames?.some(n => n.toLowerCase() === sub.name.toLowerCase());
-        const assignedToThisClass = t.assignedClasses?.some(ac => 
-          ac.classId === selectedClass && ac.sectionId === selectedSection
-        );
-        return teachesSubject && assignedToThisClass;
-      });
+      // Auto Generate resolves through the SAME function as manual editing
+      // (spec §16), so the two can never produce different allocations.
+      const matching = resolveEligibleTeachers(teachers as unknown as TeacherLike[], {
+        classId: selectedClass,
+        sectionId: selectedSection,
+        subjectId: sub.id,
+        subjectName: sub.name,
+      }) as unknown as Teacher[];
       subjectTeacherMap.set(sub.id, matching);
     });
 
@@ -287,17 +330,50 @@ export default function AdminTimetable() {
          slot frozen as ''/Unassigned would stay invisible to the teacher
          forever — saving is the moment the stored ids catch up. */
       const resolvedSlots = slots.map(slot => {
-        const match = teachers.find(t => {
-          const teachesSubject = t.subjects?.includes(slot.subjectId)
-            || t.subjectNames?.some(n => n.toLowerCase() === slot.subjectName.toLowerCase());
-          const assignedHere = t.assignedClasses?.some(ac =>
-            ac.classId === selectedClass && ac.sectionId === selectedSection);
-          return teachesSubject && assignedHere;
-        });
-        return match
-          ? { ...slot, teacherId: match.id, teacherName: match.name }
-          : slot;
+        const key = {
+          classId: selectedClass,
+          sectionId: selectedSection,
+          subjectId: slot.subjectId,
+          subjectName: slot.subjectName,
+        };
+        const roster = teachers as unknown as TeacherLike[];
+
+        /* Keep a teacher who is genuinely allocated here — including one the
+           Admin chose among several (spec §13: never rewrite a valid saved
+           assignment). Drop one who is not, rather than persisting a pairing
+           the allocation does not support. */
+        if (slot.teacherId && isTeacherValidForSlot(roster, key, slot.teacherId)) {
+          const current = teachers.find(t => t.id === slot.teacherId);
+          return current ? { ...slot, teacherName: current.name } : slot;
+        }
+
+        const assigned = resolveAssignedTeacher(roster, key);
+        return assigned
+          ? { ...slot, teacherId: assigned.id, teacherName: assigned.name }
+          : { ...slot, teacherId: '', teacherName: 'Unassigned' };
       });
+
+      /* §18 — the write path re-checks the pairing itself, because UI
+         filtering is not protection. */
+      const invalid = resolvedSlots.find(slot => !isTeacherValidForSlot(
+        teachers as unknown as TeacherLike[],
+        {
+          classId: selectedClass,
+          sectionId: selectedSection,
+          subjectId: slot.subjectId,
+          subjectName: slot.subjectName,
+        },
+        slot.teacherId,
+      ));
+      if (invalid) {
+        showToast(
+          `${invalid.teacherName} is not assigned to teach ${invalid.subjectName} in this class and section. `
+          + 'Fix the assignment under Teachers, then save again.',
+          'error',
+        );
+        setSaving(false);
+        return;
+      }
 
       const data = {
         classId: selectedClass,
@@ -475,15 +551,20 @@ export default function AdminTimetable() {
             {classSubjects.map((sub, i) => {
               const color = getSubjectColor(i);
               // Find teachers for this subject who are assigned to THIS class and section
-              const matchingTeachers = teachers.filter(t => {
-                const teachesSubject = t.subjects?.includes(sub.id) || 
-                                      t.subjectNames?.some(n => n.toLowerCase() === sub.name.toLowerCase());
-                const assignedToThisClass = t.assignedClasses?.some(ac => 
-                  ac.classId === selectedClass && ac.sectionId === selectedSection
-                );
-                return teachesSubject && assignedToThisClass;
-              });
-              const teacher = matchingTeachers[0];
+              // Same resolver as everywhere else — the palette can only offer
+              // a teacher actually allocated to this subject in this section.
+              const matchingTeachers = resolveEligibleTeachers(
+                teachers as unknown as TeacherLike[],
+                {
+                  classId: selectedClass,
+                  sectionId: selectedSection,
+                  subjectId: sub.id,
+                  subjectName: sub.name,
+                },
+              ) as unknown as Teacher[];
+              // Only auto-fill when the allocation is unambiguous; with several
+              // teachers the Admin picks, and with none nobody is invented.
+              const teacher = matchingTeachers.length === 1 ? matchingTeachers[0] : undefined;
               return (
                 <div
                   key={sub.id}
@@ -505,8 +586,13 @@ export default function AdminTimetable() {
                   }}
                 >
                   <span>{sub.name}</span>
+                  {/* Say WHY there is no teacher: none allocated here, or
+                      several so the Admin must choose (spec §8). */}
                   <span style={{ fontSize: '0.7rem', fontWeight: 400, opacity: 0.8 }}>
-                    {teacher?.name || 'No teacher'}
+                    {teacher?.name
+                      ?? (matchingTeachers.length > 1
+                        ? `${matchingTeachers.length} teachers — pick one`
+                        : 'No teacher assigned here')}
                   </span>
                 </div>
               );

@@ -120,6 +120,15 @@ export default function AdminTeachers() {
     });
   };
 
+  /** Records which subject this teacher takes in one class-section. */
+  const setSubjectForAssignment = (classId: string, sectionId: string, subjectId: string) => {
+    const subjectName = allSubjects.find(s => s.id === subjectId)?.name || '';
+    setSelectedAssignments(prev => prev.map(assignment =>
+      assignment.classId === classId && assignment.sectionId === sectionId
+        ? { ...assignment, subjectId, subjectName }
+        : assignment));
+  };
+
   const resetForm = () => {
     setFormData({ name: '', email: '', phone: '', employeeId: '' });
     setSelectedSubjects([]);
@@ -325,6 +334,54 @@ export default function AdminTeachers() {
                     );
                   })}
                 </div>
+
+                {/* WHICH subject, in THIS section. The timetable resolves its
+                    teacher from class + section + subject, so a section picked
+                    without a subject allocates nobody to any period — several
+                    teachers can be qualified in Maths, and only this says who
+                    actually takes it here. Fills the assignment's existing
+                    subjectId field; no new data shape. */}
+                {selectedAssignments.some(a => a.classId === cls.id) && (
+                  <div style={{ marginTop: 'var(--space-2)', paddingLeft: 'var(--space-3)' }}>
+                    {selectedAssignments
+                      .filter(a => a.classId === cls.id)
+                      .map(assignment => {
+                        const sectionLabel = assignment.sectionName || 'section';
+                        return (
+                          <div
+                            key={`${assignment.classId}-${assignment.sectionId}`}
+                            style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 4 }}
+                          >
+                            <span className="text-caption" style={{ color: 'var(--color-text-tertiary)', minWidth: 96 }}>
+                              Section {sectionLabel} teaches
+                            </span>
+                            <select
+                              value={assignment.subjectId || ''}
+                              onChange={e => setSubjectForAssignment(
+                                assignment.classId, assignment.sectionId, e.target.value,
+                              )}
+                              style={{
+                                padding: '6px 10px', minHeight: 34, fontSize: '0.82rem',
+                                border: `1px solid ${assignment.subjectId ? 'var(--color-border)' : 'var(--color-warning)'}`,
+                                borderRadius: 'var(--radius-md)',
+                                background: 'var(--color-surface)', color: 'var(--color-text-primary)',
+                              }}
+                            >
+                              <option value="">Choose the subject…</option>
+                              {(cls.subjects ?? []).map(sub => (
+                                <option key={sub.id} value={sub.id}>{sub.name}</option>
+                              ))}
+                            </select>
+                            {!assignment.subjectId && (
+                              <span className="text-caption" style={{ color: 'var(--color-warning-text)' }}>
+                                needed for the timetable
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             ))}
           </div>
