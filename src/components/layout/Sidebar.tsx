@@ -46,6 +46,9 @@ const ADMIN_SECTIONS: NavSection[] = [
     title: 'Academics',
     items: [
       { id: 'classes', icon: <SchoolIcon size={20} />, label: 'Classes', href: '/admin/classes' },
+      // Configured BEFORE the timetable — it is where the timetable gets its
+      // teachers, so it sits directly above it in the order of work.
+      { id: 'subject-assignments', icon: <BookOpenIcon size={20} />, label: 'Subject & Teacher Assignment', href: '/admin/subject-assignments' },
       { id: 'timetable', icon: <CalendarIcon size={20} />, label: 'Timetable', href: '/admin/timetable' },
       { id: 'attendance', icon: <ClipboardCheckIcon size={20} />, label: 'Attendance', href: '/admin/attendance' },
       { id: 'exams', icon: <CalendarIcon size={20} />, label: 'Academic Calendar', href: '/admin/exams' },

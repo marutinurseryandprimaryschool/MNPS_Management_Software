@@ -20,6 +20,7 @@ import AdminDashboard from './admin/AdminDashboard';
 import AdminStudents from './admin/AdminStudents';
 import AdminTeachers from './admin/AdminTeachers';
 import AdminClasses from './admin/AdminClasses';
+import AdminSubjectAssignments from './admin/AdminSubjectAssignments';
 import AdminTimetable from './admin/AdminTimetable';
 import AdminAttendance from './admin/AdminAttendance';
 import AdminExams from './admin/AdminExams';
@@ -62,6 +63,7 @@ const PAGE_TITLES: Record<string, string> = {
   students: 'Students',
   teachers: 'Teachers',
   classes: 'Classes & Sections',
+  'subject-assignments': 'Subject & Teacher Assignment',
   timetable: 'Timetable',
   attendance: 'Attendance Management',
   // Parent-only key; the admin/teacher fee pages are retired.
@@ -130,6 +132,7 @@ export default function DashboardLayout() {
         case 'students': return <AdminStudents />;
         case 'teachers': return <AdminTeachers />;
         case 'classes': return <AdminClasses />;
+        case 'subject-assignments': return <AdminSubjectAssignments />;
         case 'timetable': return <AdminTimetable />;
         case 'attendance': return <AdminAttendance />;
         case 'exams': return <AdminExams />;
