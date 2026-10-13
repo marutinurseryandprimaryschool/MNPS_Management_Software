@@ -1,15 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ClassTestsService, StudentsService, ClassesService } from '@/lib/firestore-service';
+import { parentData } from '@/lib/parent-api';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import Button from '@/components/ui/Button';
-import { findChildrenOfParent } from '@/lib/utils';
 import type { Class, ClassTest, ClassTestRecord, Student } from '@/types/models';
 
 export default function ParentClassTests() {
-  const { user } = useAuth();
+  const { user, parentChildren } = useAuth();
   const { school } = useSchool();
   const [loading, setLoading] = useState(true);
   const [children, setChildren] = useState<Student[]>([]);
@@ -21,16 +20,16 @@ export default function ParentClassTests() {
     async function load() {
       try {
         if (!user || !school?.academicYear) return;
-        const [allStudents, cl, tests] = await Promise.all([
-          StudentsService.getAll(school.academicYear),
-          ClassesService.getAll(school.academicYear),
-          ClassTestsService.getAll(school.academicYear),
-        ]);
-        const myKids = findChildrenOfParent(allStudents as unknown as Student[], user);
+        const myKids = parentChildren;
         setChildren(myKids);
         if (myKids.length > 0) setSelectedChildId(myKids[0].id);
-        setClasses(cl as unknown as Class[]);
-        setAllTests(tests as unknown as ClassTest[]);
+        // Fetch every child's slice up front so the switcher is instant; each
+        // response carries only that child's own record per test.
+        const perChild = await Promise.all(myKids.map(k =>
+          parentData<{ class: Class | null; classTests: ClassTest[] }>('classTests', k.id)));
+        const cls = perChild.map(p => p.class).filter((c): c is Class => !!c);
+        setClasses(Array.from(new Map(cls.map(c => [c.id, c])).values()));
+        setAllTests(perChild.flatMap(p => p.classTests || []));
       } catch (e) {
         console.error(e);
       } finally {
@@ -38,7 +37,7 @@ export default function ParentClassTests() {
       }
     }
     load();
-  }, [user, school?.academicYear]);
+  }, [user, parentChildren, school?.academicYear]);
 
   const child = useMemo(() => children.find(c => c.id === selectedChildId), [children, selectedChildId]);
   const childClass = useMemo(() => classes.find(c => c.id === child?.classId), [classes, child]);

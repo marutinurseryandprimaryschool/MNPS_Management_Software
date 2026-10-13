@@ -314,6 +314,8 @@ export default function AdminStudents() {
         ...formData,
         classId,
         sectionId,
+        // Google reports sign-in emails lowercased; store them the same way.
+        email: (formData.email || '').trim().toLowerCase(),
         dob: formData.dob ? new Date(formData.dob) : null,
         dateOfJoining: formData.dateOfJoining ? new Date(formData.dateOfJoining) : null,
         className,
@@ -467,7 +469,7 @@ export default function AdminStudents() {
           aadhaarNumber: row.aadhaarNumber || '',
           phone: row.phone || '',
           phoneVerifyStatus: row.phoneVerifyStatus || '',
-          email: row.email || '',
+          email: String(row.email || '').trim().toLowerCase(),
           dateOfJoining,
           admissionNumber: row.admissionNumber || '',
           religion: row.religion || '',

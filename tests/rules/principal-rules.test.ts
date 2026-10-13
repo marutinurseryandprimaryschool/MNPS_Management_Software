@@ -368,8 +368,8 @@ describeRules('principalRegister: reads are role-gated', () => {
     await assertSucceeds(asTeacher().doc(`principalRegister/${FOREIGN_ROW_ID}`).get());
   });
 
-  it('ALLOWS a parent reading a row (still scoped client-side — accepted residual risk)', async () => {
-    await assertSucceeds(asAnonParent().doc(`principalRegister/${OWN_ROW_ID}`).get());
+  it('DENIES a parent reading a row (parents get their row through /api/parent-data)', async () => {
+    await assertFails(asAnonParent().doc(`principalRegister/${OWN_ROW_ID}`).get());
   });
 
   it('DENIES a signed-in caller with no users doc reading a row', async () => {
@@ -829,9 +829,9 @@ describeRules('principalSettings', () => {
     await assertSucceeds(asTeacher().doc('principalSettings/main').get());
   });
 
-  it('ALLOWS a parent reading settings', async () => {
+  it('DENIES a parent reading settings (no parent reads in the module any more)', async () => {
     await seedDocs({ 'principalSettings/main': principalSettings });
-    await assertSucceeds(asAnonParent().doc('principalSettings/main').get());
+    await assertFails(asAnonParent().doc('principalSettings/main').get());
   });
 
   it('DENIES a caller with no users doc reading settings', async () => {

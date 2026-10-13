@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { AttendanceService, StudentsService } from '@/lib/firestore-service';
+import { parentData } from '@/lib/parent-api';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { AttendanceSession, AttendanceStatus } from '@/types/enums';
-import { computeDaysPresent, isParentOfStudent } from '@/lib/utils';
+import { computeDaysPresent } from '@/lib/utils';
 import type { Attendance, AttendanceRecord, Student } from '@/types/models';
 
 type Half = AttendanceStatus | undefined;
@@ -29,7 +29,7 @@ const pillText = (status: Half) =>
   status === undefined ? '—' : status.toUpperCase();
 
 export default function ParentAttendance() {
-  const { user } = useAuth();
+  const { user, parentChildren } = useAuth();
   const { school } = useSchool();
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [child, setChild] = useState<Student | null>(null);
@@ -39,12 +39,13 @@ export default function ParentAttendance() {
     async function fetchData() {
       try {
         if (!user || !school?.academicYear) return;
-        const allStudents = await StudentsService.getAll(school.academicYear);
-        const myChild = (allStudents as unknown as Student[]).find(s => isParentOfStudent(user, s));
-        setChild(myChild || null);
+        const myChild = parentChildren[0] || null;
+        setChild(myChild);
+        if (!myChild) return;
 
-        const allAttendance = await AttendanceService.getAll(school.academicYear);
-        setAttendances(allAttendance as unknown as Attendance[]);
+        // Only this child's entries come back; the server strips classmates'.
+        const data = await parentData<{ attendance: Attendance[] }>('attendance', myChild.id);
+        setAttendances(data.attendance || []);
       } catch (error) {
         console.error('Error:', error);
       } finally {
@@ -52,7 +53,7 @@ export default function ParentAttendance() {
       }
     }
     fetchData();
-  }, [user, school?.academicYear]);
+  }, [user, parentChildren, school?.academicYear]);
 
   // Roll the per-session docs up into one row per date for this child.
   const childAttendance = attendances.filter(a =>

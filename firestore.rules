@@ -32,14 +32,29 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'correspondent'];
     }
 
+    // Helper: any STAFF role recorded in users/{uid}. This is the read gate on
+    // every student-data collection. Parents are deliberately NOT here: the
+    // parent portal reads through /api/parent-data (Firebase Admin SDK, which
+    // bypasses these rules) and that endpoint returns one child's slice only.
+    // A session with no users doc — an anonymous sign-in, or a token minted
+    // straight from the public web config — matches nothing.
+    function isStaff() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')
+             in ['admin', 'principal', 'correspondent', 'teacher', 'staff'];
+    }
+
     // Users collection — redesigned: no self-service privilege escalation
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      // Staff see the directory; everyone else sees only their own doc. This
+      // closes the hole where an anonymous session could list staff emails
+      // and phone numbers.
+      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == userId);
 
-      // Parent self-signup (incl. anonymous sessions): own-uid doc, role locked to 'parent'
-      allow create: if isAuthenticated()
-        && request.auth.uid == userId
-        && request.resource.data.role == 'parent';
+      // Parent docs are written SERVER-SIDE by /api/parent-login (Admin SDK)
+      // after the code/DOB or Google email has been verified. The browser can
+      // no longer mint a parent doc for itself.
 
       // Staff first-login migration: own-uid doc with a privileged role, only when
       // migratedFrom references a pre-registration doc that is pending, matches the
@@ -78,69 +93,69 @@ service cloud.firestore {
 
     // Students
     match /students/{studentId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
     }
 
     // Teachers
     match /teachers/{teacherId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
     }
 
     // Classes
     match /classes/{classId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
     }
 
     // Timetables
     match /timetables/{timetableId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
     }
 
     // Attendance
     match /attendance/{attendanceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Marks
     match /marks/{marksId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Teacher Assignments
     match /teacherAssignments/{assignmentId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
     }
 
     // Assignments
     match /assignments/{assignmentId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Materials
     match /materials/{materialId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Fee Structures
     match /feeStructures/{feeId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
     }
 
-    // Fee Payments — Principal is the sole writer; reads stay open for
-    // parent/teacher views (client-side scoping, documented trust boundary).
+    // Fee Payments — Principal is the sole writer; reads are staff-only
+    // (parents get their own child's fees through /api/parent-data).
     // No hard delete: soft delete is an update setting deleted:true.
     match /feePayments/{paymentId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow create, update: if isPrincipal();
       allow delete: if false;
 
@@ -153,50 +168,50 @@ service cloud.firestore {
 
     // Chats
     match /chats/{chatId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow read: if isStaff();
+        allow write: if isStaff();
       }
     }
 
     // Notifications
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
-      allow update: if isAuthenticated();
+      allow update: if isStaff();
     }
 
     // Report Cards
     match /reportCards/{reportCardId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Co-Scholastic Records
     match /coScholasticRecords/{recordId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Bus Routes
     match /busRoutes/{routeId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
     }
 
     // Weekly Tests
     match /weeklyTests/{testId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Class Tests — per-test marks entered by teachers
     match /classTests/{testId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Expenses — Principal-only module; no hard delete (soft delete via update)
@@ -214,13 +229,13 @@ service cloud.firestore {
 
     // Assessment Sessions
     match /assessmentSessions/{sessionId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
 
     // Academic Calendars
     match /academicCalendars/{year} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isAdminLike();
     }
 
@@ -237,12 +252,11 @@ service cloud.firestore {
     // Helper: the caller's role as RECORDED IN users/{uid}, or '' when they
     // have no user doc at all.
     //
-    // The '' case is the one that matters. AuthContext.loginAsParent signs in
-    // anonymously BEFORE it matches the login code against a student (it has
-    // to — reading /students needs a session), and anyone holding the public
-    // web config can call signInAnonymously directly. Such a session satisfies
-    // isAuthenticated() while owning no user doc, so every rule below tests a
-    // ROLE rather than mere authentication.
+    // The '' case is the one that matters. Anyone holding the public web
+    // config can call signInAnonymously directly (the parent login itself no
+    // longer does — it goes through /api/parent-login). Such a session
+    // satisfies isAuthenticated() while owning no user doc, so every rule
+    // below tests a ROLE rather than mere authentication.
     function principalUserRole() {
       return (isAuthenticated()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid)))
@@ -258,9 +272,11 @@ service cloud.firestore {
 
     // Who may read the register at all. Admin and correspondent are OUT: this
     // module is the Principal's, and they hold no register capability in
-    // src/lib/permissions.ts either.
+    // src/lib/permissions.ts either. Parents are OUT too: their child's row
+    // and payments reach them through /api/parent-data, which matches the
+    // row server-side and returns nothing else.
     function readsPrincipalModule() {
-      return principalUserRole() in ['principal', 'teacher', 'staff', 'parent'];
+      return principalUserRole() in ['principal', 'teacher', 'staff'];
     }
 
     // Helper: the signed-in user is the teacher responsible for this register row.
@@ -333,17 +349,11 @@ service cloud.firestore {
 
     // Principal Register rows — the "fees note" Sharmi types into.
     //
-    // TRUST BOUNDARY (documented, and narrower than it used to be): reads are
-    // open to every ROLE that has business here — principal, teacher/staff and
-    // parent — and to nobody else. A session with no users/{uid} doc (the
-    // anonymous one the parent login holds before its code is matched, or one
-    // minted straight from the public web config) reads nothing.
-    //
-    // Residual, accepted risk: a signed-in parent still sees the whole
-    // collection, because their view of "my child's row" is matched CLIENT-SIDE
-    // by name+class (ParentFees.findRowForChild) and no studentId links a row
-    // to a family. Closing that needs studentId on RegisterRow plus a
-    // studentId-constrained parent query — a data migration, not a rule edit.
+    // TRUST BOUNDARY: reads are open to the roles that WORK the register —
+    // principal and teacher/staff — and to nobody else. Parents no longer read
+    // this collection at all: /api/parent-data matches their child's row
+    // server-side (findRowForChild in src/lib/parent-portal/core.ts) and
+    // returns that one row. A session with no users/{uid} doc reads nothing.
     //
     // No hard delete: rows are soft-deleted (deleted: true) via update, so the
     // audit trail and every payment that references the row stay intact.
@@ -468,6 +478,12 @@ service cloud.firestore {
     match /principalSettings/{docId} {
       allow read: if readsPrincipalModule();
       allow write: if isPrincipal();
+    }
+
+    // Parent-login rate-limit counters. Written and read ONLY by
+    // /api/parent-login through the Admin SDK; no client role may touch them.
+    match /parentLoginAttempts/{bucketKey} {
+      allow read, write: if false;
     }
   }
 }

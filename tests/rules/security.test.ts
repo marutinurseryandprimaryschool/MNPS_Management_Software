@@ -108,9 +108,9 @@ describeRules('users: self-create', () => {
     await assertFails(db.doc('users/some-other-uid').set({ role: 'parent', studentId: 'stu-1' }));
   });
 
-  it('ALLOWS self-create with role parent on own uid', async () => {
+  it('DENIES self-create with role parent on own uid (parent docs are written by /api/parent-login)', async () => {
     const db = asAnonParent('anon-genuine');
-    await assertSucceeds(db.doc('users/anon-genuine').set({ role: 'parent', status: 'active', studentId: 'stu-1' }));
+    await assertFails(db.doc('users/anon-genuine').set({ role: 'parent', status: 'active', studentId: 'stu-1' }));
   });
 });
 

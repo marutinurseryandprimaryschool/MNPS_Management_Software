@@ -20,47 +20,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
-import { StudentsService } from '@/lib/firestore-service';
-import { PrincipalRegisterService, PrincipalPaymentsService } from '@/lib/principal-service';
+import { parentData } from '@/lib/parent-api';
 import { computeRowSummary } from '@/lib/principal-fees';
 import { describeReadError } from '@/components/layout/principal/principal-shared';
-import { isParentOfStudent, getClassSlotIndex } from '@/lib/utils';
 import type { Student } from '@/types/models';
 import type {
   MonthCell, PrincipalPayment, RegisterRow, RowSummary,
 } from '@/types/principal';
 
-/* ── Matching the child to a register row ─────────────────────────────── */
-
-const norm = (value?: string | null): string =>
-  (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
-
-/** Alias-aware class equality ("Class 1" === "First"), falling back to text. */
-function sameClass(a?: string | null, b?: string | null): boolean {
-  const slotA = getClassSlotIndex(a || '');
-  const slotB = getClassSlotIndex(b || '');
-  if (slotA !== -1 && slotB !== -1) return slotA === slotB;
-  return norm(a) === norm(b) && norm(a) !== '';
-}
-
-/**
- * The child's row, or null. Name + class first; a name-only match is accepted
- * ONLY when it is unique, so a repeated name never resolves to the wrong
- * family's fees.
- */
-export function findRowForChild(rows: RegisterRow[], child: Student | null): RegisterRow | null {
-  if (!child) return null;
-  const childName = norm(child.name);
-  if (!childName) return null;
-
-  const sameName = rows.filter(row => norm(row.name) === childName);
-  if (sameName.length === 0) return null;
-
-  const withClass = sameName.filter(row => sameClass(row.className, child.className));
-  if (withClass.length === 1) return withClass[0];
-  if (withClass.length > 1) return null; // ambiguous — never guess with money
-  return sameName.length === 1 ? sameName[0] : null;
-}
+/* The child → register-row match (findRowForChild) now runs on the server in
+   api/parent-data.ts, from src/lib/parent-portal/core.ts, so the browser never
+   receives the register. */
+export { findRowForChild } from '@/lib/parent-portal/core';
 
 /* ── Status chips (same visual language as the previous parent view) ───── */
 
@@ -221,7 +192,7 @@ const HEAD_LABELS: Record<string, string> = {
 /* ── Screen ───────────────────────────────────────────────────────────── */
 
 export default function ParentFees() {
-  const { user } = useAuth();
+  const { user, parentChildren } = useAuth();
   const { school } = useSchool();
   const [child, setChild] = useState<Student | null>(null);
   const [row, setRow] = useState<RegisterRow | null>(null);
@@ -239,18 +210,17 @@ export default function ParentFees() {
       setLoading(true);
       setLoadError(null);
       try {
-        const [students, rows] = await Promise.all([
-          StudentsService.getAll(academicYear),
-          PrincipalRegisterService.listRows(academicYear),
-        ]);
-        const myChild = (students as unknown as Student[]).find(s => isParentOfStudent(user, s)) || null;
-        const myRow = findRowForChild(rows, myChild);
-        const myPayments = myRow ? await PrincipalPaymentsService.listByRow(myRow.id) : [];
+        const myChild = parentChildren[0] || null;
+        // The server matches the register row (same findRowForChild rule) and
+        // returns only that row and its payments — never the whole register.
+        const data = myChild
+          ? await parentData<{ row: RegisterRow | null; payments: PrincipalPayment[] }>('fees', myChild.id)
+          : { row: null, payments: [] };
 
         if (cancelled) return;
         setChild(myChild);
-        setRow(myRow);
-        setPayments(myPayments);
+        setRow(data.row);
+        setPayments(data.payments || []);
       } catch (error) {
         console.error('ParentFees load failed:', error);
         if (!cancelled) setLoadError(describeReadError(error, 'the fee details'));
@@ -261,7 +231,7 @@ export default function ParentFees() {
 
     load();
     return () => { cancelled = true; };
-  }, [user, academicYear]);
+  }, [user, parentChildren, academicYear]);
 
   // Every number on this screen comes from the engine — nothing is recomputed
   // here, so the parent can never see a total the Principal does not.

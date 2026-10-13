@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { TimetablesService, StudentsService, SchoolService } from '@/lib/firestore-service';
-import { getUpcomingSaturday, toDateKey, getEffectiveSaturdaySlots, isParentOfStudent } from '@/lib/utils';
+import { parentData } from '@/lib/parent-api';
+import { getUpcomingSaturday, toDateKey, getEffectiveSaturdaySlots } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { DAYS_OF_WEEK, DAY_LABELS, DayOfWeek } from '@/types/enums';
 import type { Timetable, Student, SchoolSettings } from '@/types/models';
 
 export default function ParentTimetable() {
-  const { user } = useAuth();
+  const { user, parentChildren } = useAuth();
   const { school: currentSchool } = useSchool();
   const [timetable, setTimetable] = useState<Timetable | null>(null);
   const [child, setChild] = useState<Student | null>(null);
@@ -18,19 +18,14 @@ export default function ParentTimetable() {
     async function fetchData() {
       try {
         if (!user || !currentSchool?.academicYear) return;
-        const [allStudents, schoolData] = await Promise.all([
-          StudentsService.getAll(currentSchool.academicYear),
-          SchoolService.get()
-        ]);
-        
-        setSchoolSettings(schoolData?.settings);
+        setSchoolSettings(currentSchool.settings || null);
 
-        const myChild = (allStudents as unknown as Student[]).find(s => isParentOfStudent(user, s));
-        setChild(myChild || null);
+        const myChild = parentChildren[0] || null;
+        setChild(myChild);
 
         if (myChild) {
-          const tt = await TimetablesService.getByClassSection(myChild.classId, myChild.sectionId, currentSchool.academicYear);
-          setTimetable(tt as unknown as Timetable);
+          const data = await parentData<{ timetable: Timetable | null }>('timetable', myChild.id);
+          setTimetable(data.timetable || null);
         }
       } catch (error) {
         console.error('Error:', error);
@@ -39,7 +34,7 @@ export default function ParentTimetable() {
       }
     }
     fetchData();
-  }, [user, currentSchool?.academicYear]);
+  }, [user, parentChildren, currentSchool]);
 
   if (loading) {
     return <div className="page-container"><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><span className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>Loading...</span></div></div>;

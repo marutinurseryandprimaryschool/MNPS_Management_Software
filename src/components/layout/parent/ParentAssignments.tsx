@@ -1,15 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { AssignmentsService, StudentsService } from '@/lib/firestore-service';
+import { parentData } from '@/lib/parent-api';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { Badge } from '@/components/ui/SharedUI';
-import { isParentOfStudent } from '@/lib/utils';
 import type { Assignment, Student } from '@/types/models';
 
 export default function ParentAssignments() {
-  const { user } = useAuth();
+  const { user, parentChildren } = useAuth();
   const { school } = useSchool();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [child, setChild] = useState<Student | null>(null);
@@ -19,12 +18,11 @@ export default function ParentAssignments() {
     async function fetchData() {
       try {
         if (!user || !school?.academicYear) return;
-        const allStudents = await StudentsService.getAll(school.academicYear);
-        const myChild = (allStudents as unknown as Student[]).find(s => isParentOfStudent(user, s));
-        setChild(myChild || null);
+        const myChild = parentChildren[0] || null;
+        setChild(myChild);
         if (myChild) {
-          const classAssignments = await AssignmentsService.getByClass(myChild.classId);
-          setAssignments(classAssignments as unknown as Assignment[]);
+          const data = await parentData<{ assignments: Assignment[] }>('assignments', myChild.id);
+          setAssignments(data.assignments || []);
         }
       } catch (error) {
         console.error('Error:', error);
@@ -33,7 +31,7 @@ export default function ParentAssignments() {
       }
     }
     fetchData();
-  }, [user, school?.academicYear]);
+  }, [user, parentChildren, school?.academicYear]);
 
   if (loading) {
     return <div className="page-container"><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><span className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>Loading...</span></div></div>;
