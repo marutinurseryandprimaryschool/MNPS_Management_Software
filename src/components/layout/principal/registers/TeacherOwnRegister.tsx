@@ -20,6 +20,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/SharedUI';
 import { SearchInput } from '@/components/ui/Input';
 import { TeachersService } from '@/lib/firestore-service';
+import { useAuth } from '@/context/AuthContext';
+import { sameClass } from '@/lib/parent-portal/core';
 import type { PrincipalActor, RegisterRow } from '@/types/principal';
 import { compareStudents, inr } from './register-shared';
 import {
@@ -52,6 +54,8 @@ export default function TeacherOwnRegister({
   const [editRowId, setEditRowId] = useState<string | null>(null);
 
   const myUid = actor?.uid ?? '';
+  const { user } = useAuth();
+  const myEmail = String(user?.email ?? '').trim().toLowerCase();
 
   /**
    * The class-sections this teacher holds, from their own teacher record.
@@ -74,8 +78,11 @@ export default function TeacherOwnRegister({
         ]);
         if (cancelled) return;
         const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+        // Teacher records made before first sign-in carry no uid yet, only
+        // the email — match on it too, or the class teacher sees nothing.
         const mine = (teachers as Record<string, unknown>[]).find(t =>
-          norm(t.userId) === norm(myUid) || norm(t.uid) === norm(myUid));
+          norm(t.userId) === norm(myUid) || norm(t.uid) === norm(myUid)
+          || (myEmail !== '' && norm(t.email) === myEmail));
         const mineAssignments = mine
           ? (assignments as Record<string, unknown>[]).find(a => a.teacherId === mine.id)
           : undefined;
@@ -91,12 +98,13 @@ export default function TeacherOwnRegister({
       }
     })();
     return () => { cancelled = true; };
-  }, [myUid, academicYear]);
+  }, [myUid, myEmail, academicYear]);
 
   const myRows = useMemo(() => {
-    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+    const norm = (v: unknown) => String(v ?? '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    // Alias-aware ("LKG" = "L.K.G" = "Class LKG"), like the parent portal.
     const inMySection = (row: RegisterRow) => mySections.some(section =>
-      norm(row.className) === norm(section.className)
+      sameClass(row.className, section.className)
       // A section-less assignment covers the whole class.
       && (!section.sectionName || norm(row.sectionName) === norm(section.sectionName)));
     return data.rows

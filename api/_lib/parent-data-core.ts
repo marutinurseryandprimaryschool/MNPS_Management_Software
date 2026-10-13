@@ -148,7 +148,11 @@ async function buildView(
       const rows = await store.registerRows(year);
       const row = findRowForChild(
         rows as Array<Doc & { name: string; className?: string | null; deleted?: boolean }>,
-        { name: String(student.name || ''), className: (student.className as string) || null },
+        {
+          name: String(student.name || ''),
+          className: (student.className as string) || null,
+          sectionName: (student.sectionName as string) || null,
+        },
       );
       const payments = row ? (await store.paymentsForRow(row.id)).filter(p => !p.deleted) : [];
       return { row, payments };

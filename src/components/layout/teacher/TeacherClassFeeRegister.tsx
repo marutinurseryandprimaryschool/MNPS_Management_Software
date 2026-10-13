@@ -27,6 +27,7 @@ import { SearchInput } from '@/components/ui/Input';
 import { StudentsService, TeachersService } from '@/lib/firestore-service';
 import type { RegisterRow } from '@/types/principal';
 import { useRegisterData } from '../principal/registers/useRegisterData';
+import { findRowForChild } from '@/lib/parent-portal/core';
 import StudentRegisterList from '../principal/registers/StudentRegisterList';
 import StudentDetailSheet from '../principal/registers/StudentDetailSheet';
 import { compareStudents, inr } from '../principal/registers/register-shared';
@@ -138,15 +139,18 @@ export default function TeacherClassFeeRegister() {
    */
   const myRows = useMemo(() => {
     if (!classOf || classOf === 'none') return [];
-    const byKey = new Map<string, RegisterRow>();
-    for (const row of data.rows) {
-      byKey.set(`${norm(row.name)}|${norm(row.className)}`, row);
-    }
+    // Same matcher as the parent portal: tolerant of "SANJEEV S" vs
+    // "SANJEEV.S" / "S SANJEEV" and "LKG" vs "L.K.G", but never guessing
+    // between two equally likely rows.
     return classStudents
       .map((student, index) => {
         const name = String(student.name ?? '');
         const className = String(student.className ?? classOf.className);
-        const existing = byKey.get(`${norm(name)}|${norm(className)}`);
+        const existing = findRowForChild(data.rows, {
+          name,
+          className,
+          sectionName: String(student.sectionName ?? student.section ?? '') || null,
+        });
         if (existing) return existing;
         return {
           id: `unregistered:${String(student.id ?? index)}`,
