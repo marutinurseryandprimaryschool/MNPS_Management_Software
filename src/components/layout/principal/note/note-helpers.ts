@@ -198,4 +198,7 @@ export interface NoteRowHandlers {
   onRecordPayment: (row: RegisterRow, prefill?: PaymentPrefill) => void;
   onEditRow: (row: RegisterRow) => void;
   onDeleteRow: (row: RegisterRow) => void;
+  /** Principal only: fix or remove a wrongly entered payment. */
+  canManagePayments: boolean;
+  onManagePayments: (row: RegisterRow) => void;
 }

@@ -165,6 +165,11 @@ export default function NoteGrid({
                   disabled: !canRecord,
                 },
                 {
+                  label: 'Payments (edit / delete)',
+                  onSelect: () => handlers.onManagePayments(row),
+                  disabled: !handlers.canManagePayments || summary.totalPaid <= 0,
+                },
+                {
                   label: 'Edit details',
                   onSelect: () => handlers.onEditRow(row),
                   disabled: !editable,

@@ -37,6 +37,7 @@ import PickStudentDialog from './PickStudentDialog';
 import { useTeacherOptions } from './use-teacher-options';
 import RecordPaymentDialog, { type PaymentTarget } from './RecordPaymentDialog';
 import StudentEditSheet from './StudentEditSheet';
+import StudentDetailSheet from '../registers/StudentDetailSheet';
 import { useCellAutosave, type RowPatch } from './use-cell-autosave';
 import { useNoteData } from './use-note-data';
 import {
@@ -80,6 +81,9 @@ export default function PrincipalFeesNote() {
   const [editTarget, setEditTarget] = useState<RegisterRow | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RegisterRow | null>(null);
+  /* Payments sheet (edit / delete a wrongly entered receipt). Held by id so the
+     sheet re-reads the row and its payments after every reload. */
+  const [paymentsRowId, setPaymentsRowId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   // State updates are async: two taps inside one frame would both pass a
   // `deleting` check. The ref closes that window.
@@ -191,7 +195,12 @@ export default function PrincipalFeesNote() {
     onRecordPayment: openPayment,
     onEditRow: row => setEditTarget(row),
     onDeleteRow: row => setDeleteTarget(row),
-  }), [summaryFor, canEditRow, canDeleteRow, canRecordFor, openPayment]);
+    // Editing a recorded payment is Principal-only in firestore.rules.
+    canManagePayments: isRegisterOwner,
+    onManagePayments: row => setPaymentsRowId(row.id),
+  }), [summaryFor, canEditRow, canDeleteRow, canRecordFor, openPayment, isRegisterOwner]);
+
+  const paymentsRow = paymentsRowId ? rows.find(r => r.id === paymentsRowId) ?? null : null;
 
   /* ── Derived lists ── */
 
@@ -385,6 +394,27 @@ export default function PrincipalFeesNote() {
         existingPayments={paymentTarget ? paymentsFor(paymentTarget.row.id) : []}
         onSaved={reload}
       />
+
+      {paymentsRow && (
+        <StudentDetailSheet
+          row={paymentsRow}
+          summary={summaryFor(paymentsRow.id)}
+          payments={paymentsFor(paymentsRow.id)}
+          onClose={() => setPaymentsRowId(null)}
+          actor={actor.uid ? actor : null}
+          canDeletePayments={isRegisterOwner}
+          canEditPayments={isRegisterOwner}
+          onPaymentsChanged={async () => {
+            try {
+              await reload();
+              return true;
+            } catch (refreshError) {
+              console.error('[fees-note] refresh after payment change failed', refreshError);
+              return false;
+            }
+          }}
+        />
+      )}
 
       <ConfirmDialog
         isOpen={Boolean(deleteTarget)}
