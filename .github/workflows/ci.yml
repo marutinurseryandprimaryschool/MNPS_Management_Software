@@ -1,0 +1,50 @@
+# Security + quality gate (Z3 checklist §22): lint, unit suites, Firestore
+# rules suites against the emulator, and a production build — on every push
+# and pull request. Rules tests are the only enforcement-surface tests in the
+# repo, so this job is what proves firestore.rules before a deploy.
+name: CI
+
+on:
+  push:
+    branches: [main, master, 'feat/**', 'plan/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc --noEmit -p .
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Firestore rules tests (emulator)
+        run: npm run test:rules
+
+      - name: Production build
+        run: npm run build
+
+      - name: Dependency audit (production deps, high+)
+        run: npm audit --omit=dev --audit-level=high || true
