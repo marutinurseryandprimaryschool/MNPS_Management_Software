@@ -12,6 +12,8 @@ import type { Class, Student } from '@/types/models';
 
 interface ParentMarksProps {
   defaultTab?: 'major' | 'weekly';
+  /** Lets the empty Weekly view send the parent to Class Tests. */
+  onNavigate?: (page: string) => void;
 }
 
 const MONTHS: { value: string; label: string }[] = [
@@ -38,7 +40,7 @@ function gradeFromPercent(p: number): string {
   return 'D';
 }
 
-export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps = {}) {
+export default function ParentMarks({ defaultTab = 'major', onNavigate }: ParentMarksProps = {}) {
   const { user, parentChildren } = useAuth();
   const { school } = useSchool();
   const [loading, setLoading] = useState(true);
@@ -52,6 +54,7 @@ export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps =
   // which view we render.
   const mode: 'exams' | 'weekly' = defaultTab === 'weekly' ? 'weekly' : 'exams';
   const [weeklyMonth, setWeeklyMonth] = useState('june');
+  const [subjectNames, setSubjectNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function load() {
@@ -65,14 +68,15 @@ export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps =
         const perChild = await Promise.all(myKids.map(async k => {
           const [m, w] = await Promise.all([
             parentData<{ class: Class | null; marks: any[] }>('marks', k.id),
-            parentData<{ class: Class | null; weekly: any[] }>('weekly', k.id),
+            parentData<{ class: Class | null; weekly: any[]; subjectNames?: Record<string, string> }>('weekly', k.id),
           ]);
-          return { cls: m.class, marks: m.marks || [], weekly: w.weekly || [] };
+          return { cls: m.class, marks: m.marks || [], weekly: w.weekly || [], names: w.subjectNames || {} };
         }));
         const cls = perChild.map(p => p.cls).filter((c): c is Class => !!c);
         setClasses(Array.from(new Map(cls.map(c => [c.id, c])).values()));
         setAllMarks(perChild.flatMap(p => p.marks));
-        setAllWeekly(perChild.flatMap(p => p.weekly).filter(x => x.academicYear === school.academicYear));
+        setAllWeekly(perChild.flatMap(p => p.weekly).filter(x => !x.academicYear || x.academicYear === school.academicYear));
+        setSubjectNames(Object.assign({}, ...perChild.map(p => p.names)));
       } catch (e) {
         console.error(e);
       } finally {
@@ -123,21 +127,56 @@ export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps =
     if (!child) return [] as { subjectId: string; subjectName: string; weeks: { W1?: number; W2?: number; W3?: number; W4?: number }; total: number | null; outOf: number }[];
     // Each week is scored out of 10.
     const PER_WEEK_MAX = 10;
-    return subjects.map(sub => {
-      const doc = allWeekly.find(w =>
-        w.studentId === child.id && w.subjectId === sub.id && w.month === weeklyMonth
-      );
-      const weeks = doc?.weeks || {};
-      const vals = ['W1', 'W2', 'W3', 'W4']
-        .map(k => weeks[k as keyof typeof weeks])
+    type Weeks = { W1?: number; W2?: number; W3?: number; W4?: number };
+    const month = weeklyMonth.toLowerCase();
+    const byId = new Map<string, { name: string; weeks: Weeks }>();
+    const slot = (subjectId: string, fallbackName?: string) => {
+      if (!byId.has(subjectId)) {
+        const name = subjects.find(s => s.id === subjectId)?.name
+          || subjectNames[subjectId] || fallbackName || 'Subject';
+        byId.set(subjectId, { name, weeks: {} });
+      }
+      return byId.get(subjectId)!;
+    };
+    // Class subjects first, so the usual order is kept.
+    subjects.forEach(sub => slot(sub.id));
+    // Current format: one weeklyTests doc per student · subject · month. Any
+    // subject counts, including ones from Subject & Teacher Assignment that
+    // are not on the class's own list.
+    allWeekly
+      .filter(w => w.studentId === child.id && String(w.month || '').toLowerCase() === month && w.subjectId)
+      .forEach(w => {
+        const target = slot(w.subjectId, w.subjectName);
+        (['W1', 'W2', 'W3', 'W4'] as const).forEach(k => {
+          const v = w.weeks?.[k];
+          if (typeof v === 'number') target.weeks[k] = v;
+        });
+      });
+    // Older format (marks collection, examType formative_weekly), which the
+    // teacher screen still reads: fill only the weeks the new format lacks.
+    allMarks
+      .filter((d: any) => d.examType === 'formative_weekly' && String(d.month || '').toLowerCase() === month)
+      .forEach((d: any) => {
+        const week = String(d.week || '').toUpperCase() as 'W1' | 'W2' | 'W3' | 'W4';
+        if (!['W1', 'W2', 'W3', 'W4'].includes(week)) return;
+        const rec = (d.records || []).find((r: any) => r.studentId === child.id);
+        (rec?.subjectScores || []).forEach((sc: any) => {
+          if (!sc?.subjectId || typeof sc.marksObtained !== 'number') return;
+          const target = slot(sc.subjectId, sc.subjectName);
+          if (target.weeks[week] === undefined) target.weeks[week] = sc.marksObtained;
+        });
+      });
+    return Array.from(byId.entries()).map(([subjectId, { name, weeks }]) => {
+      const vals = (['W1', 'W2', 'W3', 'W4'] as const)
+        .map(k => weeks[k])
         .filter((v): v is number => typeof v === 'number');
       const total = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
       // Only the weeks that actually have a mark count toward the denominator —
       // so a student who only sat W1 sees "7 / 10", not "7 / 40".
       const outOf = vals.length * PER_WEEK_MAX;
-      return { subjectId: sub.id, subjectName: sub.name, weeks, total, outOf };
+      return { subjectId, subjectName: name, weeks, total, outOf };
     });
-  }, [child, subjects, allWeekly, weeklyMonth]);
+  }, [child, subjects, allWeekly, allMarks, subjectNames, weeklyMonth]);
 
 
   if (loading) {
@@ -324,6 +363,24 @@ export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps =
               <p className="text-body-sm" style={{ color: 'var(--color-text-tertiary)' }}>
                 No weekly tests recorded for {MONTHS.find(m => m.value === weeklyMonth)?.label} yet.
               </p>
+              {/* Many classes record their tests under Class Tests instead
+                  (e.g. UKG's "Q CT" tests). Point the parent there. */}
+              <p className="text-body-sm" style={{ color: 'var(--color-text-secondary)', marginTop: 'var(--space-2)' }}>
+                Your child&apos;s class may record its tests under <strong>Class Tests</strong>.
+              </p>
+              {onNavigate && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('class-tests')}
+                  style={{
+                    marginTop: 'var(--space-3)', padding: '8px 16px', borderRadius: 'var(--radius-full)',
+                    border: '1.5px solid var(--color-primary-500)', background: 'var(--color-primary-50)',
+                    color: 'var(--color-primary-700)', fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Open Class Tests
+                </button>
+              )}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-3)' }}>

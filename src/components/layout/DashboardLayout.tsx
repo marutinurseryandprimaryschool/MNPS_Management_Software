@@ -200,7 +200,7 @@ export default function DashboardLayout() {
       case 'attendance': return <ParentAttendance />;
       case 'timetable': return <ParentTimetable />;
       case 'major-exams': return <ParentMarks defaultTab="major" />;
-      case 'weekly-tests': return <ParentMarks defaultTab="weekly" />;
+      case 'weekly-tests': return <ParentMarks defaultTab="weekly" onNavigate={handleNavigate} />;
       case 'class-tests': return <ParentClassTests />;
       case 'assignments': return <ParentAssignments />;
       case 'fees': return <ParentFees />;

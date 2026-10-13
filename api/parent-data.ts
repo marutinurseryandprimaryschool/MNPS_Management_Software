@@ -43,6 +43,22 @@ const store: ParentDataStore = {
       .filter(inSection(sectionId)).filter(inYear(year)),
   weeklyTestsForStudent: async (studentId, year) =>
     docs(await db().collection('weeklyTests').where('studentId', '==', studentId).get()).filter(inYear(year)),
+  subjectNamesForClass: async (classId, year) => {
+    const names: Record<string, string> = {};
+    const add = (entry: Doc) => {
+      if (entry && entry.classId === classId && typeof entry.subjectName === 'string' && entry.subjectName) {
+        const ids = Array.isArray(entry.subjectIds) ? entry.subjectIds as string[] : [entry.subjectId as string];
+        for (const id of ids) if (id && !names[id]) names[id] = entry.subjectName as string;
+      }
+    };
+    const [assignments, teachers] = await Promise.all([
+      db().collection('teacherAssignments').where('academicYear', '==', year).get(),
+      db().collection('teachers').get(),
+    ]);
+    for (const d of docs(assignments)) for (const e of (Array.isArray(d.assignments) ? d.assignments : []) as Doc[]) add(e);
+    for (const t of docs(teachers)) for (const e of (Array.isArray(t.assignedClasses) ? t.assignedClasses : []) as Doc[]) add(e);
+    return names;
+  },
   assignmentsForClass: async classId =>
     docs(await db().collection('assignments').where('classId', '==', classId).get()),
   timetableForClass: async (classId, sectionId, year) => {
