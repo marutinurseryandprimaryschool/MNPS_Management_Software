@@ -243,8 +243,10 @@ export function sanitizeStudentForParent<T extends Record<string, unknown>>(stud
 
 /* ── Fee register row matching ────────────────────────────────────────── */
 
-export interface RowLike { id: string; name: string; className?: string | null; deleted?: boolean }
-export interface ChildLike { name: string; className?: string | null }
+export interface RowLike {
+  id: string; name: string; className?: string | null; sectionName?: string | null; deleted?: boolean;
+}
+export interface ChildLike { name: string; className?: string | null; sectionName?: string | null }
 
 const norm = (value?: string | null): string =>
   (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -254,25 +256,63 @@ export function sameClass(a?: string | null, b?: string | null): boolean {
   const slotA = getClassSlotIndex(a || '');
   const slotB = getClassSlotIndex(b || '');
   if (slotA !== -1 && slotB !== -1) return slotA === slotB;
-  return norm(a) === norm(b) && norm(a) !== '';
+  const ca = compact(a);
+  return ca !== '' && ca === compact(b);
 }
 
+const nameTokens = (value?: string | null): string[] =>
+  (value || '').toLowerCase().split(/[^a-z0-9஀-௿]+/).filter(Boolean);
+const compact = (value?: string | null): string => nameTokens(value).join('');
+
 /**
- * The child's register row, or null. Name + class first; a name-only match is
- * accepted ONLY when unique, so a repeated name never resolves to the wrong
- * family's fees. (The register is standalone and carries no studentId.)
+ * Name keys from strictest to loosest. The Students list and the Fees Note
+ * are typed separately, so the same child often appears as "SANJEEV S",
+ * "SANJEEV.S", "S. SANJEEV" or "SANJEEV" — all the same person.
+ *   1. letters only, in order        "sanjeev s" / "sanjeev.s"  → "sanjeevs"
+ *   2. words in any order            "s sanjeev"                → "s sanjeev"
+ *   3. initials dropped              "sanjeev"                  → "sanjeev"
+ */
+const NAME_KEYS: Array<(name?: string | null) => string> = [
+  compact,
+  name => [...nameTokens(name)].sort().join(' '),
+  name => {
+    const words = nameTokens(name).filter(t => t.length > 1);
+    return words.length > 0 ? [...words].sort().join(' ') : '';
+  },
+];
+
+/**
+ * The child's register row, or null. The register is standalone and carries
+ * no studentId, so it is matched by name — tolerant of spacing, dots, word
+ * order and initials, but NEVER guessing with money:
+ *  - each name tier is tried from strictest to loosest;
+ *  - within a tier, same class (alias-aware) wins, then same section;
+ *  - two equally good candidates → null (ambiguous), never the first one;
+ *  - a different-class match is accepted only on the two strict tiers and
+ *    only when it is the single row with that name.
  */
 export function findRowForChild<R extends RowLike>(rows: R[], child: ChildLike | null): R | null {
-  if (!child) return null;
-  const childName = norm(child.name);
-  if (!childName) return null;
-  const live = rows.filter(r => !r.deleted);
-  const sameName = live.filter(row => norm(row.name) === childName);
-  if (sameName.length === 0) return null;
-  const withClass = sameName.filter(row => sameClass(row.className, child.className));
-  if (withClass.length === 1) return withClass[0];
-  if (withClass.length > 1) return null; // ambiguous — never guess with money
-  return sameName.length === 1 ? sameName[0] : null;
+  if (!child || !norm(child.name)) return null;
+  const live = rows.filter(r => !r.deleted && norm(r.name));
+  for (let tier = 0; tier < NAME_KEYS.length; tier++) {
+    const key = NAME_KEYS[tier];
+    const childKey = key(child.name);
+    if (!childKey) continue;
+    const sameName = live.filter(row => key(row.name) === childKey);
+    if (sameName.length === 0) continue;
+    const withClass = sameName.filter(row => sameClass(row.className, child.className));
+    if (withClass.length === 1) return withClass[0];
+    if (withClass.length > 1) {
+      const childSection = norm(child.sectionName);
+      const withSection = childSection
+        ? withClass.filter(row => norm(row.sectionName) === childSection)
+        : [];
+      return withSection.length === 1 ? withSection[0] : null; // ambiguous — never guess
+    }
+    if (tier < 2 && sameName.length === 1) return sameName[0];
+    return null;
+  }
+  return null;
 }
 
 /* ── Token claims ─────────────────────────────────────────────────────── */

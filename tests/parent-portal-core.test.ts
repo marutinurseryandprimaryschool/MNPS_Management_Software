@@ -220,3 +220,28 @@ describe('masked phone numbers never group unrelated families', () => {
     expect(siblingsOf([c, d], c).map(s => s.id)).toEqual(['c', 'd']);
   });
 });
+
+describe('findRowForChild tolerates how the Fees Note was typed', () => {
+  const rows = [
+    { id: 'sanjeev', name: 'SANJEEV.S', className: 'L.K.G', sectionName: 'A' },
+    { id: 'priya', name: 'M. PRIYA', className: 'UKG', sectionName: 'B' },
+    { id: 'ravi-a', name: 'RAVI', className: 'UKG', sectionName: 'A' },
+    { id: 'ravi-b', name: 'RAVI', className: 'UKG', sectionName: 'B' },
+  ];
+  it('ignores dots and spacing, and matches class aliases', () => {
+    expect(findRowForChild(rows, { name: 'SANJEEV S', className: 'LKG' })?.id).toBe('sanjeev');
+  });
+  it('ignores word order of initials', () => {
+    expect(findRowForChild(rows, { name: 'PRIYA M', className: 'UKG' })?.id).toBe('priya');
+  });
+  it('matches without the initial when that is the only same-class candidate', () => {
+    expect(findRowForChild(rows, { name: 'PRIYA', className: 'UKG' })?.id).toBe('priya');
+  });
+  it('uses the section to split two same-name children in one class', () => {
+    expect(findRowForChild(rows, { name: 'Ravi', className: 'UKG', sectionName: 'B' })?.id).toBe('ravi-b');
+    expect(findRowForChild(rows, { name: 'Ravi', className: 'UKG' })).toBeNull();
+  });
+  it('never matches an initials-dropped name in a different class', () => {
+    expect(findRowForChild(rows, { name: 'PRIYA', className: 'LKG' })).toBeNull();
+  });
+});
