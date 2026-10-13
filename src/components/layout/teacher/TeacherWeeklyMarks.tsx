@@ -295,6 +295,9 @@ export default function TeacherWeeklyMarks() {
           studentId: student.id, studentName: student.name,
           classId: selectedClassId, sectionId: selectedSectionId,
           subjectId: selectedSubjectId, teacherId: (teacher as any).id || '',
+          // Stored so the parent portal can name subjects that are not on
+          // the class's own subject list (Subject & Teacher Assignment).
+          subjectName: availableSubjects.find(s => s.subjectId === selectedSubjectId)?.subjectName || '',
           month: selectedMonth, academicYear: school.academicYear,
           weeks: weeksPayload,
         };

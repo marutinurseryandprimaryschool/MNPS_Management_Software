@@ -22,6 +22,8 @@ export interface ParentDataStore {
   classTestsForClass: (classId: string, sectionId: string, year: string) => Promise<Doc[]>;
   coScholasticForClass: (classId: string, sectionId: string, year: string) => Promise<Doc[]>;
   weeklyTestsForStudent: (studentId: string, year: string) => Promise<Doc[]>;
+  /** subjectId → name for every subject taught in the class (assignments). */
+  subjectNamesForClass?: (classId: string, year: string) => Promise<Record<string, string>>;
   assignmentsForClass: (classId: string) => Promise<Doc[]>;
   timetableForClass: (classId: string, sectionId: string, year: string) => Promise<Doc | null>;
   registerRows: (year: string) => Promise<Doc[]>;
@@ -128,6 +130,10 @@ async function buildView(
       return {
         class: await store.classById(classId),
         weekly: (await store.weeklyTestsForStudent(sid, year)).filter(w => w.studentId === sid),
+        // Teachers may enter marks for subjects from Subject & Teacher
+        // Assignment that are not on the class's own subject list; the
+        // parent screen needs their names to show them.
+        subjectNames: store.subjectNamesForClass ? await store.subjectNamesForClass(classId, year) : {},
       };
     case 'classTests':
       return {
