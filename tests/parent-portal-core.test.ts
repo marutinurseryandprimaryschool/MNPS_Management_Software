@@ -177,3 +177,26 @@ describe('claims + views', () => {
     expect(isParentDataView(undefined)).toBe(false);
   });
 });
+
+describe('dobKey reads the day in India time, whatever zone the server runs in', () => {
+  // Production runs in UTC; these must hold there and on an IST laptop.
+  it('midnight IST (18:30 UTC the day before) is still the IST date', () => {
+    const istMidnight = new Date(Date.UTC(2018, 5, 14, 18, 30)); // 15 Jun 2018 00:00 IST
+    expect(dobKey(istMidnight)).toBe('15062018');
+    expect(dobKey({ toDate: () => istMidnight })).toBe('15062018');
+  });
+  it('midnight UTC (date-input style) is the same calendar day', () => {
+    expect(dobKey(new Date(Date.UTC(2018, 5, 15)))).toBe('15062018');
+  });
+  it('matchStudents finds a student stored at midnight IST', () => {
+    const s = { id: 'a', phone: '98765 43210', dob: new Date(Date.UTC(2019, 0, 31, 18, 30)), status: 'active' };
+    expect(matchStudents([s], { code: '3210', dob: '01022019' }).matched?.id).toBe('a');
+  });
+  it('blank or differently cased status still logs in; archived does not', () => {
+    const base = { phone: '9000001111', dob: new Date(Date.UTC(2020, 1, 2)) };
+    const input = { code: '1111', dob: '02022020' };
+    expect(matchStudents([{ id: 'x', ...base, status: 'Active' }], input).matched?.id).toBe('x');
+    expect(matchStudents([{ id: 'y', ...base, status: '' }], input).matched?.id).toBe('y');
+    expect(matchStudents([{ id: 'z', ...base, status: 'archived' }], input).matched).toBeNull();
+  });
+});

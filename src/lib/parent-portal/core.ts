@@ -88,10 +88,18 @@ export function dobKey(value: unknown): string {
     if (!isNaN(parsed.getTime())) d = parsed;
   }
   if (!d || isNaN(d.getTime())) return '';
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `${day}${month}${d.getFullYear()}`;
+  // Read the calendar day in India time (UTC+5:30, no DST), NOT the runtime's
+  // zone. The server runs in UTC, so a DOB saved as midnight IST
+  // (= 18:30 UTC the day before) would otherwise come out one day early and
+  // every such parent would be refused. UTC-midnight values (date inputs)
+  // land at 05:30 IST — the same day — so both storage styles agree.
+  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  const day = String(ist.getUTCDate()).padStart(2, '0');
+  const month = String(ist.getUTCMonth() + 1).padStart(2, '0');
+  return `${day}${month}${ist.getUTCFullYear()}`;
 }
+
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
 
 export interface MatchResult<S extends MatchableStudent> {
   /** The student whose phone suffix + DOB matched, or null. */
@@ -101,7 +109,10 @@ export interface MatchResult<S extends MatchableStudent> {
   family: S[];
 }
 
-const isActive = (s: MatchableStudent) => !s.status || s.status === 'active';
+// Only explicitly archived/left records are excluded; blank or differently
+// cased statuses still count as enrolled (the old browser login ignored status).
+const INACTIVE = new Set(['archived', 'inactive', 'left']);
+export const isActiveStudent = (s: { status?: string | null }) => !INACTIVE.has(String(s.status || '').trim().toLowerCase());
 
 /**
  * Find the student for a login code + DOB. Only ACTIVE students can match.
@@ -117,7 +128,7 @@ export function matchStudents<S extends MatchableStudent>(
   // empty code must never equal the empty suffix of a student with no phone.
   if (!/^\d{4}$/.test(input.code) || !/^\d{8}$/.test(input.dob)) return { matched: null, family: [] };
   const hits = students
-    .filter(isActive)
+    .filter(isActiveStudent)
     .filter(s => phoneLast4(s.phone) === input.code && dobKey(s.dob) === input.dob)
     .sort((a, b) => a.id.localeCompare(b.id));
   if (hits.length === 0) return { matched: null, family: [] };
@@ -129,7 +140,7 @@ export function matchStudents<S extends MatchableStudent>(
 export function siblingsOf<S extends MatchableStudent>(students: S[], anchor: S): S[] {
   const phone = phoneKey(anchor.phone);
   const rest = phone
-    ? students.filter(s => s.id !== anchor.id && isActive(s) && phoneKey(s.phone) === phone)
+    ? students.filter(s => s.id !== anchor.id && isActiveStudent(s) && phoneKey(s.phone) === phone)
     : [];
   return [anchor, ...rest.sort((a, b) => a.id.localeCompare(b.id))];
 }
@@ -139,7 +150,7 @@ export function studentsByEmail<S extends MatchableStudent>(students: S[], email
   const key = normalizeEmail(email);
   if (!key) return [];
   return students
-    .filter(isActive)
+    .filter(isActiveStudent)
     .filter(s => normalizeEmail(s.email) === key)
     .sort((a, b) => a.id.localeCompare(b.id));
 }

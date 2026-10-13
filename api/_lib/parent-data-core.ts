@@ -7,7 +7,7 @@
    browser never holds a classmate's record. */
 
 import {
-  isParentClaims, isParentDataView, restrictRecordsToStudent, sanitizeStudentForParent,
+  isActiveStudent, isParentClaims, isParentDataView, restrictRecordsToStudent, sanitizeStudentForParent,
   findRowForChild, type ParentClaims, type ParentDataView,
 } from '../../src/lib/parent-portal/core';
 
@@ -74,7 +74,7 @@ export function createParentDataHandler(deps: ParentDataDeps) {
     const year = await deps.store.academicYear();
     if (view === 'me') {
       const students = (await deps.store.studentsByIds(claims.studentIds))
-        .filter(s => !s.status || s.status === 'active');
+        .filter(s => isActiveStudent(s as { status?: string | null }));
       return ok({ academicYear: year, children: students.map(sanitizeStudentForParent) });
     }
 
@@ -87,7 +87,7 @@ export function createParentDataHandler(deps: ParentDataDeps) {
     const [student] = await deps.store.studentsByIds([studentId]);
     // An archived/left student is invisible even to a token that still names
     // them: claims live until the next login, this check does not.
-    if (!student || (student.status && student.status !== 'active')) {
+    if (!student || !isActiveStudent(student as { status?: string | null })) {
       return { status: 404, body: { error: 'not_found' } };
     }
 

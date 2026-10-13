@@ -12,15 +12,11 @@ import type { AttemptWindow } from '../src/lib/parent-portal/core';
 
 const ATTEMPTS = 'parentLoginAttempts';
 
-async function currentAcademicYear(): Promise<string | null> {
-  const snap = await adminDb().doc('school/main').get();
-  return (snap.data()?.academicYear as string | undefined) || null;
-}
-
 async function loadStudents(): Promise<LoginStudent[]> {
-  const year = await currentAcademicYear();
-  const col = adminDb().collection('students');
-  const snap = await (year ? col.where('academicYear', '==', year) : col).get();
+  // All students, like the original browser login. Year rollover updates the
+  // same student document, so there are no per-year duplicates to confuse the
+  // match, and records whose academicYear tag lags the school year still log in.
+  const snap = await adminDb().collection('students').get();
   return snap.docs.map(d => {
     const data = d.data();
     return {
