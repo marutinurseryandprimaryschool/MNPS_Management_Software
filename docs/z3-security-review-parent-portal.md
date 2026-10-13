@@ -366,7 +366,7 @@
 - [x] Unauthorized API returns 401/403.
 - [x] CORS: no cross-origin headers emitted.
 
-Results on 2026-10-13: `npm run test` — 11 files, 242 tests passed. `npm run test:rules` — see the final report for the emulator run on this machine.
+Results on 2026-10-13 (clean `npm ci`): `npm run test` — 11 files, 242 tests passed. `npm run test:rules` — 3 files, 178 tests passed against the Firestore emulator (v1.22.0, Java 21). `tsc --noEmit` clean, `npm run lint` 0 errors, `npm run build` OK.
 
 # 27. Pre-Production Release Gate
 
