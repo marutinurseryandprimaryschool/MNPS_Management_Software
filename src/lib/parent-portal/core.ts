@@ -63,7 +63,13 @@ export const phoneLast4 = (phone?: string | null): string => phoneDigits(phone).
  * "09876543210" and "9876543210" are the same household. Shorter numbers
  * are used as-is; empty stays empty (and never groups anyone).
  */
-export const phoneKey = (phone?: string | null): string => phoneDigits(phone).slice(-10);
+export const phoneKey = (phone?: string | null): string => {
+  // Only a FULL number identifies a household. Masked imports such as
+  // "XXXXXX4967" keep 4 real digits, which many unrelated families share —
+  // grouping on those would show one family another family's children.
+  const digits = phoneDigits(phone);
+  return digits.length >= 10 ? digits.slice(-10) : '';
+};
 export const normalizeEmail = (email?: string | null): string => (email || '').trim().toLowerCase();
 
 /**

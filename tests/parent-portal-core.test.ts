@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  parseLoginInput, dobKey, matchStudents, siblingsOf, studentsByEmail,
+  parseLoginInput, dobKey, matchStudents, siblingsOf, studentsByEmail, phoneKey,
   applyRateLimit, RATE_LIMIT, restrictRecordsToStudent, sanitizeStudentForParent,
   findRowForChild, isParentClaims, isParentDataView,
 } from '@/lib/parent-portal/core';
@@ -198,5 +198,25 @@ describe('dobKey reads the day in India time, whatever zone the server runs in',
     expect(matchStudents([{ id: 'x', ...base, status: 'Active' }], input).matched?.id).toBe('x');
     expect(matchStudents([{ id: 'y', ...base, status: '' }], input).matched?.id).toBe('y');
     expect(matchStudents([{ id: 'z', ...base, status: 'archived' }], input).matched).toBeNull();
+  });
+});
+
+describe('masked phone numbers never group unrelated families', () => {
+  const dob = new Date(Date.UTC(2021, 4, 3));
+  const a = { id: 'a', phone: 'XXXXXX4967', dob, status: 'active' };
+  const b = { id: 'b', phone: 'XXXXXX4967', dob: new Date(Date.UTC(2019, 0, 1)), status: 'active' };
+  it('a masked number has no household key', () => {
+    expect(phoneKey('XXXXXX4967')).toBe('');
+    expect(phoneKey('+91 98765 43210')).toBe('9876543210');
+  });
+  it('login with a masked number returns only the matched child', () => {
+    const r = matchStudents([a, b], { code: '4967', dob: '03052021' });
+    expect(r.matched?.id).toBe('a');
+    expect(r.family.map(s => s.id)).toEqual(['a']);
+  });
+  it('siblings still group on a full number', () => {
+    const c = { id: 'c', phone: '9876543210', dob, status: 'active' };
+    const d = { id: 'd', phone: '+91 98765 43210', dob: new Date(Date.UTC(2018, 0, 1)), status: 'active' };
+    expect(siblingsOf([c, d], c).map(s => s.id)).toEqual(['c', 'd']);
   });
 });
