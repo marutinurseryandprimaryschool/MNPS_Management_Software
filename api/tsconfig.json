@@ -1,0 +1,15 @@
+{
+  // Vercel compiles /api functions with the nearest tsconfig. The root one is
+  // Next.js's (module: esnext), which emits ESM that Node then refuses to load
+  // as CommonJS ("Failed to load the ES module"). Functions get CommonJS.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": false,
+    "incremental": false,
+    "allowJs": false,
+    "plugins": []
+  },
+  "include": ["./**/*.ts", "../src/lib/parent-portal/**/*.ts", "../src/lib/class-slots.ts"]
+}

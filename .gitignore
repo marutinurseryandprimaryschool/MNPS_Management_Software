@@ -49,3 +49,4 @@ tmp-*.mjs
 
 # firebase emulator log
 firebase-debug.log
+firestore-debug.log
