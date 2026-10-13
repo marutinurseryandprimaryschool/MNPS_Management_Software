@@ -50,7 +50,23 @@ const handler = createParentLoginHandler({
     const t = await adminAuth().verifyIdToken(idToken, true);
     return { uid: t.uid, email: t.email, emailVerified: t.email_verified === true };
   },
-  setParentClaims: (uid, claims) => adminAuth().setCustomUserClaims(uid, claims),
+  setParentClaims: async (uid, claims) => {
+    // A first-time code/DOB parent has no Auth user yet: the custom token
+    // only creates it when the browser signs in. Create it first, otherwise
+    // setCustomUserClaims fails with auth/user-not-found (HTTP 500).
+    try {
+      await adminAuth().setCustomUserClaims(uid, claims);
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'auth/user-not-found') throw err;
+      try {
+        await adminAuth().createUser({ uid });
+      } catch (createErr) {
+        // Two parallel first logins: the other request created it already.
+        if ((createErr as { code?: string }).code !== 'auth/uid-already-exists') throw createErr;
+      }
+      await adminAuth().setCustomUserClaims(uid, claims);
+    }
+  },
   upsertParentUser: async (uid, data) => {
     await adminDb().doc(`users/${uid}`).set(
       { ...data, updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() },
