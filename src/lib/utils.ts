@@ -415,3 +415,22 @@ export function getGreeting(): string {
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
 }
+
+/**
+ * yyyy-mm-dd for an <input type="date">, read in the browser's LOCAL zone.
+ * toISOString() reads UTC, so a date stored as midnight IST (18:30 UTC the
+ * day before) showed one day early in edit forms, and saving the form
+ * unchanged wrote that wrong day back (shifting a student's DOB, and with
+ * it their parent's login password).
+ */
+export function toInputDate(val: unknown): string {
+  if (!val) return '';
+  try {
+    const v = val as { toDate?: () => Date };
+    const d = typeof v.toDate === 'function' ? v.toDate() : val instanceof Date ? val : new Date(val as string);
+    if (isNaN(d.getTime())) return '';
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  } catch { return ''; }
+}
