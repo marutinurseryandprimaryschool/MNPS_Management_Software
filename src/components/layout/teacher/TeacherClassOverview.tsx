@@ -25,6 +25,7 @@ import Input, { Textarea, Select as UISelect } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import type { Student } from '@/types/models';
 import { ExamTerm } from '@/types/enums';
+import { toInputDate } from '@/lib/utils';
 
 interface TeacherClassOverviewProps {
   view?: 'dashboard' | 'students' | 'attendance' | 'performance';
@@ -48,14 +49,8 @@ const EMPTY_FORM: Record<string, string> = {
   community: '', disabilityGroupName: '', groupCode: '', motherTongue: '',
 };
 
-const toDateStr = (val: any): string => {
-  if (!val) return '';
-  try {
-    const d = val?.toDate ? val.toDate() : new Date(val);
-    if (isNaN(d.getTime())) return '';
-    return d.toISOString().split('T')[0];
-  } catch { return ''; }
-};
+// Local-zone date (see toInputDate): toISOString() showed IST dates a day early.
+const toDateStr = toInputDate;
 
 export default function TeacherClassOverview({ view = 'dashboard' }: TeacherClassOverviewProps) {
   const { user } = useAuth();

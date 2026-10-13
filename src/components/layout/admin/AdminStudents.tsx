@@ -14,6 +14,7 @@ import {
   EditIcon, TrashIcon, UsersIcon, EyeIcon,
 } from '@/components/ui/Icons';
 import type { Class, Section, Student, BusRoute } from '@/types/models';
+import { toInputDate } from '@/lib/utils';
 
 // ── Column mapping for Excel import ──
 const COLUMN_MAP: Record<string, string> = {
@@ -253,14 +254,8 @@ export default function AdminStudents() {
   });
 
   // ── Safe date-to-string ──
-  const toDateStr = (val: unknown): string => {
-    if (!val) return '';
-    try {
-      const d = val instanceof Date ? val : new Date(val as string);
-      if (isNaN(d.getTime())) return '';
-      return d.toISOString().split('T')[0];
-    } catch { return ''; }
-  };
+  // Local-zone date (see toInputDate): toISOString() showed IST dates a day early.
+  const toDateStr = toInputDate;
 
   // ── Form handlers ──
   const setField = (key: string, val: string) => setFormData(p => ({ ...p, [key]: val }));
