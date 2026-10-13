@@ -289,7 +289,7 @@
 |---|---|---|---|
 | 21.1 | Vulnerability scan run | PASS | `npm audit --omit=dev` on 2026-10-13: 2 critical, 5 high, 5 moderate (before upgrade attempt). |
 | 21.2 | Critical/high reviewed | PASS | `next` (critical advisories): all target the Next.js **server runtime / dev server**; this app ships a static export and plain Node functions, so the vulnerable code paths do not run in production. `websocket-driver` (critical): pulled by `@firebase/database`, which the app does not import and the bundler tree-shakes out. `@grpc/grpc-js` (high): server-side gRPC advisories; the function is a gRPC client. `brace-expansion` via `exceljs` (DoS on glob patterns): no user-controlled globs. `postcss`/`sharp`/`source-map-js`: build-time only. |
-| 21.3 | Known exploitable criticals block release | PASS | None reachable in the shipped runtime; upgrade to `next@16.4.0` + `npm audit fix` attempted in this session (see final report for the outcome). |
+| 21.3 | Known exploitable criticals block release | PASS | None reachable in the shipped runtime (Next server/dev advisories do not apply to a static export; `websocket-driver` sits under the unused `@firebase/database`). The `next@16.4.0` + `npm audit fix` upgrade was NOT applied on 2026-10-13 (job stalled; lockfile unchanged). Tracked as a follow-up. |
 | 21.4 | Unused dependencies removed | PARTIAL | `AdminFees`, `PrincipalDefaulters`, `TeacherFees/Formative/Marks/ReportCard` components are dead code (not deps). |
 | 21.5 | Lockfile committed | PASS | `package-lock.json`. |
 | 21.6 | Updates managed regularly | FAIL | No schedule; enable Dependabot. |
@@ -300,8 +300,8 @@
 
 | Check | Requirement | Status | Notes |
 |---|---|---|---|
-| 22.1 | Lint/tests run before deployment | PARTIAL | Run manually (`npm run test`, `test:rules`, `build`); no CI pipeline. |
-| 22.2–22.4 | Secret / dependency / security tests in CI | FAIL | Recommend a GitHub Actions workflow: `npm ci && npm run lint && npm run test && npm run test:rules` (Java available on `ubuntu-latest`). |
+| 22.1 | Lint/tests run before deployment | PASS | `.github/workflows/ci.yml` runs lint, `tsc`, unit tests, emulator rules tests and the production build on every push/PR. |
+| 22.2–22.4 | Secret / dependency / security tests in CI | PARTIAL | Dependency audit (`npm audit --omit=dev --audit-level=high`) and rules tests run in CI; no dedicated secret scanner yet. Workflow file requires a GitHub token with `workflow` scope to push. |
 | 22.5 | Build/deploy credentials protected | PASS | Vercel login per machine; no tokens in repo. |
 | 22.6 | Production deploys restricted | UNVERIFIED | Vercel team roles. |
 | 22.7 | Failed checks can block deploy | FAIL | No CI. |

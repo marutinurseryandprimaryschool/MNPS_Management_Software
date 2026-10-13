@@ -46,3 +46,6 @@ next-env.d.ts
 # local debug scripts
 check-teacher.js
 tmp-*.mjs
+
+# firebase emulator log
+firebase-debug.log
