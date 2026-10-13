@@ -67,6 +67,34 @@ export default function AdminTeachers() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [classes]);
 
+  /**
+   * The same subject exists once per class, with its own id and its own
+   * spelling ("HandWriting" in one class, "Hand Writting" in another). The
+   * picker therefore lists subjects by NAME, and each class contributes the
+   * id it actually uses when an assignment is made.
+   */
+  const subjectCatalog = React.useMemo(() => {
+    const byName = new Map<string, { key: string; name: string; id: string }>();
+    classes.forEach(c => c.subjects?.forEach(sub => {
+      const key = sub.name.trim().toLowerCase();
+      if (!byName.has(key)) byName.set(key, { key, name: sub.name.trim(), id: sub.id });
+    }));
+    return Array.from(byName.values());
+  }, [classes]);
+
+  const subjectKeyOf = (subjectId: string) => {
+    const name = allSubjects.find(s => s.id === subjectId)?.name ?? '';
+    return name.trim().toLowerCase();
+  };
+
+  /** Classes that actually offer this subject — nowhere else can take it. */
+  const classesOffering = (subjectKey: string) => classes
+    .map(cls => {
+      const sub = cls.subjects?.find(s => s.name.trim().toLowerCase() === subjectKey);
+      return sub ? { cls, subjectId: sub.id, subjectName: sub.name } : null;
+    })
+    .filter((entry): entry is { cls: Class; subjectId: string; subjectName: string } => entry !== null);
+
   const fetchData = useCallback(async () => {
     try {
       if (!school?.academicYear) return;
@@ -100,33 +128,38 @@ export default function AdminTeachers() {
     !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.email?.toLowerCase().includes(search.toLowerCase())
   );
 
+  /** Selecting a subject opens the question of WHERE it is taught. */
   const toggleSubject = (subjectId: string) => {
-    setSelectedSubjects(prev =>
-      prev.includes(subjectId) ? prev.filter(s => s !== subjectId) : [...prev, subjectId]
-    );
-  };
-
-  const toggleAssignment = (classId: string, sectionId: string, className: string, sectionName: string) => {
-    setSelectedAssignments(prev => {
-      const exists = prev.find(a => a.classId === classId && a.sectionId === sectionId);
-      if (exists) {
-        // If removing an assignment that is currently designated as class teacher, clear it
-        if (classTeacherAssignment?.classId === classId && classTeacherAssignment?.sectionId === sectionId) {
-          setClassTeacherAssignment(null);
-        }
-        return prev.filter(a => !(a.classId === classId && a.sectionId === sectionId));
-      }
-      return [...prev, { classId, sectionId, subjectId: '', isClassTeacher: false, className, sectionName }];
+    const key = subjectKeyOf(subjectId);
+    setSelectedSubjects(prev => {
+      if (!prev.includes(subjectId)) return [...prev, subjectId];
+      // Dropping the subject drops the placements that depended on it.
+      setSelectedAssignments(rows => rows.filter(
+        a => (a.subjectName ?? '').trim().toLowerCase() !== key || !a.subjectId));
+      return prev.filter(id => id !== subjectId);
     });
   };
 
-  /** Records which subject this teacher takes in one class-section. */
-  const setSubjectForAssignment = (classId: string, sectionId: string, subjectId: string) => {
-    const subjectName = allSubjects.find(s => s.id === subjectId)?.name || '';
-    setSelectedAssignments(prev => prev.map(assignment =>
-      assignment.classId === classId && assignment.sectionId === sectionId
-        ? { ...assignment, subjectId, subjectName }
-        : assignment));
+  /**
+   * One placement: this teacher takes THIS subject in THIS class-section.
+   * A teacher may take several subjects in the same section, so rows are
+   * keyed by all three — the timetable asks the same way.
+   */
+  const togglePlacement = (
+    subjectId: string, subjectName: string, cls: Class, sec: { id: string; name: string },
+  ) => {
+    setSelectedAssignments(prev => {
+      const exists = prev.find(a =>
+        a.classId === cls.id && a.sectionId === sec.id && a.subjectId === subjectId);
+      if (exists) {
+        return prev.filter(a => !(
+          a.classId === cls.id && a.sectionId === sec.id && a.subjectId === subjectId));
+      }
+      return [...prev, {
+        classId: cls.id, sectionId: sec.id, subjectId, subjectName,
+        className: cls.name, sectionName: sec.name, isClassTeacher: false,
+      }];
+    });
   };
 
   const resetForm = () => {
@@ -208,8 +241,23 @@ export default function AdminTeachers() {
   const openEditTeacher = (t: Teacher) => {
     setEditingTeacher(t);
     setFormData({ name: t.name, email: t.email || '', phone: t.phone || '', employeeId: t.employeeId || '' });
-    setSelectedSubjects(t.subjects || []);
-    setSelectedAssignments(t.assignedClasses || []);
+    const assignments = t.assignedClasses || [];
+    /* Show a card for every subject this teacher is stored against — the
+       saved subject list AND anything their placements already say they
+       take, so an existing placement never disappears from the form. Ids
+       are re-read from the catalogue by name, since each class keeps its
+       own id for the same subject. */
+    const keys = new Set<string>();
+    (t.subjects || []).forEach(id => {
+      const key = subjectKeyOf(id);
+      if (key) keys.add(key);
+    });
+    assignments.forEach(a => {
+      const key = (a.subjectName ?? '').trim().toLowerCase();
+      if (key) keys.add(key);
+    });
+    setSelectedSubjects(subjectCatalog.filter(sub => keys.has(sub.key)).map(sub => sub.id));
+    setSelectedAssignments(assignments);
     
     const ct = t.assignedClasses?.find(a => a.isClassTeacher);
     setClassTeacherAssignment(ct ? { classId: ct.classId, sectionId: ct.sectionId } : null);
@@ -297,95 +345,98 @@ export default function AdminTeachers() {
         <Input label="Employee ID" placeholder="EMP001" value={formData.employeeId} onChange={e => setFormData(p => ({ ...p, employeeId: e.target.value }))} />
       </div>
 
-      {/* Subjects multi-select */}
+      {/* Subjects, and where each one is taught.
+          These were two separate lists — every subject on one row, every
+          class-section on another — which said nothing about WHICH subject
+          this teacher takes in which class. The timetable needs exactly that
+          pairing, so the form now asks for it: pick a subject, and it asks
+          where. */}
       <div>
-        <label className="text-body-sm" style={{ fontWeight: 500, display: 'block', marginBottom: 'var(--space-2)' }}>Subjects</label>
-        {allSubjects.length === 0 ? (
-          <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>No subjects available. Add subjects in Classes first.</p>
+        <label className="text-body-sm" style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
+          Subjects &amp; where they are taught
+        </label>
+        <p className="text-caption" style={{ color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)' }}>
+          Pick a subject, then choose the classes and sections this teacher takes it in.
+          The timetable fills its periods from these.
+        </p>
+
+        {subjectCatalog.length === 0 ? (
+          <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
+            No subjects available. Add subjects in Classes first.
+          </p>
         ) : (
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            {allSubjects.map(sub => (
-              <Pill key={sub.id} label={sub.name} selected={selectedSubjects.includes(sub.id)} onClick={() => toggleSubject(sub.id)} />
+            {subjectCatalog.map(sub => (
+              <Pill
+                key={sub.key}
+                label={sub.name}
+                selected={selectedSubjects.some(id => subjectKeyOf(id) === sub.key)}
+                onClick={() => {
+                  const chosen = selectedSubjects.find(id => subjectKeyOf(id) === sub.key);
+                  toggleSubject(chosen ?? sub.id);
+                }}
+              />
             ))}
           </div>
         )}
-      </div>
 
-      {/* Class/Section multi-select */}
-      <div>
-        <label className="text-body-sm" style={{ fontWeight: 500, display: 'block', marginBottom: 'var(--space-2)' }}>Assign to Classes & Sections</label>
-        {classes.length === 0 ? (
-          <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>No classes available. Create classes first.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            {classes.map(cls => (
-              <div key={cls.id}>
-                <span className="text-caption" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>{cls.name}</span>
-                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                  {cls.sections?.map(sec => {
-                    const isSelected = selectedAssignments.some(a => a.classId === cls.id && a.sectionId === sec.id);
-                    return (
-                      <Pill
-                        key={sec.id}
-                        label={`Section ${sec.name}`}
-                        selected={isSelected}
-                        onClick={() => toggleAssignment(cls.id, sec.id, cls.name, sec.name)}
-                      />
-                    );
-                  })}
+        {/* One card per chosen subject, asking the class and section. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+          {selectedSubjects.map(subjectId => {
+            const key = subjectKeyOf(subjectId);
+            const label = allSubjects.find(s => s.id === subjectId)?.name || 'This subject';
+            const offering = classesOffering(key);
+            const placed = selectedAssignments.filter(
+              a => a.subjectId && (a.subjectName ?? '').trim().toLowerCase() === key);
+
+            return (
+              <div
+                key={subjectId}
+                style={{
+                  padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
+                  background: 'var(--color-surface-variant)',
+                  border: `1px solid ${placed.length === 0 ? 'var(--color-warning)' : 'var(--color-border)'}`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 'var(--space-2)' }}>
+                  <span className="text-body-sm" style={{ fontWeight: 600 }}>
+                    Which classes take {label}?
+                  </span>
+                  {placed.length === 0 && (
+                    <span className="text-caption" style={{ color: 'var(--color-warning-text)' }}>
+                      no class chosen yet — the timetable cannot use this subject
+                    </span>
+                  )}
                 </div>
 
-                {/* WHICH subject, in THIS section. The timetable resolves its
-                    teacher from class + section + subject, so a section picked
-                    without a subject allocates nobody to any period — several
-                    teachers can be qualified in Maths, and only this says who
-                    actually takes it here. Fills the assignment's existing
-                    subjectId field; no new data shape. */}
-                {selectedAssignments.some(a => a.classId === cls.id) && (
-                  <div style={{ marginTop: 'var(--space-2)', paddingLeft: 'var(--space-3)' }}>
-                    {selectedAssignments
-                      .filter(a => a.classId === cls.id)
-                      .map(assignment => {
-                        const sectionLabel = assignment.sectionName || 'section';
-                        return (
-                          <div
-                            key={`${assignment.classId}-${assignment.sectionId}`}
-                            style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 4 }}
-                          >
-                            <span className="text-caption" style={{ color: 'var(--color-text-tertiary)', minWidth: 96 }}>
-                              Section {sectionLabel} teaches
-                            </span>
-                            <select
-                              value={assignment.subjectId || ''}
-                              onChange={e => setSubjectForAssignment(
-                                assignment.classId, assignment.sectionId, e.target.value,
-                              )}
-                              style={{
-                                padding: '6px 10px', minHeight: 34, fontSize: '0.82rem',
-                                border: `1px solid ${assignment.subjectId ? 'var(--color-border)' : 'var(--color-warning)'}`,
-                                borderRadius: 'var(--radius-md)',
-                                background: 'var(--color-surface)', color: 'var(--color-text-primary)',
-                              }}
-                            >
-                              <option value="">Choose the subject…</option>
-                              {(cls.subjects ?? []).map(sub => (
-                                <option key={sub.id} value={sub.id}>{sub.name}</option>
-                              ))}
-                            </select>
-                            {!assignment.subjectId && (
-                              <span className="text-caption" style={{ color: 'var(--color-warning-text)' }}>
-                                needed for the timetable
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
+                {offering.length === 0 ? (
+                  <p className="text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
+                    No class offers {label}. Add it to a class first.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                    {offering.map(({ cls, subjectId: classSubjectId, subjectName }) => (
+                      <div key={cls.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        <span className="text-caption" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', minWidth: 72 }}>
+                          {cls.name}
+                        </span>
+                        {cls.sections?.map(sec => (
+                          <Pill
+                            key={sec.id}
+                            label={`Section ${sec.name}`}
+                            selected={selectedAssignments.some(a =>
+                              a.classId === cls.id && a.sectionId === sec.id && a.subjectId === classSubjectId)}
+                            onClick={() => togglePlacement(classSubjectId, subjectName, cls, sec)}
+                          />
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
 
       {/* Class Teacher Designation */}

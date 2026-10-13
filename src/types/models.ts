@@ -93,6 +93,9 @@ export interface User extends Timestamps {
   // Set on parent users when the phone+DOB login matches a student record.
   // This is the most reliable parent ↔ child link in the current system.
   studentId?: string;
+  // Parent sessions: every student the server-issued token allows (siblings
+  // on the same phone / email). Mirrors the token's custom claims.
+  studentIds?: string[];
   // Set by AuthContext on staff first-login migration: the pending doc id the
   // UID-keyed doc was migrated from (firestore.rules verifies it via get()).
   migratedFrom?: string;

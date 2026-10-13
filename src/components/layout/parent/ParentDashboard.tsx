@@ -4,13 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { DataCard } from '@/components/ui/Card';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
-import { StudentsService, AssignmentsService } from '@/lib/firestore-service';
+import { parentData } from '@/lib/parent-api';
 import { getGreeting } from '@/lib/utils';
 import { GraduationCapIcon, BookOpenIcon, CreditCardIcon, ClipboardCheckIcon } from '@/components/ui/Icons';
 import type { Student, Assignment } from '@/types/models';
 
 export default function ParentDashboard({ onNavigate }: { onNavigate: (id: string) => void }) {
-  const { user } = useAuth();
+  const { user, parentChildren } = useAuth();
   const { school } = useSchool();
   const [children, setChildren] = useState<Student[]>([]);
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
@@ -22,27 +22,17 @@ export default function ParentDashboard({ onNavigate }: { onNavigate: (id: strin
       try {
         if (!user || !school?.academicYear) return;
         
-        // Use optimized query to fetch only this parent's children
-        let myChildren: Student[] = [];
-        
-        if (user.email) {
-          const results = await StudentsService.getByEmail(user.email, school.academicYear);
-          myChildren = results as unknown as Student[];
-        }
-        
-        // Fallback for parents who logged in with code/dob (might not have email in user object)
-        if (myChildren.length === 0 && user.phone) {
-          const results = await StudentsService.getByPhone(user.phone, school.academicYear);
-          myChildren = results as unknown as Student[];
-        }
+        // The children come with the session: the server resolved them from
+        // the login and the token names nothing else.
+        const myChildren = parentChildren;
 
         setChildren(myChildren);
 
         if (myChildren.length > 0) {
           const defaultChildId = myChildren[0].id;
           setActiveChildId(defaultChildId);
-          const classAssignments = await AssignmentsService.getByClass(myChildren[0].classId);
-          setAssignments(classAssignments as unknown as Assignment[]);
+          const { assignments: classAssignments } = await parentData<{ assignments: Assignment[] }>('assignments', defaultChildId);
+          setAssignments(classAssignments || []);
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -51,15 +41,15 @@ export default function ParentDashboard({ onNavigate }: { onNavigate: (id: strin
       }
     }
     fetchData();
-  }, [user, school?.academicYear]);
+  }, [user, parentChildren, school?.academicYear]);
 
   const activeChild = children.find(c => c.id === activeChildId) || children[0];
 
   useEffect(() => {
     if (activeChild && school?.academicYear) {
-      AssignmentsService.getByClass(activeChild.classId).then(data => {
-        setAssignments(data as unknown as Assignment[]);
-      });
+      parentData<{ assignments: Assignment[] }>('assignments', activeChild.id)
+        .then(data => setAssignments(data.assignments || []))
+        .catch(error => console.error('Error fetching assignments:', error));
     }
   }, [activeChildId, activeChild, school?.academicYear]);
 

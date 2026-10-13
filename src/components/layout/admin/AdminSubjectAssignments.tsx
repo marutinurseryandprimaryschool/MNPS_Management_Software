@@ -36,6 +36,8 @@ import {
   withAssignment, withoutAssignment,
   type AssignmentDoc, type AssignmentEntry, type SubjectAssignment, type TeacherRecord,
 } from '@/lib/subject-assignments';
+import SubjectAssignmentImport from './SubjectAssignmentImport';
+import { type MatchedRow } from '@/lib/assignment-import';
 import type { Class, Subject } from '@/types/models';
 
 const cardStyle: React.CSSProperties = {
@@ -73,6 +75,7 @@ export default function AdminSubjectAssignments() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<SubjectAssignment | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyToSectionId, setCopyToSectionId] = useState('');
 
@@ -247,6 +250,55 @@ export default function AdminSubjectAssignments() {
     }
   };
 
+  /**
+   * Writes the rows the Admin confirmed on the review screen. Grouped per
+   * teacher so each document is written once, and a row that moves a subject
+   * between teachers clears the previous holder first — the same two-sided
+   * write the single-assignment form does.
+   */
+  const runImport = async (rows: MatchedRow[]) => {
+    if (rows.length === 0) return;
+    const entries = new Map<string, AssignmentEntry[]>();
+    const editable = (teacherId: string): AssignmentEntry[] => {
+      if (!entries.has(teacherId)) entries.set(teacherId, entriesOf(teacherId));
+      return entries.get(teacherId)!;
+    };
+
+    for (const row of rows) {
+      const key = { classId: row.classId!, sectionId: row.sectionId!, subjectId: row.subjectId! };
+      // A conflict row hands the subject over, so strip it from whoever holds it.
+      if (row.conflictWith) {
+        entries.set(row.conflictWith.teacherId,
+          withoutAssignment(editable(row.conflictWith.teacherId), key));
+      }
+      entries.set(row.teacherId!, withAssignment(editable(row.teacherId!), {
+        ...key,
+        className: row.className!,
+        sectionName: row.sectionName!,
+        subjectName: row.subjectName!,
+        teacherId: row.teacherId!,
+        teacherName: row.teacherName!,
+      }));
+    }
+
+    let saved = 0;
+    try {
+      for (const [teacherId, list] of entries) {
+        await TeachersService.updateAssignments(teacherId, year, list as never);
+        saved += 1;
+      }
+      await load();
+      setImportOpen(false);
+      showToast(`${rows.length} assignment${rows.length === 1 ? '' : 's'} imported.`);
+    } catch (error) {
+      console.error('[subject-assignments] import failed', error);
+      await load();
+      showToast(
+        `Imported ${saved} of ${entries.size} teachers. The rest were NOT saved — re-run the import.`,
+        'error');
+    }
+  };
+
   /* ── Render ─────────────────────────────────────────────────────────── */
 
   if (loading) {
@@ -272,8 +324,12 @@ export default function AdminSubjectAssignments() {
             The timetable takes its teachers from here.
           </p>
         </div>
-        {readyToPick && (
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            Bulk Import
+          </Button>
+          {readyToPick && (
+            <>
             <Button variant="secondary" onClick={() => { setCopyToSectionId(''); setCopyOpen(true); }}>
               Copy Assignments
             </Button>
@@ -290,8 +346,9 @@ export default function AdminSubjectAssignments() {
             >
               Add Subject
             </Button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {loadError && (
@@ -555,6 +612,15 @@ export default function AdminSubjectAssignments() {
             + 'The subject itself stays in the school list; only this teacher allocation is removed.'
           : ''}
         confirmLabel="Remove assignment"
+      />
+
+      <SubjectAssignmentImport
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        classes={classes}
+        teachers={teachers}
+        existing={index}
+        onConfirm={runImport}
       />
     </div>
   );

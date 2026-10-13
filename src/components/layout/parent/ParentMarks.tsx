@@ -2,17 +2,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing untyped Firestore data handling in this legacy screen; typed migration tracked separately. */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  MarksService,
-  StudentsService,
-  ClassesService,
-  WeeklyTestsService,
-} from '@/lib/firestore-service';
+import { parentData } from '@/lib/parent-api';
 import { useAuth } from '@/context/AuthContext';
 import { useSchool } from '@/context/SchoolContext';
 import { Avatar, Badge } from '@/components/ui/SharedUI';
 import Button from '@/components/ui/Button';
-import { findChildrenOfParent } from '@/lib/utils';
 import { EXAM_TERMS_ORDER, EXAM_TERM_LABELS } from '@/types/enums';
 import type { Class, Student } from '@/types/models';
 
@@ -45,7 +39,7 @@ function gradeFromPercent(p: number): string {
 }
 
 export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps = {}) {
-  const { user } = useAuth();
+  const { user, parentChildren } = useAuth();
   const { school } = useSchool();
   const [loading, setLoading] = useState(true);
   const [children, setChildren] = useState<Student[]>([]);
@@ -63,18 +57,22 @@ export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps =
     async function load() {
       try {
         if (!user || !school?.academicYear) return;
-        const [allStudents, cl, m, w] = await Promise.all([
-          StudentsService.getAll(school.academicYear),
-          ClassesService.getAll(school.academicYear),
-          MarksService.getAll(school.academicYear),
-          WeeklyTestsService.getAll(),
-        ]);
-        const myKids = findChildrenOfParent(allStudents as unknown as Student[], user);
+        const myKids = parentChildren;
         setChildren(myKids);
         if (myKids.length > 0) setSelectedChildId(myKids[0].id);
-        setClasses(cl as unknown as Class[]);
-        setAllMarks(m as any[]);
-        setAllWeekly((w as any[]).filter(x => x.academicYear === school.academicYear));
+        // One call per child and view; every document comes back holding only
+        // that child's own record, so the switcher never shows a classmate.
+        const perChild = await Promise.all(myKids.map(async k => {
+          const [m, w] = await Promise.all([
+            parentData<{ class: Class | null; marks: any[] }>('marks', k.id),
+            parentData<{ class: Class | null; weekly: any[] }>('weekly', k.id),
+          ]);
+          return { cls: m.class, marks: m.marks || [], weekly: w.weekly || [] };
+        }));
+        const cls = perChild.map(p => p.cls).filter((c): c is Class => !!c);
+        setClasses(Array.from(new Map(cls.map(c => [c.id, c])).values()));
+        setAllMarks(perChild.flatMap(p => p.marks));
+        setAllWeekly(perChild.flatMap(p => p.weekly).filter(x => x.academicYear === school.academicYear));
       } catch (e) {
         console.error(e);
       } finally {
@@ -82,7 +80,7 @@ export default function ParentMarks({ defaultTab = 'major' }: ParentMarksProps =
       }
     }
     load();
-  }, [user, school?.academicYear]);
+  }, [user, parentChildren, school?.academicYear]);
 
   const child = useMemo(() => children.find(c => c.id === selectedChildId), [children, selectedChildId]);
   const childClass = useMemo(

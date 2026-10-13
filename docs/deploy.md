@@ -114,3 +114,12 @@ localhost).
 2. Deploy the strict rules from the repo: `npx firebase deploy --only firestore:rules`
    (the repo's `firestore.rules` is the FULL lockdown version, not the transition set).
 3. Tell staff to refresh; stale tabs get permission errors with a refresh hint until reloaded.
+
+## Parent portal (2026-10) — read first
+
+The parent login and every parent screen now go through Vercel functions
+(`api/parent-login.ts`, `api/parent-data.ts`) and Firestore rules are
+staff-only for student data. The deploy order, the `FIREBASE_SERVICE_ACCOUNT`
+setup and the sign-off checklist are in
+[parent-portal-security.md](parent-portal-security.md). The Z3 security review
+for this release is in [z3-security-review-parent-portal.md](z3-security-review-parent-portal.md).

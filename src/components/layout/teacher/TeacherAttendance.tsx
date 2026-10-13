@@ -128,6 +128,10 @@ export default function TeacherAttendance() {
   };
 
   const teacherClasses: ClassSectionCard[] = [];
+  // A teacher can hold several subjects in one section, which means several
+  // assignment rows for the same class-section. This list is about classes,
+  // so each one appears once.
+  const seenClassSections = new Set<string>();
   if (teacher) {
     teacher.assignedClasses?.forEach((ac, idx) => {
       const cls = classes.find(c => c.id === ac.classId);
@@ -136,7 +140,8 @@ export default function TeacherAttendance() {
         const sids = (ac as any).sectionIds || (ac.sectionId ? [ac.sectionId] : []);
         sids.forEach((sid: any) => {
           const section = cls.sections.find(s => s.id === sid);
-          if (section) {
+          if (section && !seenClassSections.has(`${ac.classId}|${sid}`)) {
+            seenClassSections.add(`${ac.classId}|${sid}`);
             teacherClasses.push({
               classId: ac.classId,
               sectionId: sid,

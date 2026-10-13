@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, PARENT_LOGIN_HINT } from '@/context/AuthContext';
 import styles from './LoginPage.module.css';
 
 export default function LoginPage() {
@@ -11,6 +11,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [parentCode, setParentCode] = useState('');
   const [parentDob, setParentDob] = useState('');
+
+  // A parent who pressed "Sign in with Google" on the Staff tab gets moved to
+  // the Parent tab, with the hint still showing, instead of a dead end.
+  const [lastError, setLastError] = useState(authError);
+  if (authError !== lastError) {
+    setLastError(authError);
+    if (authError === PARENT_LOGIN_HINT) setActiveTab('parent');
+  }
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -85,7 +93,8 @@ export default function LoginPage() {
         {activeTab === 'staff' ? (
           <div className={styles.googleSection}>
             <p className={styles.googleHint}>
-              Use your school-registered Google account to sign in.
+              For teachers and school staff: use your school-registered Google account.
+              Parents, please use the <strong>Parent Login</strong> tab.
             </p>
 
             <button

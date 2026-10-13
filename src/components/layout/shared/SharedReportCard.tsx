@@ -8,7 +8,7 @@ import { useSchool } from '@/context/SchoolContext';
 import { Select } from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { PrinterIcon } from '@/components/ui/Icons';
-import { isParentOfStudent, findChildrenOfParent } from '@/lib/utils';
+import { parentData } from '@/lib/parent-api';
 import type { Class, Student } from '@/types/models';
 
 interface SharedReportCardProps {
@@ -34,7 +34,7 @@ function getGrade(total: number, max: number = 100): string {
 }
 
 export default function SharedReportCard({ view }: SharedReportCardProps) {
-  const { user } = useAuth();
+  const { user, parentChildren } = useAuth();
   const { school } = useSchool();
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<Class[]>([]);
@@ -49,12 +49,33 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
 
   const printableRef = useRef<HTMLDivElement>(null);
 
-  const isMyChild = (s: Student) => isParentOfStudent(user, s);
-
   useEffect(() => {
     async function load() {
       try {
         if (!school?.academicYear) return;
+
+        // Parents never read these collections: the API returns the child's
+        // class and ONLY the child's own entries in marks / co-scholastic.
+        if (view === 'parent') {
+          const kids = parentChildren;
+          const first = kids[0];
+          if (first) {
+            // One call per child; each response holds that child's own
+            // records only, so the sibling switcher never shows a classmate.
+            const perChild = await Promise.all(kids.map(k =>
+              parentData<{ class: Class | null; marks: any[]; coScholastic: any[] }>('reportCard', k.id)));
+            const cls = perChild.map(p => p.class).filter((c): c is Class => !!c);
+            setClasses(Array.from(new Map(cls.map(c => [c.id, c])).values()));
+            setStudents(kids);
+            setAllMarks(perChild.flatMap(p => p.marks || []));
+            setAllCoScholastic(perChild.flatMap(p => p.coScholastic || []));
+            setSelectedClassId(first.classId);
+            setSelectedSectionId(first.sectionId);
+            setSelectedStudentId(first.id);
+          }
+          return;
+        }
+
         const [cl, st, m, co] = await Promise.all([
           ClassesService.getAll(school.academicYear),
           StudentsService.getAll(school.academicYear),
@@ -85,15 +106,6 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
           }
         }
 
-        // If parent, find their children and auto-select
-        if (view === 'parent' && user) {
-          const myChildren = (st as unknown as Student[]).filter(isMyChild);
-          if (myChildren.length > 0) {
-            setSelectedClassId(myChildren[0].classId);
-            setSelectedSectionId(myChildren[0].sectionId);
-            setSelectedStudentId(myChildren[0].id);
-          }
-        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -101,7 +113,7 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
       }
     }
     load();
-  }, [view, user, school?.academicYear]);
+  }, [view, user, parentChildren, school?.academicYear]);
 
   const uniqueClassSections = useMemo(() => {
     const list: any[] = [];
@@ -343,14 +355,14 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
       )}
 
       {view === 'parent' && (() => {
-        const myChildren = findChildrenOfParent(students, user);
+        const myChildren = parentChildren;
         // No picker if 0 or 1 child — the single child auto-selects via the load effect.
         if (myChildren.length <= 1) return null;
         return (
           <div className="card no-print" style={{ padding: 20, marginBottom: 24 }}>
             <p className="text-caption" style={{ marginBottom: 12 }}>Select Child</p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {myChildren.map(s => (
+              {myChildren.map((s: Student) => (
                 <Button
                   key={s.id}
                   variant={selectedStudentId === s.id ? 'primary' : 'secondary'}
