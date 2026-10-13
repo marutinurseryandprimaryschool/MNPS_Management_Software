@@ -17,6 +17,7 @@
 import React, { useState } from 'react';
 import Modal, { ConfirmDialog } from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { useSchool } from '@/context/SchoolContext';
 import { computeReceiptSnapshots } from '@/lib/principal-fees';
@@ -143,7 +144,7 @@ function MonthSchedule({ title, cells, narrow }: {
   );
 }
 
-function PaymentList({ payments, narrow, snapshots, onReceipt, onDelete }: {
+function PaymentList({ payments, narrow, snapshots, onReceipt, onDelete, onEdit }: {
   payments: PrincipalPayment[];
   narrow: boolean;
   /** Balance-after-each-payment, precomputed by the engine (§18). */
@@ -151,6 +152,8 @@ function PaymentList({ payments, narrow, snapshots, onReceipt, onDelete }: {
   onReceipt: (payment: PrincipalPayment) => void;
   /** Principal only — absent for everyone else. */
   onDelete?: (payment: PrincipalPayment) => void;
+  /** Principal only: correct a wrongly typed amount. */
+  onEdit?: (payment: PrincipalPayment) => void;
 }) {
   if (payments.length === 0) {
     return (
@@ -203,6 +206,11 @@ function PaymentList({ payments, narrow, snapshots, onReceipt, onDelete }: {
             <Button variant="ghost" size="sm" onClick={() => onReceipt(payment)}>
               Receipt
             </Button>
+            {onEdit && (
+              <Button variant="ghost" size="sm" onClick={() => onEdit(payment)}>
+                Edit
+              </Button>
+            )}
             {onDelete && (
               <Button variant="ghost" size="sm" onClick={() => onDelete(payment)}>
                 Delete
@@ -226,13 +234,15 @@ export interface StudentDetailSheetProps {
       the receipt leaves every total but stays in the activity log forever). */
   actor?: PrincipalActor | null;
   canDeletePayments?: boolean;
+  /** Principal only: correct a payment's amount or note (audited). */
+  canEditPayments?: boolean;
   /** Post-commit refetch after a deletion; false = list is stale. */
   onPaymentsChanged?: () => Promise<boolean>;
 }
 
 export default function StudentDetailSheet({
   row, summary, payments, onClose, onRecordPayment, onEditFees,
-  actor, canDeletePayments = false, onPaymentsChanged,
+  actor, canDeletePayments = false, canEditPayments = false, onPaymentsChanged,
 }: StudentDetailSheetProps) {
   const narrow = useIsNarrow();
   const { school } = useSchool();
@@ -260,6 +270,54 @@ export default function StudentDetailSheet({
       showToast(refreshed ? message : refreshFailedMessage(message), refreshed ? 'success' : 'warning');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  /* Payment correction (Principal only): fix a wrongly typed amount. The
+     service writes the change and an audit entry (old and new amount) in one
+     batch; firestore.rules refuse it on a closed day. */
+  const [editTarget, setEditTarget] = useState<PrincipalPayment | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
+  const [editError, setEditError] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const startEdit = (payment: PrincipalPayment) => {
+    setEditTarget(payment);
+    setEditAmount(String(Number(payment.amount) || ''));
+    setEditRemarks(payment.remarks || '');
+    setEditError('');
+  };
+
+  const saveEdit = async () => {
+    if (savingEdit || !editTarget || !actor) return;
+    const amount = Number(editAmount.trim());
+    if (!Number.isFinite(amount) || amount <= 0 || !/^\d+(\.\d{1,2})?$/.test(editAmount.trim())) {
+      setEditError('Enter the amount actually received, e.g. 1000.');
+      return;
+    }
+    const patch: { amount?: number; remarks?: string } = {};
+    if (amount !== Number(editTarget.amount)) patch.amount = amount;
+    if (editRemarks.trim() !== (editTarget.remarks || '')) patch.remarks = editRemarks.trim();
+    if (Object.keys(patch).length === 0) { setEditTarget(null); return; }
+    setSavingEdit(true);
+    try {
+      await PrincipalPaymentsService.update(editTarget.id, patch, actor);
+    } catch (error) {
+      console.error('[principal-register] payment edit failed', { paymentId: editTarget.id, error });
+      showToast(principalWriteError(error, 'Only the Principal can edit a recorded payment.'), 'error');
+      setSavingEdit(false);
+      return;
+    }
+    const message = patch.amount !== undefined
+      ? `Payment corrected from ${inr(Number(editTarget.amount))} to ${inr(amount)}. The change is in the activity log.`
+      : 'Payment note updated.';
+    setEditTarget(null);
+    try {
+      const refreshed = onPaymentsChanged ? await onPaymentsChanged() : true;
+      showToast(refreshed ? message : refreshFailedMessage(message), refreshed ? 'success' : 'warning');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -409,6 +467,7 @@ export default function StudentDetailSheet({
             snapshots={snapshots}
             onReceipt={payment => void handleReceipt(payment)}
             onDelete={canDeletePayments && actor ? setDeleteTarget : undefined}
+            onEdit={canEditPayments && actor ? startEdit : undefined}
           />
         </div>
 
@@ -419,6 +478,54 @@ export default function StudentDetailSheet({
           </div>
         )}
       </div>
+
+      {editTarget && (
+        <Modal
+          isOpen
+          onClose={() => { if (!savingEdit) setEditTarget(null); }}
+          title="Edit payment"
+          size="sm"
+        >
+          <form
+            onSubmit={event => { event.preventDefault(); void saveEdit(); }}
+            style={{ display: 'grid', gap: 'var(--space-3)' }}
+          >
+            <p className="text-body-sm" style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+              {row.name} · {headLabel(editTarget.head)}
+              {editTarget.month ? ` (${editTarget.month})` : ''} · {editTarget.dateKey} ·{' '}
+              {modeLabel(editTarget.mode)}
+            </p>
+            <Input
+              label="Amount received (₹)"
+              inputMode="decimal"
+              autoFocus
+              value={editAmount}
+              onChange={event => { setEditAmount(event.target.value); setEditError(''); }}
+              error={editError || undefined}
+              hint={`Currently recorded: ${inr(Number(editTarget.amount) || 0)}`}
+            />
+            <Input
+              label="Note (optional)"
+              value={editRemarks}
+              onChange={event => setEditRemarks(event.target.value)}
+              placeholder="e.g. Corrected: typed 2,985 instead of 1,000"
+            />
+            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setEditTarget(null)}
+                disabled={savingEdit}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" disabled={savingEdit}>
+                {savingEdit ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {deleteTarget && (
         <ConfirmDialog

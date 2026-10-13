@@ -136,6 +136,16 @@ export default function NoteCards({ rows, expandedRowId, handlers }: NoteCardsPr
               >
                 Record payment
               </button>
+              {handlers.canManagePayments && summary.totalPaid > 0 && (
+                <button
+                  type="button"
+                  style={{ ...actionStyle, flex: '0 0 auto' }}
+                  onClick={() => handlers.onManagePayments(row)}
+                  aria-label={`Edit payments for ${row.name}`}
+                >
+                  Payments
+                </button>
+              )}
               {removable && (
                 <button
                   type="button"
