@@ -228,9 +228,26 @@ export default function NoteGrid({
                       </td>
                     ))}
                     <td style={{ ...bodyCellStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
-                        {formatINR(summary.totalPaid)}
-                      </span>
+                      {handlers.canManagePayments && summary.totalPaid > 0 ? (
+                        // Click the paid amount to see, edit or delete the receipts.
+                        <button
+                          type="button"
+                          onClick={() => handlers.onManagePayments(row)}
+                          title="View, edit or delete payments"
+                          aria-label={`Edit payments for ${row.name}`}
+                          style={{
+                            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                            color: 'var(--color-success)', fontWeight: 600, font: 'inherit',
+                            textDecoration: 'underline dotted', textUnderlineOffset: 3,
+                          }}
+                        >
+                          {formatINR(summary.totalPaid)}
+                        </button>
+                      ) : (
+                        <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+                          {formatINR(summary.totalPaid)}
+                        </span>
+                      )}
                     </td>
                     <td style={{ ...bodyCellStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <span style={{ fontWeight: 600 }}>{formatINR(summary.totalPending)}</span>

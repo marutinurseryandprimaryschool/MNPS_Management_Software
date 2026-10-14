@@ -242,7 +242,9 @@ export interface StudentDetailSheetProps {
 
 export default function StudentDetailSheet({
   row, summary, payments, onClose, onRecordPayment, onEditFees,
-  actor, canDeletePayments = false, canEditPayments = false, onPaymentsChanged,
+  // Edit follows Delete unless a caller says otherwise: both are Principal-only
+  // corrections, and every screen that offered Delete was missing Edit.
+  actor, canDeletePayments = false, canEditPayments = canDeletePayments, onPaymentsChanged,
 }: StudentDetailSheetProps) {
   const narrow = useIsNarrow();
   const { school } = useSchool();
