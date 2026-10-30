@@ -255,6 +255,7 @@ function MoreMenu({
               { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
             ]
           : []),
+        { id: 'report-card', icon: <FileTextIcon size={22} />, label: 'Report Card' },
         { id: 'teachers', icon: <UsersIcon size={22} />, label: 'Teachers' },
         { id: 'classes', icon: <SchoolIcon size={22} />, label: 'Classes' },
         { id: 'attendance', icon: <ClipboardCheckIcon size={22} />, label: 'Attendance' },

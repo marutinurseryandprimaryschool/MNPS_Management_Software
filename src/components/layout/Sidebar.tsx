@@ -200,6 +200,9 @@ const PRINCIPAL_FOCUS_IDS = new Set([
   'dashboard',
   'principal-note', 'principal-classes', 'principal-teachers',
   'principal-accounts', 'principal-activity',
+  // The Principal also views and corrects report cards (same marks as the
+  // teachers' — one record per student, whoever edits it).
+  'report-card',
 ]);
 const FOCUS_MODE_STORAGE_KEY = 'mnps_principal_view_mode';
 
