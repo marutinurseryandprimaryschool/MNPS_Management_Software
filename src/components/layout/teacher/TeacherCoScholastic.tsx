@@ -61,6 +61,11 @@ export default function TeacherCoScholastic() {
   // existingDoc is the document from Firestore for this Class + Section + Exam
   const [existingDoc, setExistingDoc] = useState<any>(null);
   const [records, setRecords] = useState<Record<string, any>>({});
+  /* Records and total working days as loaded. On save, a student whose row
+     was not touched here keeps what is stored NOW, so an edit made on the
+     report card meanwhile (Principal, admin, another teacher) survives. */
+  const [loadedRecords, setLoadedRecords] = useState<Record<string, any>>({});
+  const [loadedWorkingDays, setLoadedWorkingDays] = useState('0');
   
   const [saveStatus, setSaveStatus] = useState<'saved'|'unsaved'>('saved');
 
@@ -119,9 +124,13 @@ export default function TeacherCoScholastic() {
             recMap[r.studentId] = r;
           });
           setRecords(recMap);
+          setLoadedRecords(recMap);
+          setLoadedWorkingDays(doc.totalWorkingDays || '0');
         } else {
           setExistingDoc(null);
           setRecords({});
+          setLoadedRecords({});
+          setLoadedWorkingDays('0');
           setTotalWorkingDays('0');
         }
         setSaveStatus('saved');
@@ -221,7 +230,7 @@ export default function TeacherCoScholastic() {
     
     setIsSaving(true);
     try {
-      const recordsArray = classStudents.map(s => {
+      const built = classStudents.map(s => {
         const r = records[s.id] || {};
         const presentDays = r.presentDays || '0';
         const workingDaysString = `${presentDays}/${totalWorkingDays}`;
@@ -240,6 +249,19 @@ export default function TeacherCoScholastic() {
         };
       });
 
+      // Merge per student against what is stored right now.
+      const fresh: any = await CoScholasticService.getByClassSectionExam(
+        selectedClassId, selectedSectionId, selectedExam, school.academicYear);
+      const byStudent = new Map<string, any>(((fresh?.records || []) as any[]).map(r => [r.studentId, r]));
+      const workingDaysChanged = String(totalWorkingDays) !== String(loadedWorkingDays);
+      for (const rec of built) {
+        const untouched = !workingDaysChanged
+          && JSON.stringify(records[rec.studentId] ?? null) === JSON.stringify(loadedRecords[rec.studentId] ?? null);
+        if (untouched && byStudent.has(rec.studentId)) continue;
+        byStudent.set(rec.studentId, rec);
+      }
+      const recordsArray = Array.from(byStudent.values());
+
       const payload = {
         classId: selectedClassId,
         sectionId: selectedSectionId,
@@ -251,13 +273,20 @@ export default function TeacherCoScholastic() {
         records: recordsArray,
       };
 
-      if (existingDoc) {
-        await CoScholasticService.update(existingDoc.id, payload);
+      const target = fresh?.id ? fresh : existingDoc;
+      if (target) {
+        await CoScholasticService.update(target.id, payload);
       } else {
         const newDocId = await CoScholasticService.create(payload);
         setExistingDoc({ id: newDocId, ...payload });
       }
       
+      // What is stored now is the new starting point.
+      const savedMap: Record<string, any> = {};
+      recordsArray.forEach((r: any) => { savedMap[r.studentId] = r; });
+      setRecords(savedMap);
+      setLoadedRecords(savedMap);
+      setLoadedWorkingDays(String(totalWorkingDays));
       setSaveStatus('saved');
       showToast('Records saved successfully!');
     } catch (err) {
