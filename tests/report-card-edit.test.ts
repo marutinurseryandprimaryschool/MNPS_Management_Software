@@ -39,3 +39,61 @@ describe('upsertStudentMarks', () => {
     expect(a).toMatchObject({ faTotal: null, saScore: 45, totalMarks: 45 });
   });
 });
+
+import {
+  isKgClass, parseKgMark, kgColumnSummary, kgGrade, stdColumnSummary, upsertCoRecord,
+} from '@/lib/report-card-utils';
+
+describe('isKgClass', () => {
+  it('Pre-KG, LKG, UKG are KG; Class 1-5 are not', () => {
+    for (const c of ['Pre-KG', 'LKG', 'L.K.G', 'UKG', 'U.K.G', 'Nursery']) expect(isKgClass(c)).toBe(true);
+    for (const c of ['Class 1', 'Std 3', 'Class 5', 'First']) expect(isKgClass(c)).toBe(false);
+  });
+});
+
+describe('KG card', () => {
+  it('parses numbers, ab, dash and grade letters', () => {
+    expect(parseKgMark('68')).toEqual({ value: '68', numeric: 68 });
+    expect(parseKgMark('AB')).toEqual({ value: 'ab', numeric: null });
+    expect(parseKgMark('-')).toEqual({ value: '-', numeric: null });
+    expect(parseKgMark('c')).toEqual({ value: 'C', numeric: null });
+    expect(parseKgMark('101')).toBe('invalid');
+    expect(parseKgMark('xyz')).toBe('invalid');
+  });
+  it('matches the LKG A paper card: I MID 570 → A; Quarterly 428 with absences → no grade', () => {
+    const iMid = ['68', '80', '94', '78', '90', '88', '72', '-', 'C'];
+    expect(kgColumnSummary(iMid)).toEqual({ total: 570, grade: 'A' });
+    const quarterly = ['73', '91', 'ab', '82', '92', '90', 'ab', null, 'ab'];
+    expect(kgColumnSummary(quarterly)).toEqual({ total: 428, grade: null });
+  });
+  it('a mark below 35 means no grade; the scale bands', () => {
+    expect(kgColumnSummary(['90', '30']).grade).toBeNull();
+    expect([kgGrade(95), kgGrade(85), kgGrade(72), kgGrade(61), kgGrade(55), kgGrade(40), kgGrade(20)])
+      .toEqual(['A+', 'A', 'B', 'C', 'D', 'E', 'F']);
+  });
+  it('stores a KG mark on the student record', () => {
+    const [r] = upsertStudentMarks([], 's', 'S', null, null, { kgMark: 'ab' });
+    expect(r).toMatchObject({ kgMark: 'ab', totalMarks: null });
+    const [n] = upsertStudentMarks([], 's', 'S', null, null, { kgMark: '88' });
+    expect(n).toMatchObject({ kgMark: '88', totalMarks: 88 });
+  });
+});
+
+describe('STD card', () => {
+  it('matches the Class card: I MID total 430, average 54%, grade C1', () => {
+    expect(stdColumnSummary([50, 56, 43, 67, 74, 38, 50, 52])).toEqual({ total: 430, average: 54, grade: 'C1' });
+  });
+  it('a total-only subject (GK, Computer, Hindi) saves without FA/SA', () => {
+    const [r] = upsertStudentMarks([], 's', 'S', null, null, { total: 38 });
+    expect(r).toMatchObject({ faTotal: null, saScore: null, totalMarks: 38 });
+  });
+});
+
+describe('upsertCoRecord', () => {
+  it('replaces one student and keeps presentDays in step', () => {
+    const other = { studentId: 'b', remarks: 'Good' };
+    const out = upsertCoRecord([other], 'a', 'A', { workingDays: '45/48', remarks: 'Study well' });
+    expect(out).toContainEqual(other);
+    expect(out.find(r => r.studentId === 'a')).toMatchObject({ workingDays: '45/48', presentDays: '45', remarks: 'Study well' });
+  });
+});

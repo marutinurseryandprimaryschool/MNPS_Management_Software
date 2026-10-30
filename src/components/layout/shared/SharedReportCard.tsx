@@ -11,30 +11,14 @@ import { PrinterIcon } from '@/components/ui/Icons';
 import { parentData } from '@/lib/parent-api';
 import { useToast } from '@/components/ui/Toast';
 import {
-  parseMark, upsertStudentMarks, REPORT_FA_MAX, REPORT_SA_MAX, type ExamRecord,
+  parseMark, parseKgMark, upsertStudentMarks, upsertCoRecord, isKgClass,
+  CO_FIELDS, REPORT_FA_MAX, REPORT_SA_MAX, type ExamRecord, type CoField,
 } from '@/lib/report-card-utils';
+import ReportCardSheet, { EXAM_COLUMNS, type MarkDraft, type CoDraft } from './ReportCardSheet';
 import type { Class, Student } from '@/types/models';
 
 interface SharedReportCardProps {
   view: 'admin' | 'teacher' | 'parent';
-}
-
-const EXAM_COLUMNS = [
-  { value: 'i_mid_term', label: 'I MID TERM' },
-  { value: 'quarterly', label: 'QUARTERLY' },
-  { value: 'ii_mid_term', label: 'II MID TERM' },
-  { value: 'half_yearly', label: 'HALF YEARLY' },
-  { value: 'iii_mid_term', label: 'III MID TERM' },
-  { value: 'annual', label: 'ANNUAL' },
-];
-
-function getGrade(total: number, max: number = 100): string {
-  if (total === 0 && max === 0) return '';
-  const percent = (total / max) * 100;
-  if (percent >= 80) return 'A';
-  if (percent >= 60) return 'B';
-  if (percent >= 40) return 'C';
-  return 'D';
 }
 
 export default function SharedReportCard({ view }: SharedReportCardProps) {
@@ -54,12 +38,15 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
   const printableRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
 
-  /* -- Edit marks (teachers, Principal, admin; never parents) --
-     Drafts are keyed "subjectId|examId" and hold the typed FA / SA text.
-     Saving writes into the SAME marks docs the Exam Marks screen uses. */
+  /* -- Edit (teachers, Principal, admin; never parents) --
+     Mark drafts are keyed "subjectId|examId"; co-scholastic drafts by examId.
+     Saving writes the SAME per-student records the Exam Marks and
+     Co-Scholastic screens use: one record per student, whoever edits it. */
   const canEditMarks = view !== 'parent';
   const [editing, setEditing] = useState(false);
-  const [drafts, setDrafts] = useState<Record<string, { fa: string; sa: string }>>({});
+  const [drafts, setDrafts] = useState<Record<string, MarkDraft>>({});
+  const [coDrafts, setCoDrafts] = useState<Record<string, CoDraft>>({});
+  const [initial, setInitial] = useState<{ marks: Record<string, MarkDraft>; co: Record<string, CoDraft> }>({ marks: {}, co: {} });
   const [savingMarks, setSavingMarks] = useState(false);
 
   useEffect(() => {
@@ -221,86 +208,150 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
   }, [selectedStudent, activeClassData, allMarks, allCoScholastic, selectedClassId, selectedSectionId, selectedStudentId]);
 
   // Switching student or class discards unsaved drafts.
-  useEffect(() => { setEditing(false); setDrafts({}); }, [selectedStudentId, selectedClassId, selectedSectionId]);
+  useEffect(() => { setEditing(false); setDrafts({}); setCoDrafts({}); }, [selectedStudentId, selectedClassId, selectedSectionId]);
 
+  const isKG = isKgClass(activeClassData?.className);
   const markText = (v: unknown): string => (v === undefined || v === null ? '' : String(v));
+  const emptyCo = (): CoDraft => Object.fromEntries(CO_FIELDS.map(f => [f, ''])) as CoDraft;
 
   const startEditing = () => {
     if (!reportData) return;
-    const next: Record<string, { fa: string; sa: string }> = {};
+    const marks: Record<string, MarkDraft> = {};
     reportData.subjects.forEach((sub: any) => {
       EXAM_COLUMNS.forEach(ex => {
         const cell = reportData.matrix[sub.id][ex.value];
-        next[`${sub.id}|${ex.value}`] = { fa: markText(cell?.faTotal), sa: markText(cell?.saScore) };
+        const fa = markText(cell?.faTotal);
+        const sa = markText(cell?.saScore);
+        marks[`${sub.id}|${ex.value}`] = {
+          fa, sa,
+          // A total typed on its own (GK, Computer, Hindi) — only when there is no FA/SA split.
+          total: fa === '' && sa === '' ? markText(cell?.totalMarks) : '',
+          kg: markText(cell?.kgMark ?? cell?.totalMarks),
+        };
       });
     });
-    setDrafts(next);
+    const co: Record<string, CoDraft> = {};
+    EXAM_COLUMNS.forEach(ex => {
+      const rec = reportData.coScholasticData[ex.value] || {};
+      const d = emptyCo();
+      CO_FIELDS.forEach(f => { d[f] = markText(rec[f]); });
+      co[ex.value] = d;
+    });
+    setDrafts(marks);
+    setCoDrafts(co);
+    setInitial({ marks, co });
     setEditing(true);
   };
 
-  const setDraft = (key: string, part: 'fa' | 'sa', value: string) =>
-    setDrafts(prev => ({ ...prev, [key]: { ...(prev[key] || { fa: '', sa: '' }), [part]: value } }));
+  const setDraft = (key: string, part: keyof MarkDraft, value: string) =>
+    setDrafts(prev => ({ ...prev, [key]: { ...(prev[key] || { fa: '', sa: '', total: '', kg: '' }), [part]: value } }));
+  const setCoDraft = (examId: string, field: CoField, value: string) =>
+    setCoDrafts(prev => ({ ...prev, [examId]: { ...(prev[examId] || emptyCo()), [field]: value } }));
 
   const saveMarks = async () => {
     if (!reportData || !selectedStudent || savingMarks || !school?.academicYear) return;
-    // 1. Validate and collect only the cells that changed.
-    const changes: { subjectId: string; examId: string; fa: number | null; sa: number | null }[] = [];
+    const year = school.academicYear;
+    const examLabel = (id: string) => EXAM_COLUMNS.find(e => e.value === id)?.label || id;
+
+    // 1. Validate and collect only what changed.
+    type MarkChange = { subjectId: string; examId: string; fa: number | null; sa: number | null; total: number | null; kg: string | null };
+    const markChanges: MarkChange[] = [];
     for (const sub of reportData.subjects as any[]) {
       for (const ex of EXAM_COLUMNS) {
         const key = `${sub.id}|${ex.value}`;
-        const draft = drafts[key] || { fa: '', sa: '' };
-        const cell = reportData.matrix[sub.id][ex.value];
-        if (draft.fa.trim() === markText(cell?.faTotal) && draft.sa.trim() === markText(cell?.saScore)) continue;
-        const fa = parseMark(draft.fa, REPORT_FA_MAX);
-        const sa = parseMark(draft.sa, REPORT_SA_MAX);
-        if (fa === 'invalid' || sa === 'invalid') {
-          showToast(`${sub.name}, ${ex.label}: FA must be 0-${REPORT_FA_MAX} and SA 0-${REPORT_SA_MAX}.`, 'error');
+        const d = drafts[key] || { fa: '', sa: '', total: '', kg: '' };
+        const before = initial.marks[key] || { fa: '', sa: '', total: '', kg: '' };
+        if (isKG) {
+          if (d.kg.trim() === before.kg.trim()) continue;
+          const kg = parseKgMark(d.kg);
+          if (kg === 'invalid') {
+            showToast(`${sub.name}, ${ex.label}: enter a mark 0-100, "ab", "-" or a grade letter.`, 'error');
+            return;
+          }
+          markChanges.push({ subjectId: sub.id, examId: ex.value, fa: null, sa: null, total: null, kg: kg.value });
+          continue;
+        }
+        if (d.fa.trim() === before.fa.trim() && d.sa.trim() === before.sa.trim() && d.total.trim() === before.total.trim()) continue;
+        const fa = parseMark(d.fa, REPORT_FA_MAX);
+        const sa = parseMark(d.sa, REPORT_SA_MAX);
+        const total = fa === null && sa === null ? parseMark(d.total, 100) : null;
+        if (fa === 'invalid' || sa === 'invalid' || total === 'invalid') {
+          showToast(`${sub.name}, ${ex.label}: FA 0-${REPORT_FA_MAX}, SA 0-${REPORT_SA_MAX}, or a total 0-100.`, 'error');
           return;
         }
-        changes.push({ subjectId: sub.id, examId: ex.value, fa, sa });
+        markChanges.push({ subjectId: sub.id, examId: ex.value, fa, sa, total, kg: null });
       }
     }
-    if (changes.length === 0) { setEditing(false); return; }
+    const coChanges = EXAM_COLUMNS
+      .map(ex => ex.value as string)
+      .filter(examId => CO_FIELDS.some(f => (coDrafts[examId]?.[f] ?? '').trim() !== (initial.co[examId]?.[f] ?? '').trim()));
+    if (markChanges.length === 0 && coChanges.length === 0) { setEditing(false); return; }
 
     setSavingMarks(true);
     try {
+      // 2. Marks: one doc per class/section/subject/exam; only this student's record changes.
       const updatedDocs: any[] = [];
-      for (const change of changes) {
+      for (const change of markChanges) {
         const match = (m: any) => m.examType === 'major_exam' && m.examId === change.examId
           && m.classId === selectedClassId && m.sectionId === selectedSectionId
           && m.subjectId === change.subjectId
-          && (!m.academicYear || m.academicYear === school.academicYear);
+          && (!m.academicYear || m.academicYear === year);
         const local = allMarks.find(match);
-        // Re-read the doc so a teacher's save in the meantime is not overwritten.
+        // Re-read so a teacher's save in the meantime is not overwritten.
         const fresh = local?.id ? await MarksService.getById(local.id) as any : null;
         const base: ExamRecord[] = (fresh?.records || local?.records || []) as ExamRecord[];
-        const records = upsertStudentMarks(base, selectedStudent.id, selectedStudent.name, change.fa, change.sa);
+        const records = upsertStudentMarks(base, selectedStudent.id, selectedStudent.name,
+          change.fa, change.sa, { total: change.total, kgMark: change.kg });
         if (local?.id) {
           await MarksService.update(local.id, { records });
           updatedDocs.push({ ...(fresh || local), id: local.id, records });
         } else {
           const payload = {
-            examType: 'major_exam', examId: change.examId,
-            examName: EXAM_COLUMNS.find(e => e.value === change.examId)?.label || change.examId,
+            examType: 'major_exam', examId: change.examId, examName: examLabel(change.examId),
             classId: selectedClassId, sectionId: selectedSectionId, subjectId: change.subjectId,
-            faMax: REPORT_FA_MAX, records, status: 'draft',
-            academicYear: school.academicYear, createdAt: new Date(),
+            isKG, faMax: REPORT_FA_MAX, records, status: 'draft', academicYear: year, createdAt: new Date(),
           };
           const created: any = await MarksService.create(payload);
           updatedDocs.push({ ...payload, id: typeof created === 'string' ? created : created?.id });
         }
       }
-      // 2. Show the saved marks immediately.
-      setAllMarks(prev => {
+
+      // 3. Co-scholastic: one doc per class/section/exam; only this student's record changes.
+      const updatedCo: any[] = [];
+      for (const examId of coChanges) {
+        const fresh = await CoScholasticService.getByClassSectionExam(selectedClassId, selectedSectionId, examId, year) as any;
+        const changed: Partial<Record<CoField, string>> = {};
+        CO_FIELDS.forEach(f => {
+          const now = coDrafts[examId]?.[f] ?? '';
+          if (now.trim() !== (initial.co[examId]?.[f] ?? '').trim()) changed[f] = now;
+        });
+        const records = upsertCoRecord(fresh?.records || [], selectedStudent.id, selectedStudent.name, changed);
+        if (fresh?.id) {
+          await CoScholasticService.update(fresh.id, { records, updatedAt: new Date().toISOString() });
+          updatedCo.push({ ...fresh, records });
+        } else {
+          const payload = {
+            classId: selectedClassId, sectionId: selectedSectionId, examId,
+            academicYear: year, records, updatedAt: new Date().toISOString(),
+          };
+          const created: any = await CoScholasticService.create(payload);
+          updatedCo.push({ ...payload, id: typeof created === 'string' ? created : created?.id });
+        }
+      }
+
+      // 4. Show the saved values immediately.
+      const merge = (prev: any[], next: any[]) => {
         const byId = new Map(prev.map(m => [m.id, m]));
-        updatedDocs.forEach(d => byId.set(d.id, d));
+        next.forEach(d => byId.set(d.id, d));
         return Array.from(byId.values());
-      });
+      };
+      if (updatedDocs.length) setAllMarks(prev => merge(prev, updatedDocs));
+      if (updatedCo.length) setAllCoScholastic(prev => merge(prev, updatedCo));
       setEditing(false);
-      showToast(`Marks saved for ${selectedStudent.name}`);
+      showToast(`Report card saved for ${selectedStudent.name}`);
     } catch (error) {
-      console.error('[report-card] save marks failed', error);
-      showToast('Could not save the marks. Check your connection and try again.', 'error');
+      console.error('[report-card] save failed', error);
+      showToast('Could not save the report card. Check your connection and try again.', 'error');
     } finally {
       setSavingMarks(false);
     }
@@ -406,15 +457,15 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
         {reportData && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {canEditMarks && !editing && (
-              <Button variant="secondary" onClick={startEditing}>Edit marks</Button>
+              <Button variant="secondary" onClick={startEditing}>Edit report card</Button>
             )}
             {editing && (
               <>
-                <Button variant="secondary" onClick={() => { setEditing(false); setDrafts({}); }} disabled={savingMarks}>
+                <Button variant="secondary" onClick={() => { setEditing(false); setDrafts({}); setCoDrafts({}); }} disabled={savingMarks}>
                   Cancel
                 </Button>
                 <Button variant="primary" onClick={() => { void saveMarks(); }} disabled={savingMarks}>
-                  {savingMarks ? 'Saving...' : 'Save marks'}
+                  {savingMarks ? 'Saving...' : 'Save report card'}
                 </Button>
               </>
             )}
@@ -510,6 +561,7 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
+                <div style={{ fontWeight: 700 }}>STD: <span style={{ borderBottom: '1px dashed #000', padding: '0 24px 0 8px' }}>{activeClassData.className} {activeClassData.sectionName}</span></div>
                 <div>Student Name: <span style={{ borderBottom: '1px dashed #000', padding: '0 40px 0 8px' }}>{selectedStudent.name}</span></div>
                 <div>Class: <span style={{ borderBottom: '1px dashed #000', padding: '0 40px 0 8px' }}>{activeClassData.className} - {activeClassData.sectionName}</span></div>
                 <div>Admission No: <span style={{ borderBottom: '1px dashed #000', padding: '0 40px 0 8px' }}>{selectedStudent.admissionNumber || '____'}</span></div>
@@ -517,184 +569,17 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
             </div>
           </div>
 
-          <table className="report-table">
-            <thead>
-              <tr>
-                <th rowSpan={2} style={{ minWidth: 120 }}>SUBJECT</th>
-                {EXAM_COLUMNS.map(ex => (
-                  <th key={ex.value} colSpan={4}>{ex.label}</th>
-                ))}
-              </tr>
-              <tr>
-                {EXAM_COLUMNS.map(ex => (
-                  <React.Fragment key={ex.value + '_sub'}>
-                    <th className="col-sub">FA<br/>40</th>
-                    <th className="col-sub">SA<br/>60</th>
-                    <th className="col-sub">Total<br/>100</th>
-                    <th className="col-sub">Grade</th>
-                  </React.Fragment>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* Subject Rows */}
-              {reportData.subjects.map((sub: any) => (
-                <tr key={sub.id}>
-                  <td className="text-left text-bold" style={{ textTransform: 'uppercase' }}>{sub.name}</td>
-                  {EXAM_COLUMNS.map(ex => {
-                    const cell = reportData.matrix[sub.id][ex.value];
-                    if (editing) {
-                      const key = `${sub.id}|${ex.value}`;
-                      const draft = drafts[key] || { fa: '', sa: '' };
-                      const fa = parseMark(draft.fa, REPORT_FA_MAX);
-                      const sa = parseMark(draft.sa, REPORT_SA_MAX);
-                      const ok = fa !== 'invalid' && sa !== 'invalid';
-                      const total = ok && (fa !== null || sa !== null)
-                        ? Math.round(((fa ?? 0) + (sa ?? 0)) * 10) / 10
-                        : null;
-                      const input = (part: 'fa' | 'sa', max: number) => {
-                        const bad = parseMark(draft[part], max) === 'invalid';
-                        return (
-                          <input
-                            inputMode="decimal"
-                            aria-label={`${sub.name} ${ex.label} ${part.toUpperCase()} out of ${max}`}
-                            value={draft[part]}
-                            onChange={e => setDraft(key, part, e.target.value)}
-                            style={{
-                              width: 38, padding: '2px', textAlign: 'center', fontSize: 12,
-                              border: `1px solid ${bad ? 'var(--color-error)' : 'var(--color-border)'}`,
-                              borderRadius: 4, background: bad ? '#fef2f2' : '#fff',
-                            }}
-                          />
-                        );
-                      };
-                      return (
-                        <React.Fragment key={ex.value + sub.id}>
-                          <td>{input('fa', REPORT_FA_MAX)}</td>
-                          <td>{input('sa', REPORT_SA_MAX)}</td>
-                          <td className="total-text text-bold">{total ?? '-'}</td>
-                          <td className="grade-text text-bold">{total ? getGrade(total, 100) : '-'}</td>
-                        </React.Fragment>
-                      );
-                    }
-                    if (!cell) {
-                      return (
-                        <React.Fragment key={ex.value + sub.id}>
-                          <td>-</td><td>-</td><td>-</td><td>-</td>
-                        </React.Fragment>
-                      );
-                    }
-                    return (
-                      <React.Fragment key={ex.value + sub.id}>
-                        <td>{cell.faTotal !== undefined && cell.faTotal !== null ? cell.faTotal : '-'}</td>
-                        <td>{cell.saScore !== undefined && cell.saScore !== null ? cell.saScore : '-'}</td>
-                        <td className="total-text text-bold">{cell.totalMarks !== undefined && cell.totalMarks !== null ? cell.totalMarks : '-'}</td>
-                        <td className="grade-text text-bold">{cell.totalMarks ? getGrade(cell.totalMarks, 100) : '-'}</td>
-                      </React.Fragment>
-                    );
-                  })}
-                </tr>
-              ))}
-
-              {/* Total Row */}
-              <tr>
-                <td className="text-left text-bold">TOTAL</td>
-                {EXAM_COLUMNS.map(ex => {
-                  const stat = reportData.examTotals[ex.value];
-                  if (stat.count === 0) return <td key={ex.value} colSpan={4}>-</td>;
-                  return (
-                    <td key={ex.value} colSpan={4} className="total-text text-bold" style={{ fontSize: 13 }}>
-                      {stat.total}
-                    </td>
-                  );
-                })}
-              </tr>
-
-              {/* Average Row */}
-              <tr>
-                <td className="text-left text-bold">AVERAGE</td>
-                {EXAM_COLUMNS.map(ex => {
-                  const stat = reportData.examTotals[ex.value];
-                  if (stat.count === 0) return <td key={ex.value} colSpan={4}>-</td>;
-                  const maxPossible = reportData.subjects.length * 100;
-                  const avg = maxPossible > 0 ? (stat.total / maxPossible) * 100 : 0;
-                  return (
-                    <td key={ex.value} colSpan={4} className="text-bold">
-                      {avg.toFixed(0)}%
-                    </td>
-                  );
-                })}
-              </tr>
-
-              {/* Grade Row */}
-              <tr>
-                <td className="text-left text-bold">GRADE</td>
-                {EXAM_COLUMNS.map(ex => {
-                  const stat = reportData.examTotals[ex.value];
-                  if (stat.count === 0) return <td key={ex.value} colSpan={4}>-</td>;
-                  const maxPossible = reportData.subjects.length * 100;
-                  const grade = getGrade(stat.total, maxPossible);
-                  return (
-                    <td key={ex.value} colSpan={4} className="grade-text text-bold">
-                      {grade}
-                    </td>
-                  );
-                })}
-              </tr>
-
-              {/* Working Days Row */}
-              <tr>
-                <td className="text-left text-bold">NO OF WORKING DAYS</td>
-                {EXAM_COLUMNS.map(ex => (
-                  <td key={ex.value} colSpan={4} className="text-bold">{reportData.coScholasticData[ex.value]?.workingDays || '-'}</td>
-                ))}
-              </tr>
-
-              {/* Remarks Row */}
-              <tr>
-                <td className="text-left text-bold">REMARKS</td>
-                {EXAM_COLUMNS.map(ex => (
-                  <td key={ex.value} colSpan={4} className="text-bold">{reportData.coScholasticData[ex.value]?.remarks || '-'}</td>
-                ))}
-              </tr>
-
-              {/* Co-Scholastic Headers */}
-              <tr>
-                <td className="text-left text-bold">NEATNESS</td>
-                {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} className="text-bold">{reportData.coScholasticData[ex.value]?.neatness || '-'}</td>)}
-              </tr>
-              <tr>
-                <td className="text-left text-bold">LIFE SKILLS</td>
-                {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} className="text-bold">{reportData.coScholasticData[ex.value]?.lifeSkills || '-'}</td>)}
-              </tr>
-              <tr>
-                <td className="text-left text-bold">ATTITUDES AND VALUES</td>
-                {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} className="text-bold">{reportData.coScholasticData[ex.value]?.attitudes || '-'}</td>)}
-              </tr>
-              <tr>
-                <td className="text-left text-bold">YOGA, HEALTH & WELLNESS</td>
-                {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} className="text-bold">{reportData.coScholasticData[ex.value]?.yoga || '-'}</td>)}
-              </tr>
-              <tr>
-                <td className="text-left text-bold">CO-CURRICULAR ACTIVITIES</td>
-                {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} className="text-bold">{reportData.coScholasticData[ex.value]?.coCurricular || '-'}</td>)}
-              </tr>
-              
-              {/* Signatures */}
-              <tr className="signature-row">
-                <td className="text-left text-bold" style={{ height: 50, verticalAlign: 'bottom', paddingBottom: 8 }}>SIGNATURE OF CLASS TEACHER</td>
-                {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} style={{ verticalAlign: 'bottom', paddingBottom: 8 }}></td>)}
-              </tr>
-              <tr className="signature-row">
-                <td className="text-left text-bold" style={{ height: 50, verticalAlign: 'bottom', paddingBottom: 8 }}>SIGNATURE OF THE PRINCIPAL</td>
-                {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} style={{ verticalAlign: 'bottom', paddingBottom: 8 }}></td>)}
-              </tr>
-              <tr className="signature-row">
-                <td className="text-left text-bold" style={{ height: 50, verticalAlign: 'bottom', paddingBottom: 8 }}>SIGNATURE OF THE PARENT</td>
-                {EXAM_COLUMNS.map(ex => <td key={ex.value} colSpan={4} style={{ verticalAlign: 'bottom', paddingBottom: 8 }}></td>)}
-              </tr>
-            </tbody>
-          </table>
+          <ReportCardSheet
+            isKG={isKG}
+            subjects={reportData.subjects}
+            matrix={reportData.matrix}
+            coData={reportData.coScholasticData}
+            editing={editing}
+            drafts={drafts}
+            coDrafts={coDrafts}
+            onMark={setDraft}
+            onCo={setCoDraft}
+          />
         </div>
       )}
     </div>
