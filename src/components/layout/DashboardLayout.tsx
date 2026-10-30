@@ -263,7 +263,15 @@ function MoreMenu({
       ]
     : isTeacherLike(role)
     ? [
+        // Every teacher page the bottom bar has no room for. Report Card and
+        // the marks pages were desktop-only before: on a phone (how most
+        // teachers work) there was no way to reach them.
+        { id: 'report-card', icon: <FileTextIcon size={22} />, label: 'Report Card' },
+        { id: 'exam-marks', icon: <ClipboardCheckIcon size={22} />, label: 'Exam Marks' },
+        { id: 'weekly-marks', icon: <FileTextIcon size={22} />, label: 'Weekly Marks' },
         { id: 'class-tests', icon: <FileTextIcon size={22} />, label: 'Class Tests' },
+        { id: 'co-scholastic', icon: <FileTextIcon size={22} />, label: 'Co-Scholastic' },
+        { id: 'timetable', icon: <CalendarIcon size={22} />, label: 'Timetable' },
         { id: 'assignments', icon: <BookOpenIcon size={22} />, label: 'Assignments' },
         // The bottom bar's "Fees" tab is the assigned-students register; the
         // class-section register (scholarships included) lives here, because

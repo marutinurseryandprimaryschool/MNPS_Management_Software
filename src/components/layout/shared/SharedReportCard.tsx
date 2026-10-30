@@ -9,6 +9,10 @@ import { Select } from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { PrinterIcon } from '@/components/ui/Icons';
 import { parentData } from '@/lib/parent-api';
+import { useToast } from '@/components/ui/Toast';
+import {
+  parseMark, upsertStudentMarks, REPORT_FA_MAX, REPORT_SA_MAX, type ExamRecord,
+} from '@/lib/report-card-utils';
 import type { Class, Student } from '@/types/models';
 
 interface SharedReportCardProps {
@@ -48,6 +52,15 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
   const [selectedStudentId, setSelectedStudentId] = useState('');
 
   const printableRef = useRef<HTMLDivElement>(null);
+  const { showToast } = useToast();
+
+  /* -- Edit marks (teachers, Principal, admin; never parents) --
+     Drafts are keyed "subjectId|examId" and hold the typed FA / SA text.
+     Saving writes into the SAME marks docs the Exam Marks screen uses. */
+  const canEditMarks = view !== 'parent';
+  const [editing, setEditing] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, { fa: string; sa: string }>>({});
+  const [savingMarks, setSavingMarks] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -207,6 +220,92 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
     return { subjects, matrix, examTotals, coScholasticData };
   }, [selectedStudent, activeClassData, allMarks, allCoScholastic, selectedClassId, selectedSectionId, selectedStudentId]);
 
+  // Switching student or class discards unsaved drafts.
+  useEffect(() => { setEditing(false); setDrafts({}); }, [selectedStudentId, selectedClassId, selectedSectionId]);
+
+  const markText = (v: unknown): string => (v === undefined || v === null ? '' : String(v));
+
+  const startEditing = () => {
+    if (!reportData) return;
+    const next: Record<string, { fa: string; sa: string }> = {};
+    reportData.subjects.forEach((sub: any) => {
+      EXAM_COLUMNS.forEach(ex => {
+        const cell = reportData.matrix[sub.id][ex.value];
+        next[`${sub.id}|${ex.value}`] = { fa: markText(cell?.faTotal), sa: markText(cell?.saScore) };
+      });
+    });
+    setDrafts(next);
+    setEditing(true);
+  };
+
+  const setDraft = (key: string, part: 'fa' | 'sa', value: string) =>
+    setDrafts(prev => ({ ...prev, [key]: { ...(prev[key] || { fa: '', sa: '' }), [part]: value } }));
+
+  const saveMarks = async () => {
+    if (!reportData || !selectedStudent || savingMarks || !school?.academicYear) return;
+    // 1. Validate and collect only the cells that changed.
+    const changes: { subjectId: string; examId: string; fa: number | null; sa: number | null }[] = [];
+    for (const sub of reportData.subjects as any[]) {
+      for (const ex of EXAM_COLUMNS) {
+        const key = `${sub.id}|${ex.value}`;
+        const draft = drafts[key] || { fa: '', sa: '' };
+        const cell = reportData.matrix[sub.id][ex.value];
+        if (draft.fa.trim() === markText(cell?.faTotal) && draft.sa.trim() === markText(cell?.saScore)) continue;
+        const fa = parseMark(draft.fa, REPORT_FA_MAX);
+        const sa = parseMark(draft.sa, REPORT_SA_MAX);
+        if (fa === 'invalid' || sa === 'invalid') {
+          showToast(`${sub.name}, ${ex.label}: FA must be 0-${REPORT_FA_MAX} and SA 0-${REPORT_SA_MAX}.`, 'error');
+          return;
+        }
+        changes.push({ subjectId: sub.id, examId: ex.value, fa, sa });
+      }
+    }
+    if (changes.length === 0) { setEditing(false); return; }
+
+    setSavingMarks(true);
+    try {
+      const updatedDocs: any[] = [];
+      for (const change of changes) {
+        const match = (m: any) => m.examType === 'major_exam' && m.examId === change.examId
+          && m.classId === selectedClassId && m.sectionId === selectedSectionId
+          && m.subjectId === change.subjectId
+          && (!m.academicYear || m.academicYear === school.academicYear);
+        const local = allMarks.find(match);
+        // Re-read the doc so a teacher's save in the meantime is not overwritten.
+        const fresh = local?.id ? await MarksService.getById(local.id) as any : null;
+        const base: ExamRecord[] = (fresh?.records || local?.records || []) as ExamRecord[];
+        const records = upsertStudentMarks(base, selectedStudent.id, selectedStudent.name, change.fa, change.sa);
+        if (local?.id) {
+          await MarksService.update(local.id, { records });
+          updatedDocs.push({ ...(fresh || local), id: local.id, records });
+        } else {
+          const payload = {
+            examType: 'major_exam', examId: change.examId,
+            examName: EXAM_COLUMNS.find(e => e.value === change.examId)?.label || change.examId,
+            classId: selectedClassId, sectionId: selectedSectionId, subjectId: change.subjectId,
+            faMax: REPORT_FA_MAX, records, status: 'draft',
+            academicYear: school.academicYear, createdAt: new Date(),
+          };
+          const created: any = await MarksService.create(payload);
+          updatedDocs.push({ ...payload, id: typeof created === 'string' ? created : created?.id });
+        }
+      }
+      // 2. Show the saved marks immediately.
+      setAllMarks(prev => {
+        const byId = new Map(prev.map(m => [m.id, m]));
+        updatedDocs.forEach(d => byId.set(d.id, d));
+        return Array.from(byId.values());
+      });
+      setEditing(false);
+      showToast(`Marks saved for ${selectedStudent.name}`);
+    } catch (error) {
+      console.error('[report-card] save marks failed', error);
+      showToast('Could not save the marks. Check your connection and try again.', 'error');
+    } finally {
+      setSavingMarks(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -305,9 +404,26 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
           </p>
         </div>
         {reportData && (
-          <Button variant="primary" icon={<PrinterIcon size={18} />} onClick={handlePrint}>
-            Print Report Card
-          </Button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {canEditMarks && !editing && (
+              <Button variant="secondary" onClick={startEditing}>Edit marks</Button>
+            )}
+            {editing && (
+              <>
+                <Button variant="secondary" onClick={() => { setEditing(false); setDrafts({}); }} disabled={savingMarks}>
+                  Cancel
+                </Button>
+                <Button variant="primary" onClick={() => { void saveMarks(); }} disabled={savingMarks}>
+                  {savingMarks ? 'Saving...' : 'Save marks'}
+                </Button>
+              </>
+            )}
+            {!editing && (
+              <Button variant="primary" icon={<PrinterIcon size={18} />} onClick={handlePrint}>
+                Print Report Card
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -427,6 +543,40 @@ export default function SharedReportCard({ view }: SharedReportCardProps) {
                   <td className="text-left text-bold" style={{ textTransform: 'uppercase' }}>{sub.name}</td>
                   {EXAM_COLUMNS.map(ex => {
                     const cell = reportData.matrix[sub.id][ex.value];
+                    if (editing) {
+                      const key = `${sub.id}|${ex.value}`;
+                      const draft = drafts[key] || { fa: '', sa: '' };
+                      const fa = parseMark(draft.fa, REPORT_FA_MAX);
+                      const sa = parseMark(draft.sa, REPORT_SA_MAX);
+                      const ok = fa !== 'invalid' && sa !== 'invalid';
+                      const total = ok && (fa !== null || sa !== null)
+                        ? Math.round(((fa ?? 0) + (sa ?? 0)) * 10) / 10
+                        : null;
+                      const input = (part: 'fa' | 'sa', max: number) => {
+                        const bad = parseMark(draft[part], max) === 'invalid';
+                        return (
+                          <input
+                            inputMode="decimal"
+                            aria-label={`${sub.name} ${ex.label} ${part.toUpperCase()} out of ${max}`}
+                            value={draft[part]}
+                            onChange={e => setDraft(key, part, e.target.value)}
+                            style={{
+                              width: 38, padding: '2px', textAlign: 'center', fontSize: 12,
+                              border: `1px solid ${bad ? 'var(--color-error)' : 'var(--color-border)'}`,
+                              borderRadius: 4, background: bad ? '#fef2f2' : '#fff',
+                            }}
+                          />
+                        );
+                      };
+                      return (
+                        <React.Fragment key={ex.value + sub.id}>
+                          <td>{input('fa', REPORT_FA_MAX)}</td>
+                          <td>{input('sa', REPORT_SA_MAX)}</td>
+                          <td className="total-text text-bold">{total ?? '-'}</td>
+                          <td className="grade-text text-bold">{total ? getGrade(total, 100) : '-'}</td>
+                        </React.Fragment>
+                      );
+                    }
                     if (!cell) {
                       return (
                         <React.Fragment key={ex.value + sub.id}>

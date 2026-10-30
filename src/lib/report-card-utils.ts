@@ -72,3 +72,77 @@ export function calcRanks(reportCards: ReportCard[], term: ExamTerm): void {
 }
 
 export { EXAM_TERMS_ORDER, EXAM_TERM_LABELS, CoScholasticArea, CO_SCHOLASTIC_LABELS, ExamTerm };
+
+/* ── Editing marks from the report card ─────────────────────────────────
+   The report card reads `marks` docs (examType 'major_exam', one per
+   class · section · subject · exam) whose `records[]` hold one entry per
+   student — the same docs the Exam Marks screen writes. Editing on the
+   report card must write that exact shape, or the two screens disagree. */
+
+export const REPORT_FA_MAX = 40;
+export const REPORT_SA_MAX = 60;
+
+export interface ExamRecord {
+  studentId: string;
+  studentName?: string;
+  faClassExamScore?: number;
+  faProjectScore?: number;
+  faReadingScore?: number;
+  faTotal?: number | null;
+  saScore?: number | null;
+  totalMarks?: number | null;
+  [key: string]: unknown;
+}
+
+/**
+ * A typed mark → number, null (left blank) or 'invalid'. Accepts whole
+ * numbers and halves/one decimal (4.5), within 0..max.
+ */
+export function parseMark(raw: string, max: number): number | null | 'invalid' {
+  const text = raw.trim();
+  if (text === '') return null;
+  if (!/^\d+(\.\d)?$/.test(text)) return 'invalid';
+  const value = Number(text);
+  return value >= 0 && value <= max ? value : 'invalid';
+}
+
+/**
+ * The exam doc's records with ONE student's FA/SA replaced. Other students
+ * are untouched. Both blank removes the student's entry (the card shows
+ * "-" again). When FA changes, the FA breakdown is kept consistent with
+ * the new FA total so the Exam Marks screen shows the same number.
+ */
+export function upsertStudentMarks(
+  records: ExamRecord[],
+  studentId: string,
+  studentName: string,
+  fa: number | null,
+  sa: number | null,
+): ExamRecord[] {
+  const others = records.filter(r => r.studentId !== studentId);
+  if (fa === null && sa === null) return others;
+  const existing = records.find(r => r.studentId === studentId);
+  const next: ExamRecord = { ...(existing ?? {}), studentId, studentName: existing?.studentName || studentName };
+
+  const faValue = fa ?? 0;
+  const project = Number(existing?.faProjectScore) || 0;
+  const reading = Number(existing?.faReadingScore) || 0;
+  const breakdownSum = (Number(existing?.faClassExamScore) || 0) + project + reading;
+  if (!existing || breakdownSum !== faValue) {
+    if (project + reading <= faValue) {
+      next.faClassExamScore = round1(faValue - project - reading);
+      next.faProjectScore = project;
+      next.faReadingScore = reading;
+    } else {
+      next.faClassExamScore = faValue;
+      next.faProjectScore = 0;
+      next.faReadingScore = 0;
+    }
+  }
+  next.faTotal = fa;
+  next.saScore = sa;
+  next.totalMarks = round1(faValue + (sa ?? 0));
+  return [...others, next];
+}
+
+const round1 = (n: number): number => Math.round(n * 10) / 10;
