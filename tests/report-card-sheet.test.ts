@@ -25,7 +25,7 @@ describe('ReportCardSheet', () => {
     expect(out).toContain('|Total|570|428|');
     expect(out).toContain('|Grade|A|—|');
     expect(out).toContain('|No. of Working days|44/48|');
-    expect(out).toContain('Grade Assessment is made only for those who have passed in all Subjects.');
+    expect(out).toContain('Grade Assessment is made only for those who have passed in all Subjects');
     expect(out).not.toContain('FA');
   });
 

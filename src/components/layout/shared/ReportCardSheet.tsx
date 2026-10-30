@@ -88,6 +88,29 @@ function stdDraftTotal(d: MarkDraft): number | null {
   return total === 'invalid' ? null : total;
 }
 
+
+/* KG card: like the pink paper card. Equal exam columns, larger marks,
+   roomy rows, printed on A4 PORTRAIT (the STD card stays landscape). */
+const KG_STYLE = `
+  .kg-table { table-layout: fixed; font-size: 13px; }
+  .kg-table th { font-size: 12px; line-height: 1.25; }
+  .kg-table td { height: 30px; }
+  .kg-table .kg-mark { font-size: 15px; font-weight: 700; }
+  .kg-table .kg-subject { font-size: 13px; font-weight: 700; padding-left: 8px; }
+  .kg-table .kg-co { font-size: 13px; font-weight: 600; }
+  .kg-scale { font-size: 12px; }
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    html, body { width: 210mm !important; }
+    .printable-report .kg-table { font-size: 11px !important; }
+    .printable-report .kg-table td { height: 24px; padding: 2px 4px; }
+    .printable-report .kg-table .kg-mark { font-size: 13px; }
+    .printable-report .kg-table .kg-subject,
+    .printable-report .kg-table .kg-co { font-size: 11px; }
+    .printable-report .kg-table .signature-row td { height: 30px !important; }
+  }
+`;
+
 export default function ReportCardSheet(props: Props) {
   return props.isKG ? <KgSheet {...props} /> : <StdSheet {...props} />;
 }
@@ -104,10 +127,16 @@ function KgSheet({ subjects, matrix, coData, editing, drafts, coDrafts, onMark, 
 
   return (
     <>
+      <style dangerouslySetInnerHTML={{ __html: KG_STYLE }} />
       <table className="report-table kg-table">
+        {/* Subject column, then six equal exam columns, as on the paper card. */}
+        <colgroup>
+          <col style={{ width: '19%' }} />
+          {examIds.map(id => <col key={id} style={{ width: `${81 / 6}%` }} />)}
+        </colgroup>
         <thead>
           <tr>
-            <th rowSpan={2} style={{ minWidth: 120 }} className="text-left">Subject</th>
+            <th rowSpan={2} className="text-left kg-subject">Subject</th>
             {KG_TERMS.map(t => <th key={t.label} colSpan={2}>{t.label}</th>)}
           </tr>
           <tr>
@@ -119,7 +148,7 @@ function KgSheet({ subjects, matrix, coData, editing, drafts, coDrafts, onMark, 
         <tbody>
           {subjects.map(sub => (
             <tr key={sub.id}>
-              <td className="text-left text-bold">{sub.name}</td>
+              <td className="text-left kg-subject">{sub.name}</td>
               {examIds.map(examId => {
                 const key = `${sub.id}|${examId}`;
                 const value = valueOf(sub.id, examId);
@@ -139,7 +168,7 @@ function KgSheet({ subjects, matrix, coData, editing, drafts, coDrafts, onMark, 
                 }
                 const absent = value.toLowerCase() === 'ab';
                 return (
-                  <td key={examId} className="text-bold" style={absent ? { color: '#dc2626' } : undefined}>
+                  <td key={examId} className="kg-mark" style={absent ? { color: '#dc2626' } : undefined}>
                     {value}
                   </td>
                 );
@@ -148,51 +177,57 @@ function KgSheet({ subjects, matrix, coData, editing, drafts, coDrafts, onMark, 
           ))}
 
           <tr>
-            <td className="text-left text-bold">Total</td>
+            <td className="text-left kg-subject">Total</td>
             {examIds.map(examId => {
               const s = kgColumnSummary(subjects.map(sub => valueOf(sub.id, examId)));
-              return <td key={examId} className="total-text text-bold">{s.total ?? ''}</td>;
+              return <td key={examId} className="total-text kg-mark">{s.total ?? ''}</td>;
             })}
           </tr>
           <tr>
-            <td className="text-left text-bold">Grade</td>
+            <td className="text-left kg-subject">Grade</td>
             {examIds.map(examId => {
               const s = kgColumnSummary(subjects.map(sub => valueOf(sub.id, examId)));
               // A total but no grade = not passed in all subjects (absent or below the pass mark).
-              return <td key={examId} className="grade-text text-bold">{s.grade ?? (s.total !== null ? '—' : '')}</td>;
+              return <td key={examId} className="grade-text kg-mark">{s.grade ?? (s.total !== null ? '—' : '')}</td>;
             })}
           </tr>
 
           {KG_CO_ROWS.map(row => (
-            <CoRow key={row.field} row={row} examIds={examIds} span={1}
+            <CoRow key={row.field} row={row} examIds={examIds} span={1} labelClass="text-left kg-subject" cellClass="kg-co"
               coData={coData} editing={editing} coDrafts={coDrafts} onCo={onCo} />
           ))}
 
-          <SignatureRows examIds={examIds} span={1} labels={[
+          <SignatureRows examIds={examIds} span={1} height={36} labelClass="text-left kg-subject" labels={[
             'Signature of Class Teacher', 'Signature of Principal', 'Signature of Parent',
           ]} />
         </tbody>
       </table>
 
-      <div className="kg-scale" style={{ marginTop: 12, fontSize: 11, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div className="text-bold">Range of Marks in each Grade:</div>
+      <div className="kg-scale" style={{ marginTop: 12, display: 'flex', gap: 28, alignItems: 'flex-start' }}>
+        <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Range of Marks in each Grade :</div>
         <table style={{ borderCollapse: 'collapse' }}>
           <tbody>
-            {KG_GRADE_SCALE.map(b => (
-              <tr key={b.grade}>
-                <td style={{ padding: '0 12px 0 0', fontWeight: 700 }}>{b.grade}</td>
-                <td>{b.label}</td>
-              </tr>
-            ))}
+            {KG_GRADE_SCALE.map(b => {
+              const [from, , to] = b.label.split(' ');
+              const open = b.label.includes('above');
+              return (
+                <tr key={b.grade}>
+                  <td style={{ padding: '1px 18px 1px 0', fontWeight: 700 }}>{b.grade}</td>
+                  <td style={{ padding: '1px 18px 1px 0' }}>{from}</td>
+                  <td style={{ padding: '1px 18px 1px 0' }}>{open ? 'And' : 'to'}</td>
+                  <td style={{ padding: '1px 0' }}>{open ? 'above' : to}</td>
+                </tr>
+              );
+            })}
             <tr>
-              <td style={{ padding: '0 12px 0 0', fontWeight: 700 }}>F</td>
-              <td>Below {KG_PASS_MARK}% (Fail)</td>
+              <td colSpan={2} style={{ padding: '1px 18px 1px 0', fontWeight: 700 }}>Below {KG_PASS_MARK}%</td>
+              <td colSpan={2}>Fail - F</td>
             </tr>
           </tbody>
         </table>
-        <div style={{ alignSelf: 'flex-end', fontWeight: 700 }}>
-          Grade Assessment is made only for those who have passed in all Subjects.
-        </div>
+      </div>
+      <div className="kg-scale" style={{ marginTop: 8, fontWeight: 700 }}>
+        Grade Assessment is made only for those who have passed in all Subjects
       </div>
     </>
   );
@@ -302,8 +337,10 @@ function StdSheet({ subjects, matrix, coData, editing, drafts, coDrafts, onMark,
 
 /* ── Shared rows ─────────────────────────────────────────────────────── */
 
-function CoRow({ row, examIds, span, coData, editing, coDrafts, onCo }: {
+function CoRow({ row, examIds, span, coData, editing, coDrafts, onCo, labelClass = 'text-left text-bold', cellClass = 'text-bold' }: {
   row: { field: CoField; label: string };
+  labelClass?: string;
+  cellClass?: string;
   examIds: string[];
   span: number;
   coData: Record<string, any>;
@@ -313,9 +350,9 @@ function CoRow({ row, examIds, span, coData, editing, coDrafts, onCo }: {
 }) {
   return (
     <tr>
-      <td className="text-left text-bold">{row.label}</td>
+      <td className={labelClass}>{row.label}</td>
       {examIds.map(examId => (
-        <td key={examId} colSpan={span} className="text-bold">
+        <td key={examId} colSpan={span} className={cellClass}>
           {editing ? (
             <input
               aria-label={`${row.label} ${examId}`}
@@ -331,12 +368,14 @@ function CoRow({ row, examIds, span, coData, editing, coDrafts, onCo }: {
   );
 }
 
-function SignatureRows({ examIds, span, labels }: { examIds: string[]; span: number; labels: string[] }) {
+function SignatureRows({ examIds, span, labels, height = 44, labelClass = 'text-left text-bold' }: {
+  examIds: string[]; span: number; labels: string[]; height?: number; labelClass?: string;
+}) {
   return (
     <>
       {labels.map(label => (
         <tr key={label} className="signature-row">
-          <td className="text-left text-bold" style={{ height: 44, verticalAlign: 'bottom', paddingBottom: 6 }}>{label}</td>
+          <td className={labelClass} style={{ height, verticalAlign: 'middle' }}>{label}</td>
           {examIds.map(examId => <td key={examId} colSpan={span} />)}
         </tr>
       ))}
