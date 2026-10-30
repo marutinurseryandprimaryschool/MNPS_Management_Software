@@ -67,6 +67,12 @@ export default function TeacherExamMarks() {
   // Step 2: Marks data
   const [weeklyData, setWeeklyData] = useState<Record<string, Record<string, number[]>>>({}); // studentId -> subjectId -> scores[]
   const [marks, setMarks] = useState<MarksMap>({});
+  /* The marks as they were when this screen loaded them. On save, a student
+     whose row the teacher did not touch keeps whatever is stored NOW, so a
+     correction made meanwhile on the report card (by the Principal, admin or
+     another teacher) is never overwritten. Marks belong to the student, not
+     to whoever typed them last. */
+  const [baseline, setBaseline] = useState<MarksMap>({});
   const [isSaving, setIsSaving] = useState(false);
   const [step, setStep] = useState<'setup' | 'entry'>('setup');
   const [saveStatus, setSaveStatus] = useState<'loading' | 'saved' | 'unsaved' | 'none'>('none');
@@ -217,14 +223,21 @@ export default function TeacherExamMarks() {
 
       // Load existing exam marks if any
       const existingMark = await MarksService.getAll().then((all: any[]) =>
-        all.find(m => m.examType === 'major_exam' && m.examId === selectedExam && m.classId === classId && m.sectionId === sectionId && m.subjectId === subjectId)
+        all.find(m => m.examType === 'major_exam' && m.examId === selectedExam && m.classId === classId && m.sectionId === sectionId && m.subjectId === subjectId
+          && (!m.academicYear || m.academicYear === school.academicYear))
       );
 
       const initMarks: MarksMap = {};
       for (const student of classStudents) {
         const scores = weeklyMap[student.id] || [];
-        const faClassExam = bestTwo(scores);
         const existing = existingMark?.records?.find((r: any) => r.studentId === student.id);
+        // A saved FA class-exam mark is the student's mark (it may have been
+        // corrected on the report card). The weekly-test estimate only fills
+        // in a student who has nothing saved yet.
+        const savedClassExam = existing && typeof existing.faClassExamScore === 'number'
+          ? existing.faClassExamScore
+          : null;
+        const faClassExam = savedClassExam ?? bestTwo(scores);
         initMarks[student.id] = {
           faProject: existing ? String(existing.faProjectScore ?? '') : '',
           faReading: isKG ? '0' : (existing ? String(existing.faReadingScore ?? '') : ''),
@@ -234,6 +247,7 @@ export default function TeacherExamMarks() {
       }
 
       setMarks(initMarks);
+      setBaseline(initMarks);
       setSaveStatus(existingMark ? 'saved' : 'none');
       setIsEditing(!existingMark);
       setStep('entry');
@@ -260,6 +274,7 @@ export default function TeacherExamMarks() {
       };
     }
     setMarks(initMarks);
+    setBaseline(initMarks);
     setSaveStatus('saved');
     setIsEditing(false);
     setStep('entry');
@@ -268,7 +283,7 @@ export default function TeacherExamMarks() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const records = classStudents.map(student => {
+      const built = classStudents.map(student => {
         const m = marks[student.id] || {};
         const faClass = m.faClassExam ?? 0;
         const faProj = parseInt(m.faProject) || 0;
@@ -284,12 +299,29 @@ export default function TeacherExamMarks() {
         };
       });
 
-      // Check if record already exists
+      // Check if record already exists (read fresh, just before writing)
       const allMarks = await MarksService.getAll() as any[];
       const existing = allMarks.find(m =>
         m.examType === 'major_exam' && m.examId === selectedExam &&
-        m.classId === classId && m.sectionId === sectionId && m.subjectId === subjectId
+        m.classId === classId && m.sectionId === sectionId && m.subjectId === subjectId &&
+        (!m.academicYear || m.academicYear === school.academicYear)
       );
+
+      // Merge per student: start from what is stored now; replace only the
+      // students this teacher changed (or who have nothing stored yet).
+      // Students not on this screen (e.g. moved section) are kept too.
+      const sameRow = (a: MarksMap[string] | undefined, b: MarksMap[string] | undefined) =>
+        !!a && !!b && a.faProject === b.faProject && a.faReading === b.faReading
+        && a.sa === b.sa && a.faClassExam === b.faClassExam;
+      const byStudent = new Map<string, any>(
+        ((existing?.records || []) as any[]).map(r => [r.studentId, r]),
+      );
+      for (const record of built) {
+        const untouched = sameRow(marks[record.studentId], baseline[record.studentId]);
+        if (untouched && byStudent.has(record.studentId)) continue;
+        byStudent.set(record.studentId, record);
+      }
+      const records = Array.from(byStudent.values());
 
       const payload = {
         examType: 'major_exam', examId: selectedExam,
@@ -301,6 +333,7 @@ export default function TeacherExamMarks() {
       if (existing) await MarksService.update(existing.id, payload);
       else await MarksService.create({ ...payload, createdAt: new Date() });
 
+      setBaseline(marks);
       setSaveStatus('saved');
       setIsEditing(false);
       showToast(`Marks saved for ${examInfo.label}!`);
