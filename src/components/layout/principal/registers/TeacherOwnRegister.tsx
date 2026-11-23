@@ -58,7 +58,8 @@ export default function TeacherOwnRegister({
   const myEmail = String(user?.email ?? '').trim().toLowerCase();
 
   /**
-   * The class-sections this teacher holds, from their own teacher record.
+   * The class-sections this teacher is CLASS TEACHER of, from their own
+   * teacher record (subject-only assignments do not count).
    * Students of those sections are THEIRS automatically — the Principal
    * should not have to hand-pick each child a second time when the school
    * has already said who teaches which section. Explicit register
@@ -86,12 +87,26 @@ export default function TeacherOwnRegister({
         const mineAssignments = mine
           ? (assignments as Record<string, unknown>[]).find(a => a.teacherId === mine.id)
           : undefined;
-        setMySections(((mineAssignments?.assignments ?? []) as Record<string, unknown>[])
+        // ONLY the sections this teacher is CLASS TEACHER of. Subject
+        // assignments (Tamil in six classes, say) used to count too, so a
+        // subject teacher saw every student of every class they teach —
+        // names that are not theirs. Both stores carry isClassTeacher.
+        const entries = [
+          ...((mineAssignments?.assignments ?? []) as Record<string, unknown>[]),
+          ...((mine?.assignedClasses ?? []) as Record<string, unknown>[]),
+        ].filter(entry => entry.isClassTeacher === true);
+        const seen = new Set<string>();
+        setMySections(entries
           .map(entry => ({
             className: String(entry.className ?? ''),
             sectionName: String(entry.sectionName ?? ''),
           }))
-          .filter(entry => entry.className));
+          .filter(entry => {
+            const key = `${norm(entry.className)}|${norm(entry.sectionName)}`;
+            if (!entry.className || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }));
       } catch (error) {
         // Non-fatal: explicitly assigned rows still list without this.
         console.warn('[teacher-register] could not read your class assignment', error);
