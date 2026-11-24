@@ -23,6 +23,9 @@ import { SearchInput, Select } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { TeachersService, UsersService } from '@/lib/firestore-service';
 import { computeTeacherSummaries } from '@/lib/principal-fees';
+import {
+  classTeacherSlots, planClassTeacherAssignment, type ClassTeacherSlot,
+} from '@/lib/class-teacher-plan';
 import { PrincipalRegisterService } from '@/lib/principal-service';
 import type { PrincipalActor, RegisterRow, TeacherSummary } from '@/types/principal';
 import ImportStudentsDialog from './ImportStudentsDialog';
@@ -79,6 +82,8 @@ export default function TeacherAssignPanel({ data, actor, academicYear }: Teache
   const [editFeesRow, setEditFeesRow] = useState<RegisterRow | null>(null);
   /* "Add from student list" — the in-app bridge to the school's real students. */
   const [importOpen, setImportOpen] = useState(false);
+  /** Who is class teacher of which section, from the office's teacher assignments. */
+  const [slots, setSlots] = useState<ClassTeacherSlot[]>([]);
 
   /**
    * The teacher list is the one thing this panel loads for itself (the rows
@@ -122,6 +127,21 @@ export default function TeacherAssignPanel({ data, actor, academicYear }: Teache
 
         if (cancelled) return;
 
+        try {
+          const yearDocs = academicYear ? await TeachersService.getAllAssignments(academicYear) : [];
+          if (!cancelled) {
+            setSlots(classTeacherSlots(
+              docs as Record<string, unknown>[],
+              yearDocs as Record<string, unknown>[],
+              doc => teacherAuthUid(doc as { userId?: string; uid?: string; id?: string }),
+            ));
+          }
+        } catch (slotErr) {
+          console.warn('[principal-register] could not read class teacher assignments', slotErr);
+        }
+
+        if (cancelled) return;
+
         setTeachers(docs
           .map(doc => ({
             id: String(doc.id ?? ''),
@@ -138,7 +158,7 @@ export default function TeacherAssignPanel({ data, actor, academicYear }: Teache
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [academicYear]);
 
   const countsByUid = useMemo(() => {
     const counts = new Map<string, number>();
@@ -264,6 +284,60 @@ export default function TeacherAssignPanel({ data, actor, academicYear }: Teache
 
   const unassignPicked = () => { void applyAssignment(pickedIds, null, 'unassigned'); };
 
+  /**
+   * Give every student to the class teacher of their own class + section.
+   * Fixes rows an import put under one teacher for a whole class.
+   * Sections with no (or two) class teachers are left exactly as they are.
+   */
+  const assignByClassTeacher = async () => {
+    if (busy || !actor) return;
+    if (slots.length === 0) {
+      showToast('No class teachers are set yet. Mark each teacher as class teacher of their section on the Teachers page first.', 'error');
+      return;
+    }
+    const plan = planClassTeacherAssignment(data.rows, slots);
+    const notes: string[] = [];
+    if (plan.sectionsWithoutTeacher.length > 0) {
+      notes.push(`No class teacher set (left as they are): ${plan.sectionsWithoutTeacher.join(', ')}.`);
+    }
+    if (plan.sectionsWithClash.length > 0) {
+      notes.push(`More than one class teacher (left as they are): ${plan.sectionsWithClash.join(', ')}.`);
+    }
+    if (plan.moves.length === 0) {
+      showToast(`Every student is already with their class teacher. ${notes.join(' ')}`.trim(), 'success');
+      return;
+    }
+    const ok = window.confirm([
+      `Move ${plan.moves.length} student${plan.moves.length === 1 ? '' : 's'} to the class teacher of their own class and section?`,
+      `${plan.alreadyCorrect} already correct.`,
+      ...notes,
+      'Fees and payments do not change — only whose list each student shows in.',
+    ].join('\n\n'));
+    if (!ok) return;
+
+    setBusy(true);
+    let saved = 0;
+    let lastError: unknown = null;
+    for (const move of plan.moves) {
+      try {
+        await PrincipalRegisterService.assignTeacher(move.rowId, move.teacher, actor);
+        saved += 1;
+      } catch (e) {
+        console.error('[principal-register] class-teacher assignment failed', { move, error: e });
+        lastError = e;
+      }
+    }
+    await data.refreshQuietly();
+    setPicked({});
+    setBusy(false);
+    showToast(
+      saved === plan.moves.length
+        ? `${saved} student${saved === 1 ? '' : 's'} moved to their class teacher.`
+        : `${saved} of ${plan.moves.length} moved. ${describeError(lastError, 'The rest were NOT saved — please retry.')}`,
+      saved === plan.moves.length ? 'success' : 'error',
+    );
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -274,9 +348,19 @@ export default function TeacherAssignPanel({ data, actor, academicYear }: Teache
             Tap a student&rsquo;s name to see their full fee details.
           </p>
         </div>
-        <Button variant="primary" onClick={() => setImportOpen(true)}>
-          Add from student list
-        </Button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          <Button
+            variant="secondary"
+            onClick={() => { void assignByClassTeacher(); }}
+            loading={busy}
+            disabled={busy || data.rows.length === 0}
+          >
+            Assign by class teacher
+          </Button>
+          <Button variant="primary" onClick={() => setImportOpen(true)}>
+            Add from student list
+          </Button>
+        </div>
       </div>
 
       {teacherError && <NoticeBanner tone="error">{teacherError}</NoticeBanner>}
