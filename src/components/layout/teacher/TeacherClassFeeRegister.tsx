@@ -27,7 +27,7 @@ import { SearchInput } from '@/components/ui/Input';
 import { StudentsService, TeachersService } from '@/lib/firestore-service';
 import type { RegisterRow } from '@/types/principal';
 import { useRegisterData } from '../principal/registers/useRegisterData';
-import { findRowForChild } from '@/lib/parent-portal/core';
+import { findRowForChild, isActiveStudent } from '@/lib/parent-portal/core';
 import StudentRegisterList from '../principal/registers/StudentRegisterList';
 import StudentDetailSheet from '../principal/registers/StudentDetailSheet';
 import { compareStudents, inr } from '../principal/registers/register-shared';
@@ -90,11 +90,11 @@ export default function TeacherClassFeeRegister() {
           ? (assignments as Record<string, unknown>[]).find(a => a.teacherId === mine.id)
           : undefined;
 
-        // Assignments live per-year; older records keep them on the teacher doc.
-        const entries = [
-          ...((mineAssignments?.assignments ?? []) as Record<string, unknown>[]),
-          ...((mine?.assignedClasses ?? []) as Record<string, unknown>[]),
-        ];
+        // Assignments live per-year; older records keep them on the teacher
+        // doc. The year doc wins — the legacy copy can name last year's class.
+        const entries = ((mineAssignments
+          ? mineAssignments.assignments
+          : mine?.assignedClasses) ?? []) as Record<string, unknown>[];
         const classTeacherEntry = entries.find(entry => entry.isClassTeacher === true);
 
         if (!classTeacherEntry) {
@@ -110,13 +110,23 @@ export default function TeacherClassFeeRegister() {
           sectionName: String(classTeacherEntry.sectionName ?? ''),
         };
 
-        const roll = section.sectionId
+        const roll = (section.sectionId
           ? await StudentsService.getByClassSection(
             section.classId, section.sectionId, school?.academicYear)
-          : await StudentsService.getByClass(section.classId, school?.academicYear);
+          : await StudentsService.getByClass(section.classId, school?.academicYear)
+        ) as Record<string, unknown>[] | null;
         if (cancelled) return;
 
-        setClassStudents((roll as Record<string, unknown>[]) ?? []);
+        // A class-teacher entry with no section id used to load the WHOLE
+        // class — every section, 52-53 children. Narrow by section name, and
+        // drop children who have left.
+        const sectionKey = (v: unknown) => String(v ?? '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+        const wanted = sectionKey(section.sectionName);
+        setClassStudents((roll ?? []).filter(student => {
+          if (!isActiveStudent(student as { status?: string })) return false;
+          if (section.sectionId || !wanted) return true;
+          return sectionKey(student.sectionName ?? student.section) === wanted;
+        }));
         setClassOf(section);
         setSectionError(null);
       } catch (error) {

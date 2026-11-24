@@ -90,11 +90,13 @@ export default function TeacherOwnRegister({
         // ONLY the sections this teacher is CLASS TEACHER of. Subject
         // assignments (Tamil in six classes, say) used to count too, so a
         // subject teacher saw every student of every class they teach —
-        // names that are not theirs. Both stores carry isClassTeacher.
-        const entries = [
-          ...((mineAssignments?.assignments ?? []) as Record<string, unknown>[]),
-          ...((mine?.assignedClasses ?? []) as Record<string, unknown>[]),
-        ].filter(entry => entry.isClassTeacher === true);
+        // names that are not theirs. This year's assignment doc wins; the
+        // legacy copy on the teacher doc can still name LAST year's section,
+        // so it is read only when there is no year doc at all.
+        const source = (mineAssignments
+          ? mineAssignments.assignments
+          : mine?.assignedClasses) as Record<string, unknown>[] | undefined;
+        const entries = (source ?? []).filter(entry => entry.isClassTeacher === true);
         const seen = new Set<string>();
         setMySections(entries
           .map(entry => ({
@@ -122,8 +124,14 @@ export default function TeacherOwnRegister({
       sameClass(row.className, section.className)
       // A section-less assignment covers the whole class.
       && (!section.sectionName || norm(row.sectionName) === norm(section.sectionName)));
+    // A CLASS TEACHER sees their own section — 18-20 children — even if an
+    // import once put a whole class (52-53, every section) under their
+    // name. A teacher with no class of their own sees the students the
+    // Principal handed them.
     return data.rows
-      .filter(row => (row.teacherUid && row.teacherUid === myUid) || inMySection(row))
+      .filter(row => (mySections.length > 0
+        ? inMySection(row)
+        : Boolean(row.teacherUid) && row.teacherUid === myUid))
       .sort(compareStudents);
   }, [data.rows, myUid, mySections]);
 
